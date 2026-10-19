@@ -18,7 +18,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: 3. Setup Java 17 (Temurin) for Android Gradle
         uses: actions/setup-java@v4
@@ -26,19 +25,20 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 4. Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: 4. Verify Pre-installed Android SDK & Accept Licenses
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+          yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
 
       - name: 5. Install Web Dependencies & Build Production Bundle
         run: |
-          npm ci
+          npm install --legacy-peer-deps
           npm run build
 
       - name: 6. Initialize & Sync Capacitor Android Platform
         run: |
-          # Temporarily use capacitor.config.json so @capacitor/cli does not require ts-node
           mv capacitor.config.ts capacitor.config.ts.bak || true
-          npm install --no-save @capacitor/core@^6.0.0 @capacitor/cli@^6.0.0 @capacitor/android@^6.0.0
+          npm install --no-save --legacy-peer-deps @capacitor/core@^6.0.0 @capacitor/cli@^6.0.0 @capacitor/android@^6.0.0
           if [ ! -d "android" ]; then
             npx cap add android
           fi
@@ -47,6 +47,8 @@ jobs:
 
       - name: 7. Inject Native Overlay Service & Bridge (SYSTEM_ALERT_WINDOW)
         run: |
+          rm -f android/app/src/main/java/com/pbg/deliverybuddy/MainActivity.java
+          rm -f android/app/src/main/java/com/pbg/deliverybuddy/*.kt
           mkdir -p android/app/src/main/java/com/pbg/deliverybuddy
           cp -f android-native-template/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           cp -f android-native-template/BuddyOverlayService.java android/app/src/main/java/com/pbg/deliverybuddy/BuddyOverlayService.java
@@ -56,7 +58,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --stacktrace --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk ../Delivery-Buddy-Amarante.apk
 
       - name: 9. Upload Delivery-Buddy-Amarante.apk Artifact
