@@ -1,0 +1,15 @@
+{
+  "appId": "com.pbg.deliverybuddy",
+  "appName": "Delivery Buddy",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": ["*"]
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#00000000"
+  }
+}

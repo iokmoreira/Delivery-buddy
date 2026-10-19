@@ -1,0 +1,68 @@
+name: Build Signed Android APK (Delivery Buddy)
+
+on:
+  push:
+    branches: ['*']
+  workflow_dispatch:
+
+jobs:
+  build-android-apk:
+    name: Compile & Sign Delivery-Buddy-Amarante.apk
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 3. Setup Java 17 (Temurin) for Android Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 4. Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 5. Install Web Dependencies & Build Production Bundle
+        run: |
+          npm ci
+          npm run build
+
+      - name: 6. Initialize & Sync Capacitor Android Platform
+        run: |
+          # Temporarily use capacitor.config.json so @capacitor/cli does not require ts-node
+          mv capacitor.config.ts capacitor.config.ts.bak || true
+          npm install --no-save @capacitor/core@^6.0.0 @capacitor/cli@^6.0.0 @capacitor/android@^6.0.0
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+          mv capacitor.config.ts.bak capacitor.config.ts || true
+
+      - name: 7. Inject Native Overlay Service & Bridge (SYSTEM_ALERT_WINDOW)
+        run: |
+          mkdir -p android/app/src/main/java/com/pbg/deliverybuddy
+          cp -f android-native-template/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          cp -f android-native-template/BuddyOverlayService.java android/app/src/main/java/com/pbg/deliverybuddy/BuddyOverlayService.java
+          cp -f android-native-template/MainActivity.java android/app/src/main/java/com/pbg/deliverybuddy/MainActivity.java
+
+      - name: 8. Compile & Sign Android APK (Delivery-Buddy-Amarante.apk)
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../Delivery-Buddy-Amarante.apk
+
+      - name: 9. Upload Delivery-Buddy-Amarante.apk Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Delivery-Buddy-Amarante-APK
+          path: Delivery-Buddy-Amarante.apk
+          if-no-files-found: error
+          retention-days: 90

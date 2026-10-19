@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+@layer base {
+  html,
+  body {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+}
+
+/* ============================================================================
+   HIGH-LEGIBILITY "DAYLIGHT CLEAN" THEME (DEFAULT: .theme-daylight)
+   App Backdrop: #F1F5F9 (bg-slate-100)
+   Cards: Pure White (#FFFFFF) with soft elevation & subtle slate-200 border
+   Primary Text: Crisp Charcoal (#0F172A / text-slate-900)
+   Secondary Labels: Slate-500 (#64748B)
+   ============================================================================ */
+#app-audit-root.theme-daylight {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+#app-audit-root.theme-daylight .bg-zinc-950,
+#app-audit-root.theme-daylight .bg-zinc-950\/95,
+#app-audit-root.theme-daylight .bg-zinc-950\/90,
+#app-audit-root.theme-daylight .bg-zinc-950\/85,
+#app-audit-root.theme-daylight .bg-zinc-950\/80 {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Main shell backdrop in Daylight mode */
+#app-audit-root.theme-daylight > .daylight-shell-backdrop {
+  background-color: #f1f5f9 !important;
+}
+
+/* Cards in Daylight mode: Pure White with soft elevation */
+#app-audit-root.theme-daylight section,
+#app-audit-root.theme-daylight .bg-zinc-900,
+#app-audit-root.theme-daylight .bg-zinc-900\/95,
+#app-audit-root.theme-daylight .bg-zinc-900\/90,
+#app-audit-root.theme-daylight .bg-zinc-900\/80 {
+  background-color: #ffffff !important;
+  border-color: rgba(226, 232, 240, 0.85) !important;
+  box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.06), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
+}
+
+#app-audit-root.theme-daylight .bg-zinc-800,
+#app-audit-root.theme-daylight .bg-zinc-800\/80 {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Borders in Daylight mode: Soft Slate-200 instead of dark zinc-800 */
+#app-audit-root.theme-daylight .border-zinc-900,
+#app-audit-root.theme-daylight .border-zinc-800,
+#app-audit-root.theme-daylight .border-zinc-800\/80,
+#app-audit-root.theme-daylight .border-zinc-700 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Preserve mandatory red audit borders at all times! */
+#app-audit-root.theme-daylight .border-red-500,
+#app-audit-root.theme-night .border-red-500 {
+  border-color: #ef4444 !important;
+}
+
+/* Typography in Daylight mode */
+#app-audit-root.theme-daylight .text-slate-900,
+#app-audit-root.theme-daylight .text-zinc-100,
+#app-audit-root.theme-daylight .text-zinc-200,
+#app-audit-root.theme-daylight .dark\:text-zinc-100,
+#app-audit-root.theme-daylight .dark\:text-white {
+  color: #0f172a !important;
+}
+
+#app-audit-root.theme-night .text-slate-900 {
+  color: #ffffff !important;
+}
+
+#app-audit-root.theme-daylight .text-zinc-300 {
+  color: #334155 !important;
+}
+
+#app-audit-root.theme-daylight .text-zinc-400 {
+  color: #475569 !important;
+}
+
+#app-audit-root.theme-daylight .text-zinc-500,
+#app-audit-root.theme-daylight .text-zinc-600 {
+  color: #64748b !important;
+}
+
+/* Active buttons & active segmented pills in Daylight mode: Deep Charcoal with White Text */
+#app-audit-root.theme-daylight button.bg-white.text-zinc-950,
+#app-audit-root.theme-daylight span.bg-white.text-zinc-950 {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+}
+
+/* Inputs, Selects & Textareas in Daylight mode */
+#app-audit-root.theme-daylight input,
+#app-audit-root.theme-daylight select,
+#app-audit-root.theme-daylight textarea {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* ============================================================================
+   SOFT DARK MODE THEME (.theme-night)
+   Backdrop: Soft Slate (#0F172A / bg-slate-900)
+   Cards: Soft Slate-800 (#1E293B / bg-slate-800)
+   Text: Crisp Slate-100 (#F8FAFC)
+   ============================================================================ */
+#app-audit-root.theme-night {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+#app-audit-root.theme-night .bg-zinc-950,
+#app-audit-root.theme-night .bg-zinc-950\/95,
+#app-audit-root.theme-night .bg-zinc-950\/90 {
+  background-color: #0f172a !important;
+}
+
+#app-audit-root.theme-night section,
+#app-audit-root.theme-night .bg-zinc-900,
+#app-audit-root.theme-night .bg-zinc-900\/95,
+#app-audit-root.theme-night .bg-zinc-900\/90,
+#app-audit-root.theme-night .bg-zinc-900\/80 {
+  background-color: #1e293b !important;
+  border-color: rgba(51, 65, 85, 0.6) !important;
+  box-shadow: 0 4px 12px -2px rgba(2, 6, 23, 0.35);
+}
+
+#app-audit-root.theme-night .border-zinc-900,
+#app-audit-root.theme-night .border-zinc-800,
+#app-audit-root.theme-night .border-zinc-800\/80,
+#app-audit-root.theme-night .border-zinc-700 {
+  border-color: rgba(51, 65, 85, 0.65) !important;
+}
