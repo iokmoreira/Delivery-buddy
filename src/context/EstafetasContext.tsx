@@ -8374,10 +8374,31 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           return false;
         }
         lastExecutedVoicePhraseRef.current = { phrase: norm, ts: nowMs };
+        // Single-shot command recognition: immediately close and release the microphone hardware!
+        keepVoiceListeningRef.current = false;
+        setIsListeningSpeechRecognition(false);
+        if (typeof window !== 'undefined') {
+          const winAny = window as unknown as {
+            BuddyNativeOverlay?: {
+              stopNativeVoice?: () => void;
+              setBubbleListeningState?: (listening: boolean) => void;
+            };
+          };
+          try {
+            winAny.BuddyNativeOverlay?.stopNativeVoice?.();
+            winAny.BuddyNativeOverlay?.setBubbleListeningState?.(false);
+          } catch {
+            // ignore
+          }
+        }
         executeVoiceCommandPt(
           hasWakeWord || matchedDirectCmd ? latestRaw : `Buddy ${latestRaw}`
         );
         return true;
+      }
+      if (isFinal) {
+        keepVoiceListeningRef.current = false;
+        setIsListeningSpeechRecognition(false);
       }
       return false;
     },
@@ -8436,10 +8457,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       isCourierRegistrationModalOpen ||
       isInputOrModalPausedRef.current
     ) {
+      setIsListeningSpeechRecognition(false);
       return;
     }
 
-    // 1. If running inside the Native Android .APK with Native SpeechRecognizer:
+    // 1. If running inside the Native Android .APK with Single-Shot Native SpeechRecognizer:
     const winAny = window as unknown as {
       BuddyNativeOverlay?: {
         startNativeVoice?: () => void;
@@ -8457,7 +8479,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       return;
     }
 
-    // 2. Web Browser fallback (when not running inside Native Android .APK):
+    // 2. Web Browser single-shot fallback (when not running inside Native Android .APK):
     if (activeSpeechRecRef.current) {
       return;
     }
@@ -8467,7 +8489,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
 
     if (!SpeechRec || typeof SpeechRec !== 'function') {
-      setIsListeningSpeechRecognition(true);
+      setIsListeningSpeechRecognition(false);
       return;
     }
 
@@ -8514,6 +8536,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
         const executed = processIncomingVoiceTranscript(latestRaw, isFinal);
         if (executed) {
+          keepVoiceListeningRef.current = false;
+          setIsListeningSpeechRecognition(false);
           activeSpeechRecRef.current = null;
           try {
             recognition.stop();
@@ -8525,10 +8549,10 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
       recognition.onerror = (errEvent) => {
         const errCode = errEvent?.error || '';
+        keepVoiceListeningRef.current = false;
         activeSpeechRecRef.current = null;
+        setIsListeningSpeechRecognition(false);
         if (errCode === 'not-allowed' || errCode === 'service-not-allowed') {
-          keepVoiceListeningRef.current = false;
-          setIsListeningSpeechRecognition(false);
           showLiveMicTranscriptFeedback(
             'Microfone bloqueado pelo navegador — permita o acesso no cadeado'
           );
@@ -8536,15 +8560,16 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       };
 
       recognition.onend = () => {
+        keepVoiceListeningRef.current = false;
         activeSpeechRecRef.current = null;
-        if (!keepVoiceListeningRef.current) {
-          setIsListeningSpeechRecognition(false);
-        }
+        setIsListeningSpeechRecognition(false);
       };
 
       recognition.start();
     } catch {
+      keepVoiceListeningRef.current = false;
       activeSpeechRecRef.current = null;
+      setIsListeningSpeechRecognition(false);
     }
   }, [
     isCourierRegistrationModalOpen,
@@ -8562,9 +8587,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     hasUnlockedMicOnFirstTouchRef.current = true;
     keepVoiceListeningRef.current = true;
     setIsListeningSpeechRecognition(true);
-    showLiveMicTranscriptFeedback(
-      '🎙️ Microfone Ativo • Diga "Buddy..." ou o seu comando'
-    );
+    showLiveMicTranscriptFeedback('🟢 Ouvindo comando...');
     startContinuousRecognitionInstance();
   }, [showLiveMicTranscriptFeedback, startContinuousRecognitionInstance]);
 

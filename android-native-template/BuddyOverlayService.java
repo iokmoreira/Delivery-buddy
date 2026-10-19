@@ -13,11 +13,14 @@ import android.graphics.PixelFormat;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -32,6 +35,7 @@ public class BuddyOverlayService extends Service {
     private static final String CHANNEL_ID = "delivery_buddy_overlay_channel";
     private static final int NOTIFICATION_ID = 4401;
 
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private WindowManager windowManager;
     private TextView bubbleView;
     private WindowManager.LayoutParams layoutParams;
@@ -88,7 +92,7 @@ public class BuddyOverlayService extends Service {
         if (intent != null && intent.getAction() != null) {
             String action = intent.getAction();
             if (ACTION_SHOW_BUBBLE.equals(action)) {
-                isListeningState = intent.getBooleanExtra(EXTRA_IS_LISTENING, isListeningState);
+                isListeningState = intent.getBooleanExtra(EXTRA_IS_LISTENING, false);
                 showFloatingBubble();
             } else if (ACTION_HIDE_BUBBLE.equals(action)) {
                 removeFloatingBubble();
@@ -135,7 +139,7 @@ public class BuddyOverlayService extends Service {
         layoutParams.x = getResources().getDisplayMetrics().widthPixels - sizePx - dpToPx(12f);
         layoutParams.y = (int) (getResources().getDisplayMetrics().heightPixels * 0.58f);
 
-        TextView tv = new TextView(this);
+        final TextView tv = new TextView(this);
         tv.setGravity(Gravity.CENTER);
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
         tv.setTypeface(Typeface.DEFAULT_BOLD);
@@ -151,6 +155,24 @@ public class BuddyOverlayService extends Service {
             private float initialTouchX;
             private float initialTouchY;
             private long touchStartTime;
+            private boolean longPressTriggered = false;
+
+            private final Runnable longPressRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    longPressTriggered = true;
+                    try {
+                        tv.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                    } catch (Exception ignored) {
+                    }
+                    isListeningState = true;
+                    updateBubbleVisualStyle();
+                    MainActivity activeInstance = MainActivity.getInstance();
+                    if (activeInstance != null) {
+                        activeInstance.startSingleShotVoiceFromOverlay();
+                    }
+                }
+            };
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -161,6 +183,9 @@ public class BuddyOverlayService extends Service {
                         initialTouchX = event.getRawX();
                         initialTouchY = event.getRawY();
                         touchStartTime = SystemClock.uptimeMillis();
+                        longPressTriggered = false;
+                        uiHandler.removeCallbacks(longPressRunnable);
+                        uiHandler.postDelayed(longPressRunnable, 400L);
                         return true;
 
                     case MotionEvent.ACTION_MOVE:
@@ -169,6 +194,7 @@ public class BuddyOverlayService extends Service {
                             event.getRawY() - initialTouchY
                         );
                         if (moveDist > 12.0) {
+                            uiHandler.removeCallbacks(longPressRunnable);
                             layoutParams.x = initialX + (int) (event.getRawX() - initialTouchX);
                             layoutParams.y = initialY + (int) (event.getRawY() - initialTouchY);
                             try {
@@ -181,12 +207,15 @@ public class BuddyOverlayService extends Service {
                         return true;
 
                     case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        uiHandler.removeCallbacks(longPressRunnable);
                         double upDist = Math.hypot(
                             event.getRawX() - initialTouchX,
                             event.getRawY() - initialTouchY
                         );
                         long elapsed = SystemClock.uptimeMillis() - touchStartTime;
-                        if (upDist <= 18.0 || elapsed < 220) {
+                        // Short tap (< 350ms, movement < 18px) -> 1-Tap Maximize!
+                        if (!longPressTriggered && upDist < 18.0 && elapsed < 350L) {
                             restoreMainActivityToForeground();
                         }
                         return true;
@@ -208,7 +237,7 @@ public class BuddyOverlayService extends Service {
     private void restoreMainActivityToForeground() {
         removeFloatingBubble();
 
-        // Fallback 1: ActivityManager.moveTaskToFront using MainActivity static WeakReference
+        // 1. ActivityManager.moveTaskToFront
         try {
             MainActivity activeInstance = MainActivity.getInstance();
             if (activeInstance != null) {
@@ -221,7 +250,7 @@ public class BuddyOverlayService extends Service {
         } catch (Exception ignored) {
         }
 
-        // Prepare Foreground Restore Intent
+        // 2. Intent + PendingIntent.send()
         Intent restoreIntent = new Intent(this, MainActivity.class);
         restoreIntent.setAction(Intent.ACTION_MAIN);
         restoreIntent.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -233,7 +262,6 @@ public class BuddyOverlayService extends Service {
         );
         restoreIntent.putExtra("RESTORE_FROM_BUBBLE", true);
 
-        // Fallback 2: PendingIntent.send() (Bypasses Samsung One UI background activity start restrictions)
         try {
             int pendingFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                 ? (PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)
@@ -243,7 +271,7 @@ public class BuddyOverlayService extends Service {
         } catch (Exception ignored) {
         }
 
-        // Fallback 3: Direct startActivity
+        // 3. Direct startActivity fallback
         try {
             startActivity(restoreIntent);
         } catch (Exception ignored) {
@@ -255,17 +283,17 @@ public class BuddyOverlayService extends Service {
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.OVAL);
         if (isListeningState) {
-            // Listening state: Vibrant Emerald Green #10b981 background, 3dp white border, bold white text "DB ON"
+            // Single-shot listening active: Vibrant Emerald Green #10b981
             bg.setColor(Color.parseColor("#10B981"));
             bg.setStroke(dpToPx(3f), Color.WHITE);
             bubbleView.setTextColor(Color.WHITE);
-            bubbleView.setText("DB\nON");
+            bubbleView.setText("DB\n🎙️");
         } else {
-            // Idle state: Dark slate #0f172a background, 2dp emerald border, bold white text "DB" + "🎙️"
+            // Idle: Dark slate #0f172a with 2dp emerald border
             bg.setColor(Color.parseColor("#0F172A"));
             bg.setStroke(dpToPx(2f), Color.parseColor("#10B981"));
             bubbleView.setTextColor(Color.WHITE);
-            bubbleView.setText("DB\n🎙️");
+            bubbleView.setText("DB\n↗️");
         }
         bubbleView.setBackground(bg);
     }
@@ -285,10 +313,10 @@ public class BuddyOverlayService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "Delivery Buddy — Copiloto de Voz & Mapa",
+                "Delivery Buddy — Bolinha Flutuante & Mapa",
                 NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Mantém a escuta mãos-livres 'Buddy...' e a bolinha flutuante DB sobre a Uber/Glovo.");
+            channel.setDescription("Toque na bolinha DB para abrir ou segure 0.4s para comando de voz.");
             channel.setShowBadge(false);
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm != null) {
@@ -319,8 +347,8 @@ public class BuddyOverlayService extends Service {
 
         Notification notification = builder
             .setContentTitle("Delivery Buddy Ativo (Amarante)")
-            .setContentText("Bolinha DB & Voz 'Buddy...' ativas • Toque para abrir")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentText("1 toque na bolinha DB abre • Segurar 0.4s ativa voz")
+            .setSmallIcon(android.R.drawable.ic_dialog_map)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build();

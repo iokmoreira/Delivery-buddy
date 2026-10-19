@@ -6,6 +6,8 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -20,11 +22,14 @@ import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
 import java.lang.ref.WeakReference;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +37,7 @@ import org.json.JSONObject;
 
 public class MainActivity extends BridgeActivity {
 
+    private static final String LIVE_OTA_URL = "https://iokmoreira.github.io/Delivery-buddy/";
     private static WeakReference<MainActivity> instanceRef;
 
     public static MainActivity getInstance() {
@@ -42,22 +48,16 @@ public class MainActivity extends BridgeActivity {
     private SpeechRecognizer speechRecognizer;
     private Intent recognizerIntent;
 
-    // Strictly OFF (false) by default on startup — never auto-starts without user tap!
-    private volatile boolean keepListening = false;
-    private boolean isRecognizerListening = false;
+    // 100% Silent by Default: single-shot on-demand voice only (NEVER loops!)
+    private boolean isSingleShotListening = false;
     private boolean isInForeground = true;
     private long lastDirectJavaCommandTs = 0L;
-    private String lastForwardedPartial = "";
 
-    private final Runnable restartRecognizerRunnable = new Runnable() {
+    // 6-second single-shot silence watchdog: automatically closes and releases hardware mic
+    private final Runnable singleShotTimeoutRunnable = new Runnable() {
         @Override
         public void run() {
-            if (keepListening) {
-                startNativeSpeechRecognizerInternal();
-            } else {
-                destroySpeechRecognizerInternal();
-                BuddyOverlayService.updateListeningState(MainActivity.this, false);
-            }
+            stopAndReleaseMicrophoneNow();
         }
     };
 
@@ -65,19 +65,19 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         instanceRef = new WeakReference<>(this);
-
-        // Strictly ensure mic is OFF on launch
-        keepListening = false;
-        isRecognizerListening = false;
+        isSingleShotListening = false;
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         requestRuntimePermissionsIfNeeded();
         initRecognizerIntent();
 
         if (getBridge() != null && getBridge().getWebView() != null) {
-            WebView webView = getBridge().getWebView();
-            webView.getSettings().setJavaScriptEnabled(true);
-            webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+            final WebView webView = getBridge().getWebView();
+            WebSettings settings = webView.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+            settings.setMediaPlaybackRequiresUserGesture(false);
             webView.addJavascriptInterface(new BuddyNativeOverlayBridge(), "BuddyNativeOverlay");
 
             webView.setWebChromeClient(new WebChromeClient() {
@@ -96,7 +96,82 @@ public class MainActivity extends BridgeActivity {
                     }
                 }
             });
+
+            // Automatic Live OTA check on startup: load https://iokmoreira.github.io/Delivery-buddy/ if reachable,
+            // otherwise stay on the bundled local Capacitor build (https://localhost) seamlessly!
+            checkAndLoadLiveOtaIfOnline(false);
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private boolean isNetworkAvailable() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return false;
+            NetworkInfo active = cm.getActiveNetworkInfo();
+            return active != null && active.isConnected();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void checkAndLoadLiveOtaIfOnline(final boolean clearCacheFirst) {
+        if (!isNetworkAvailable()) {
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                HttpURLConnection conn = null;
+                try {
+                    URL url = new URL(LIVE_OTA_URL + "?ota_ping=" + System.currentTimeMillis());
+                    conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(2500);
+                    conn.setReadTimeout(2500);
+                    conn.setInstanceFollowRedirects(true);
+                    int code = conn.getResponseCode();
+                    if (code >= 200 && code < 300) {
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (getBridge() != null && getBridge().getWebView() != null) {
+                                    WebView wv = getBridge().getWebView();
+                                    if (clearCacheFirst) {
+                                        wv.clearCache(true);
+                                    }
+                                    wv.loadUrl(LIVE_OTA_URL + "?ota_ts=" + System.currentTimeMillis());
+                                }
+                            }
+                        });
+                    } else if (clearCacheFirst) {
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (getBridge() != null && getBridge().getWebView() != null) {
+                                    getBridge().getWebView().reload();
+                                }
+                            }
+                        });
+                    }
+                } catch (Exception ignored) {
+                    if (clearCacheFirst) {
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (getBridge() != null && getBridge().getWebView() != null) {
+                                    getBridge().getWebView().reload();
+                                }
+                            }
+                        });
+                    }
+                } finally {
+                    if (conn != null) {
+                        conn.disconnect();
+                    }
+                }
+            }
+        }).start();
     }
 
     private void initRecognizerIntent() {
@@ -109,19 +184,21 @@ public class MainActivity extends BridgeActivity {
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "pt-PT");
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
-        // Extended silence windows so Android One UI does not cut off and blink every 2 seconds
-        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 10000L);
-        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L);
-        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 4000L);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 6000L);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L);
     }
 
-    private void startNativeSpeechRecognizerInternal() {
-        if (!keepListening) {
-            destroySpeechRecognizerInternal();
-            BuddyOverlayService.updateListeningState(MainActivity.this, false);
-            return;
-        }
+    public void startSingleShotVoiceFromOverlay() {
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                startSingleShotVoiceRecognition();
+            }
+        });
+    }
 
+    private void startSingleShotVoiceRecognition() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(
@@ -129,151 +206,105 @@ public class MainActivity extends BridgeActivity {
                 new String[] { Manifest.permission.RECORD_AUDIO },
                 9102
             );
+            stopAndReleaseMicrophoneNow();
             return;
         }
 
+        // Clean up any previous recognizer before starting a fresh single-shot session
+        destroySpeechRecognizerInternal();
+
         try {
-            if (speechRecognizer == null) {
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getApplicationContext());
-                speechRecognizer.setRecognitionListener(new RecognitionListener() {
-                    @Override
-                    public void onReadyForSpeech(Bundle params) {
-                        if (!keepListening) {
-                            destroySpeechRecognizerInternal();
-                            return;
-                        }
-                        isRecognizerListening = true;
-                        BuddyOverlayService.updateListeningState(MainActivity.this, true);
-                    }
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getApplicationContext());
+            speechRecognizer.setRecognitionListener(new RecognitionListener() {
+                @Override
+                public void onReadyForSpeech(Bundle params) {
+                    isSingleShotListening = true;
+                    BuddyOverlayService.updateListeningState(MainActivity.this, true);
+                    notifyWebViewListeningState(true);
+                }
 
-                    @Override
-                    public void onBeginningOfSpeech() {
-                        if (!keepListening) {
-                            destroySpeechRecognizerInternal();
-                            return;
-                        }
-                        isRecognizerListening = true;
-                    }
+                @Override
+                public void onBeginningOfSpeech() {
+                    isSingleShotListening = true;
+                }
 
-                    @Override
-                    public void onRmsChanged(float rmsdB) {
-                    }
+                @Override
+                public void onRmsChanged(float rmsdB) {
+                }
 
-                    @Override
-                    public void onBufferReceived(byte[] buffer) {
-                    }
+                @Override
+                public void onBufferReceived(byte[] buffer) {
+                }
 
-                    @Override
-                    public void onEndOfSpeech() {
-                        isRecognizerListening = false;
-                        if (keepListening) {
-                            mainHandler.removeCallbacks(restartRecognizerRunnable);
-                            mainHandler.postDelayed(restartRecognizerRunnable, 900);
-                        } else {
-                            destroySpeechRecognizerInternal();
-                            BuddyOverlayService.updateListeningState(MainActivity.this, false);
-                        }
-                    }
+                @Override
+                public void onEndOfSpeech() {
+                    // Single-shot mode: never auto-restart in a loop!
+                }
 
-                    @Override
-                    public void onError(int error) {
-                        isRecognizerListening = false;
-                        if (!keepListening) {
-                            destroySpeechRecognizerInternal();
-                            BuddyOverlayService.updateListeningState(MainActivity.this, false);
-                            return;
-                        }
+                @Override
+                public void onError(int error) {
+                    // Single-shot mode: immediately release hardware mic on error or silence timeout
+                    stopAndReleaseMicrophoneNow();
+                }
 
-                        if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-                            keepListening = false;
-                            destroySpeechRecognizerInternal();
-                            BuddyOverlayService.updateListeningState(MainActivity.this, false);
-                            notifyWebViewListeningState(false);
-                            return;
-                        }
-
-                        if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY
-                            || error == SpeechRecognizer.ERROR_CLIENT) {
-                            destroySpeechRecognizerInternal();
-                            if (keepListening) {
-                                mainHandler.removeCallbacks(restartRecognizerRunnable);
-                                mainHandler.postDelayed(restartRecognizerRunnable, 1500);
-                            }
-                            return;
-                        }
-
-                        if (keepListening) {
-                            mainHandler.removeCallbacks(restartRecognizerRunnable);
-                            mainHandler.postDelayed(restartRecognizerRunnable, 1200);
-                        } else {
-                            BuddyOverlayService.updateListeningState(MainActivity.this, false);
-                        }
-                    }
-
-                    @Override
-                    public void onResults(Bundle results) {
-                        isRecognizerListening = false;
-                        lastForwardedPartial = "";
-                        if (keepListening && results != null) {
-                            ArrayList<String> matches = results.getStringArrayList(
-                                SpeechRecognizer.RESULTS_RECOGNITION
-                            );
-                            if (matches != null && !matches.isEmpty()) {
-                                String bestText = matches.get(0);
-                                handleRecognizedSpeech(bestText, true);
-                            }
-                        }
-                        if (keepListening) {
-                            mainHandler.removeCallbacks(restartRecognizerRunnable);
-                            mainHandler.postDelayed(restartRecognizerRunnable, 800);
-                        } else {
-                            destroySpeechRecognizerInternal();
-                            BuddyOverlayService.updateListeningState(MainActivity.this, false);
-                        }
-                    }
-
-                    @Override
-                    public void onPartialResults(Bundle partialResults) {
-                        if (!keepListening || partialResults == null) return;
-                        ArrayList<String> partials = partialResults.getStringArrayList(
+                @Override
+                public void onResults(Bundle results) {
+                    if (results != null) {
+                        ArrayList<String> matches = results.getStringArrayList(
                             SpeechRecognizer.RESULTS_RECOGNITION
                         );
-                        if (partials != null && !partials.isEmpty()) {
-                            String partialText = partials.get(0);
-                            if (partialText != null && !partialText.trim().isEmpty()) {
-                                String trimmed = partialText.trim();
-                                if (!trimmed.equalsIgnoreCase(lastForwardedPartial)) {
-                                    lastForwardedPartial = trimmed;
-                                    handleRecognizedSpeech(trimmed, false);
-                                }
-                            }
+                        if (matches != null && !matches.isEmpty()) {
+                            String bestText = matches.get(0);
+                            handleRecognizedSpeech(bestText, true);
                         }
                     }
+                    // Immediately close and release microphone after single command completes
+                    stopAndReleaseMicrophoneNow();
+                }
 
-                    @Override
-                    public void onEvent(int eventType, Bundle params) {
+                @Override
+                public void onPartialResults(Bundle partialResults) {
+                    if (!isSingleShotListening || partialResults == null) return;
+                    ArrayList<String> partials = partialResults.getStringArrayList(
+                        SpeechRecognizer.RESULTS_RECOGNITION
+                    );
+                    if (partials != null && !partials.isEmpty()) {
+                        String partialText = partials.get(0);
+                        if (partialText != null && !partialText.trim().isEmpty()) {
+                            handleRecognizedSpeech(partialText.trim(), false);
+                        }
                     }
-                });
-            }
+                }
 
-            if (!isRecognizerListening && keepListening) {
-                isRecognizerListening = true;
-                lastForwardedPartial = "";
-                speechRecognizer.startListening(recognizerIntent);
-                BuddyOverlayService.updateListeningState(MainActivity.this, true);
-            }
+                @Override
+                public void onEvent(int eventType, Bundle params) {
+                }
+            });
+
+            isSingleShotListening = true;
+            BuddyOverlayService.updateListeningState(MainActivity.this, true);
+            notifyWebViewListeningState(true);
+            speechRecognizer.startListening(recognizerIntent);
+
+            // 6-second maximum single-shot watchdog
+            mainHandler.removeCallbacks(singleShotTimeoutRunnable);
+            mainHandler.postDelayed(singleShotTimeoutRunnable, 6000L);
         } catch (Exception e) {
-            isRecognizerListening = false;
-            if (keepListening) {
-                mainHandler.removeCallbacks(restartRecognizerRunnable);
-                mainHandler.postDelayed(restartRecognizerRunnable, 1500);
-            }
+            stopAndReleaseMicrophoneNow();
         }
     }
 
+    private void stopAndReleaseMicrophoneNow() {
+        isSingleShotListening = false;
+        mainHandler.removeCallbacks(singleShotTimeoutRunnable);
+        destroySpeechRecognizerInternal();
+        BuddyOverlayService.updateListeningState(MainActivity.this, false);
+        notifyWebViewListeningState(false);
+    }
+
     private void destroySpeechRecognizerInternal() {
-        isRecognizerListening = false;
-        mainHandler.removeCallbacks(restartRecognizerRunnable);
+        isSingleShotListening = false;
+        mainHandler.removeCallbacks(singleShotTimeoutRunnable);
         if (speechRecognizer != null) {
             try {
                 speechRecognizer.stopListening();
@@ -297,14 +328,38 @@ public class MainActivity extends BridgeActivity {
         return nfd.replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
     }
 
+    private boolean isActionableFastCommand(String norm) {
+        return norm.contains("minimizar")
+            || norm.contains("minimizer")
+            || norm.contains("minimiz")
+            || norm.contains("modo invisivel")
+            || norm.contains("maximizar")
+            || norm.contains("maximizer")
+            || norm.contains("maximiz")
+            || norm.contains("abrir")
+            || norm.contains("mostrar tela")
+            || norm.contains("restaurar")
+            || norm.contains("aceitar")
+            || norm.contains("recusar")
+            || norm.contains("rejeitar")
+            || norm.contains("dividir pedido")
+            || norm.contains("iniciar entrega")
+            || norm.contains("finalizar entrega")
+            || norm.contains("modo chuva")
+            || norm.contains("mapa")
+            || norm.contains("financas")
+            || norm.contains("inicio");
+    }
+
     private void handleRecognizedSpeech(final String text, final boolean isFinal) {
-        if (!keepListening || text == null || text.trim().isEmpty()) return;
+        if (text == null || text.trim().isEmpty()) return;
 
         String norm = normalizeText(text);
         long now = SystemClock.uptimeMillis();
+        boolean matchedFastCmd = isActionableFastCommand(norm);
 
-        // Direct Java-level execution for "minimizar" and "maximizar" / "abrir" in onPartialResults & onResults
-        if (now - lastDirectJavaCommandTs > 2200L) {
+        // Execute native window minimize/maximize directly in Java without waiting for WebView round-trip
+        if (now - lastDirectJavaCommandTs > 1800L) {
             if (norm.contains("minimizar")
                 || norm.contains("minimizer")
                 || norm.contains("minimiz")
@@ -312,6 +367,7 @@ public class MainActivity extends BridgeActivity {
                 || norm.contains("esconder")
                 || norm.contains("ocultar")) {
                 lastDirectJavaCommandTs = now;
+                stopAndReleaseMicrophoneNow();
                 minimizeToFloatingBubbleNow();
             } else if (norm.contains("maximizar")
                 || norm.contains("maximizer")
@@ -320,19 +376,23 @@ public class MainActivity extends BridgeActivity {
                 || norm.contains("mostrar tela")
                 || norm.contains("restaurar")) {
                 lastDirectJavaCommandTs = now;
+                stopAndReleaseMicrophoneNow();
                 bringActivityToFrontNow();
+            } else if (matchedFastCmd) {
+                // Immediately release microphone hardware as soon as a fast command is captured!
+                stopAndReleaseMicrophoneNow();
             }
         }
 
-        // Forward both partial and final transcripts to WebView so React executes all commands ("aceitar", "recusar", "iniciar entrega", "finalizar entrega", "modo chuva", "mapa", "finanças", "início", etc.)
         if (getBridge() != null && getBridge().getWebView() != null) {
             final WebView webView = getBridge().getWebView();
+            final boolean treatAsFinal = isFinal || matchedFastCmd;
             webView.post(new Runnable() {
                 @Override
                 public void run() {
                     String quoted = JSONObject.quote(text.trim());
                     String js = "window.onBuddyNativeTranscript && window.onBuddyNativeTranscript("
-                        + quoted + ", " + (isFinal ? "true" : "false") + ");";
+                        + quoted + ", " + (treatAsFinal ? "true" : "false") + ");";
                     webView.evaluateJavascript(js, null);
                 }
             });
@@ -375,7 +435,7 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void run() {
                 if (ensureOverlayPermission()) {
-                    BuddyOverlayService.showBubble(MainActivity.this, keepListening);
+                    BuddyOverlayService.showBubble(MainActivity.this, isSingleShotListening);
                     moveTaskToBack(true);
                 }
             }
@@ -441,7 +501,6 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         isInForeground = true;
-        // Hide the floating bubble overlay while MainActivity is in the foreground
         BuddyOverlayService.hideBubble(this);
     }
 
@@ -449,9 +508,8 @@ public class MainActivity extends BridgeActivity {
     public void onPause() {
         super.onPause();
         isInForeground = false;
-        // Show the floating DB bubble whenever MainActivity goes to the background
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)) {
-            BuddyOverlayService.showBubble(this, keepListening);
+            BuddyOverlayService.showBubble(this, isSingleShotListening);
         }
     }
 
@@ -460,14 +518,13 @@ public class MainActivity extends BridgeActivity {
         super.onStop();
         isInForeground = false;
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)) {
-            BuddyOverlayService.showBubble(this, keepListening);
+            BuddyOverlayService.showBubble(this, isSingleShotListening);
         }
     }
 
     @Override
     public void onDestroy() {
-        keepListening = false;
-        destroySpeechRecognizerInternal();
+        stopAndReleaseMicrophoneNow();
         super.onDestroy();
     }
 
@@ -509,9 +566,7 @@ public class MainActivity extends BridgeActivity {
             mainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    keepListening = true;
-                    BuddyOverlayService.updateListeningState(MainActivity.this, true);
-                    startNativeSpeechRecognizerInternal();
+                    startSingleShotVoiceRecognition();
                 }
             });
         }
@@ -521,9 +576,7 @@ public class MainActivity extends BridgeActivity {
             mainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    keepListening = false;
-                    destroySpeechRecognizerInternal();
-                    BuddyOverlayService.updateListeningState(MainActivity.this, false);
+                    stopAndReleaseMicrophoneNow();
                 }
             });
         }
@@ -544,12 +597,17 @@ public class MainActivity extends BridgeActivity {
                 @Override
                 public void run() {
                     if (!listening) {
-                        keepListening = false;
-                        destroySpeechRecognizerInternal();
+                        stopAndReleaseMicrophoneNow();
+                    } else {
+                        BuddyOverlayService.updateListeningState(MainActivity.this, true);
                     }
-                    BuddyOverlayService.updateListeningState(MainActivity.this, listening);
                 }
             });
+        }
+
+        @JavascriptInterface
+        public void reloadOtaNow() {
+            checkAndLoadLiveOtaIfOnline(true);
         }
     }
 }

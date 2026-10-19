@@ -1,13 +1,18 @@
-name: Build Signed Android APK (Delivery Buddy)
+name: Build Signed Android APK + OTA GitHub Pages (Delivery Buddy)
 
 on:
   push:
-    branches: ['*']
+    branches: ['main', 'master']
   workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build-android-apk:
-    name: Compile & Sign Delivery-Buddy-Amarante.apk
+    name: Compile & Sign Delivery-Buddy-Amarante.apk + Deploy OTA
     runs-on: ubuntu-latest
 
     steps:
@@ -35,7 +40,14 @@ jobs:
           npm install --legacy-peer-deps
           npm run build
 
-      - name: 6. Initialize & Sync Capacitor Android Platform
+      - name: 6. Deploy Live OTA Web Bundle to GitHub Pages (gh-pages)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          force_orphan: true
+
+      - name: 7. Initialize & Sync Capacitor Android Platform
         run: |
           mv capacitor.config.ts capacitor.config.ts.bak || true
           npm install --no-save --legacy-peer-deps @capacitor/core@^6.0.0 @capacitor/cli@^6.0.0 @capacitor/android@^6.0.0
@@ -45,7 +57,7 @@ jobs:
           npx cap sync android
           mv capacitor.config.ts.bak capacitor.config.ts || true
 
-      - name: 7. Inject Native Overlay Service, Bridge & Persistent Keystore + Dynamic versionCode
+      - name: 8. Inject Native Overlay Service, Bridge & Persistent Keystore + Dynamic versionCode
         run: |
           rm -f android/app/src/main/java/com/pbg/deliverybuddy/MainActivity.java
           rm -f android/app/src/main/java/com/pbg/deliverybuddy/*.kt
@@ -85,14 +97,14 @@ jobs:
           }
           EOF
 
-      - name: 8. Compile & Sign Android APK (Delivery-Buddy-Amarante.apk)
+      - name: 9. Compile & Sign Android APK (Delivery-Buddy-Amarante.apk)
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk ../Delivery-Buddy-Amarante.apk
 
-      - name: 9. Upload Delivery-Buddy-Amarante.apk Artifact
+      - name: 10. Upload Delivery-Buddy-Amarante.apk Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Delivery-Buddy-Amarante-APK

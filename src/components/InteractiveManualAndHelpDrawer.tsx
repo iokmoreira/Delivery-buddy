@@ -1580,14 +1580,14 @@ export const MenuMaisHubView: React.FC = () => {
                 style={{ backgroundColor: '#064e3b', color: '#6ee7b7' }}
                 className="rounded-full border border-emerald-400/50 px-2 py-0.5 text-[9px] font-mono font-bold"
               >
-                VAD 2-Estágios: {isListeningSpeechRecognition ? '🎙️ ON' : 'Pronto'}
+                Voz 1-Toque: {isListeningSpeechRecognition ? '🟢 Ouvindo comando...' : '🎙️ OFF (Pronto)'}
               </span>
             </div>
             <h3
               style={{ color: '#ffffff' }}
               className="text-sm font-black tracking-tight pt-0.5"
             >
-              📲 Gerar &amp; Baixar .APK Nativo (Sobreposição Uber / Glovo)
+              📲 APK Nativo + Atualização Automática OTA (GitHub Pages)
             </h3>
           </div>
 
@@ -1601,22 +1601,37 @@ export const MenuMaisHubView: React.FC = () => {
           </button>
         </div>
 
-        {/* Status of Native Bridge & 1-Tap Invisible Minimized Bubble Test */}
+        {/* 1-Tap OTA Cloud Reload + Invisible Minimized Bubble Test */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
-          <div
-            style={{ backgroundColor: '#064e3b' }}
-            className="rounded-xl border border-emerald-500/40 px-2.5 py-2 flex items-center justify-between gap-2"
+          <button
+            type="button"
+            onClick={() => {
+              const winAny = window as unknown as {
+                BuddyNativeOverlay?: {
+                  reloadOtaNow?: () => void;
+                };
+              };
+              if (typeof winAny.BuddyNativeOverlay?.reloadOtaNow === 'function') {
+                winAny.BuddyNativeOverlay.reloadOtaNow();
+                return;
+              }
+              try {
+                if ('caches' in window) {
+                  caches.keys().then((names) => {
+                    names.forEach((n) => caches.delete(n));
+                  });
+                }
+              } catch {
+                // ignore
+              }
+              const baseUrl = window.location.href.split('?')[0];
+              window.location.replace(`${baseUrl}?ota_ts=${Date.now()}`);
+            }}
+            style={{ backgroundColor: '#0284c7', color: '#ffffff' }}
+            className="rounded-xl border border-sky-300 px-3 py-2 text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-95 transition"
           >
-            <span style={{ color: '#a7f3d0' }} className="font-semibold">
-              Ponte Nativa (<code className="font-mono">BuddyNativeOverlay</code>):
-            </span>
-            <span
-              style={{ color: hasNativeOverlayBridge ? '#34d399' : '#fde68a' }}
-              className="font-mono font-black text-[10px] shrink-0"
-            >
-              {hasNativeOverlayBridge ? 'ATIVA (.APK)' : 'MODO WEB / OTA'}
-            </span>
-          </div>
+            <span>🔄 Atualizar App Agora (OTA)</span>
+          </button>
 
           <button
             type="button"
