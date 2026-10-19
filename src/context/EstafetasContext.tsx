@@ -3751,20 +3751,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   // ZONE AGREEMENTS, SAFETY TELEMETRY, B2B PORTAL & VOICE COMMAND COPILOT
   // =========================================================================
 
-  const lastMinimizedTimestampRef = useRef<number>(0);
-  const wasHiddenWhileMinimizedRef = useRef<boolean>(false);
-
   const setIsBubbleMinimized = useCallback(
     (minimized: boolean) => {
       cancelSpeechNow();
-      if (minimized) {
-        lastMinimizedTimestampRef.current = Date.now();
-        wasHiddenWhileMinimizedRef.current = false;
-      }
-      setState((prev) => ({
-        ...prev,
-        isBubbleMinimized: minimized,
-      }));
       if (minimized) {
         setIsQuickSummaryOpenState(false);
       }
@@ -3775,6 +3764,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
             minimizeToFloatingBubble?: () => void;
             maximizeFromBubble?: () => void;
             setBubbleListeningState?: (listening: boolean) => void;
+            startNativeVoice?: () => void;
+            stopNativeVoice?: () => void;
           };
           BuddyAndroid?: {
             maximizeWindow?: () => void;
@@ -3782,12 +3773,37 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           };
         };
 
-        if (minimized) {
-          try {
-            winAny.BuddyNativeOverlay?.minimizeToFloatingBubble?.();
-          } catch {
-            // ignore native overlay bridge error
+        // If running inside Native Android .APK (window.BuddyNativeOverlay):
+        // Keep the normal React dashboard rendered in the WebView (isBubbleMinimized = false)
+        // and let MainActivity moveTaskToBack(true) + show BuddyOverlayService floating DB bubble!
+        if (winAny.BuddyNativeOverlay) {
+          setState((prev) => ({
+            ...prev,
+            isBubbleMinimized: false,
+          }));
+          if (minimized) {
+            try {
+              winAny.BuddyNativeOverlay.minimizeToFloatingBubble?.();
+            } catch {
+              // ignore native overlay error
+            }
+          } else {
+            try {
+              winAny.BuddyNativeOverlay.maximizeFromBubble?.();
+            } catch {
+              // ignore native overlay error
+            }
           }
+          return;
+        }
+
+        // Web / PWA fallback when not inside Native Android .APK
+        setState((prev) => ({
+          ...prev,
+          isBubbleMinimized: minimized,
+        }));
+
+        if (minimized) {
           try {
             winAny.BuddyAndroid?.minimizeToBubble?.();
           } catch {
@@ -3802,11 +3818,6 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           }
         } else {
           try {
-            winAny.BuddyNativeOverlay?.maximizeFromBubble?.();
-          } catch {
-            // ignore native overlay bridge error
-          }
-          try {
             winAny.BuddyAndroid?.maximizeWindow?.();
           } catch {
             // ignore legacy native bridge error
@@ -3817,6 +3828,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
             // ignore focus error
           }
         }
+      } else {
+        setState((prev) => ({
+          ...prev,
+          isBubbleMinimized: minimized,
+        }));
       }
     },
     [cancelSpeechNow]
@@ -3839,55 +3855,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       // ignore
     }
     winAny.__onNativeBubbleRestore = () => {
-      setIsBubbleMinimized(false);
-      speakTextPt('Tela aberta.');
-    };
-  }, [isListeningSpeechRecognition, setIsBubbleMinimized, speakTextPt]);
-
-  // Auto-restore full UI when reopening from Samsung One UI's floating Pop-Up Bubble ("DB") after being hidden
-  useEffect(() => {
-    if (typeof window === 'undefined' || !state.isBubbleMinimized) {
-      return;
-    }
-
-    const handlePopupRestore = () => {
-      if (Date.now() - lastMinimizedTimestampRef.current < 700) {
-        return;
-      }
-      if (
-        typeof document !== 'undefined' &&
-        document.visibilityState === 'hidden'
-      ) {
-        wasHiddenWhileMinimizedRef.current = true;
-        return;
-      }
-      if (!wasHiddenWhileMinimizedRef.current) {
-        return;
-      }
-      wasHiddenWhileMinimizedRef.current = false;
       setState((prev) =>
         prev.isBubbleMinimized ? { ...prev, isBubbleMinimized: false } : prev
       );
+      speakTextPt('Tela aberta.');
     };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        wasHiddenWhileMinimizedRef.current = true;
-      } else if (document.visibilityState === 'visible') {
-        handlePopupRestore();
-      }
-    };
-
-    window.addEventListener('focus', handlePopupRestore);
-    window.addEventListener('pageshow', handlePopupRestore);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('focus', handlePopupRestore);
-      window.removeEventListener('pageshow', handlePopupRestore);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [state.isBubbleMinimized]);
+  }, [isListeningSpeechRecognition, speakTextPt]);
 
   const dismissBubbleAnimation = useCallback(() => {
     setActiveBubbleAnimation(null);
@@ -8245,17 +8218,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   );
 
   // =========================================================================
-  // 2-STAGE CONTINUOUS VOICE WAKE-WORD ENGINE VIA SILENT AUDIO VAD (ZERO UI FLICKER)
-  // Stage 1: Persistent Silent Audio Monitor (AudioContext + AnalyserNode, 200ms ref loop)
-  // Stage 2: Instant SpeechRecognition Trigger on RMS Voice Energy or Touch
+  // NATIVE ANDROID SPEECH RECOGNIZER BRIDGE + CLEAN WEB SPEECH FALLBACK
+  // Zero getUserMedia hardware mic lock! Uses window.BuddyNativeOverlay.startNativeVoice()
+  // inside the Android .APK and forwards partial/final transcripts via window.onBuddyNativeTranscript.
   // =========================================================================
-  const vadAudioContextRef = useRef<AudioContext | null>(null);
-  const vadAnalyserRef = useRef<AnalyserNode | null>(null);
-  const vadMediaStreamRef = useRef<MediaStream | null>(null);
-  const vadIntervalRef = useRef<number | null>(null);
-  const isMicStreamOpenRef = useRef<boolean>(false);
   const isInputOrModalPausedRef = useRef<boolean>(false);
-  const lastVadSpeechTriggerTsRef = useRef<number>(0);
 
   const abortActiveSpeechRecOnly = useCallback(() => {
     if (activeSpeechRecRef.current) {
@@ -8271,91 +8238,32 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     }
   }, []);
 
-  const stopContinuousVoiceMic = useCallback(() => {
-    keepVoiceListeningRef.current = false;
-    isMicStreamOpenRef.current = false;
-    if (watchdogRestartTimerRef.current !== null) {
-      window.clearTimeout(watchdogRestartTimerRef.current);
-      watchdogRestartTimerRef.current = null;
-    }
-    if (vadIntervalRef.current !== null) {
-      window.clearInterval(vadIntervalRef.current);
-      vadIntervalRef.current = null;
-    }
-    abortActiveSpeechRecOnly();
-    if (vadMediaStreamRef.current) {
-      try {
-        vadMediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      } catch {
-        // ignore
-      }
-      vadMediaStreamRef.current = null;
-    }
-    if (vadAudioContextRef.current) {
-      try {
-        vadAudioContextRef.current.close().catch(() => {});
-      } catch {
-        // ignore
-      }
-      vadAudioContextRef.current = null;
-    }
-    vadAnalyserRef.current = null;
-    setIsListeningSpeechRecognition(false);
-  }, [abortActiveSpeechRecOnly]);
+  const processIncomingVoiceTranscript = useCallback(
+    (rawTranscript: string, isFinal: boolean): boolean => {
+      if (isInputOrModalPausedRef.current) return false;
+      const latestRaw = (rawTranscript || '').trim();
+      if (!latestRaw) return false;
 
-  const startContinuousRecognitionInstance = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    if (
-      !keepVoiceListeningRef.current ||
-      state.isAppPaused ||
-      isCourierRegistrationModalOpen ||
-      isInputOrModalPausedRef.current
-    ) {
-      return;
-    }
+      // 1. Show the Live Transcript Feedback Pill near the green bubble
+      showLiveMicTranscriptFeedback(latestRaw);
 
-    // If a SpeechRecognition session is already actively running, do not restart it
-    if (activeSpeechRecRef.current) {
-      return;
-    }
+      // Also update the 45% live voice transcription drawer if open
+      setLiveVoiceTranscription((prev) =>
+        prev
+          ? {
+              ...prev,
+              transcriptText: latestRaw,
+              fullTargetText: latestRaw,
+            }
+          : null
+      );
 
-    const SpeechRec =
-      (window as unknown as Record<string, unknown>).SpeechRecognition ||
-      (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
-
-    if (!SpeechRec || typeof SpeechRec !== 'function') {
-      setIsListeningSpeechRecognition(true);
-      return;
-    }
-
-    try {
-      const recognition = new (SpeechRec as new () => {
-        lang: string;
-        continuous: boolean;
-        interimResults: boolean;
-        onstart: (() => void) | null;
-        onresult:
-          | ((event: {
-              resultIndex?: number;
-              results: ArrayLike<{
-                isFinal?: boolean;
-                0: { transcript: string };
-              }>;
-            }) => void)
-          | null;
-        onerror: ((event?: { error?: string }) => void) | null;
-        onend: (() => void) | null;
-        start: () => void;
-        stop: () => void;
-        abort?: () => void;
-      })();
-
-      // Stage 2: Single clean SpeechRecognition pass triggered by VAD energy or touch
-      recognition.lang = 'pt-PT';
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      activeSpeechRecRef.current = recognition;
-      setIsListeningSpeechRecognition(true);
+      // 2. Normalize transcript (lowercase + strip accents)
+      const norm = latestRaw
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
 
       const phoneticWakeAliases = [
         'buddy',
@@ -8429,6 +8337,155 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         'estou bem',
       ];
 
+      const hasWakeWord = phoneticWakeAliases.some((alias) => {
+        const re = new RegExp(`\\b${alias}\\b`, 'i');
+        return re.test(norm) || norm.includes(alias);
+      });
+
+      const matchedDirectCmd = directHighPriorityCommands.find((cmd) =>
+        norm.includes(
+          cmd
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+        )
+      );
+
+      const shouldExecuteNow =
+        Boolean(matchedDirectCmd) ||
+        (isFinal && (hasWakeWord || norm.length >= 3));
+
+      if (shouldExecuteNow) {
+        const nowMs = Date.now();
+        const lastExec = lastExecutedVoicePhraseRef.current;
+        if (lastExec.phrase === norm && nowMs - lastExec.ts < 2200) {
+          return false;
+        }
+        lastExecutedVoicePhraseRef.current = { phrase: norm, ts: nowMs };
+        executeVoiceCommandPt(
+          hasWakeWord || matchedDirectCmd ? latestRaw : `Buddy ${latestRaw}`
+        );
+        return true;
+      }
+      return false;
+    },
+    [
+      executeVoiceCommandPt,
+      showLiveMicTranscriptFeedback,
+      state.voiceActivationConfig.customTriggerWord,
+    ]
+  );
+
+  // Register global window.onBuddyNativeTranscript callback for Native Android SpeechRecognizer
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const winAny = window as unknown as {
+      onBuddyNativeTranscript?: (text: string, isFinal: boolean) => void;
+    };
+    winAny.onBuddyNativeTranscript = (text: string, isFinal: boolean) => {
+      processIncomingVoiceTranscript(text, Boolean(isFinal));
+    };
+    return () => {
+      if (winAny.onBuddyNativeTranscript) {
+        delete winAny.onBuddyNativeTranscript;
+      }
+    };
+  }, [processIncomingVoiceTranscript]);
+
+  const stopContinuousVoiceMic = useCallback(() => {
+    keepVoiceListeningRef.current = false;
+    if (watchdogRestartTimerRef.current !== null) {
+      window.clearTimeout(watchdogRestartTimerRef.current);
+      watchdogRestartTimerRef.current = null;
+    }
+    abortActiveSpeechRecOnly();
+    if (typeof window !== 'undefined') {
+      const winAny = window as unknown as {
+        BuddyNativeOverlay?: {
+          stopNativeVoice?: () => void;
+          setBubbleListeningState?: (listening: boolean) => void;
+        };
+      };
+      try {
+        winAny.BuddyNativeOverlay?.stopNativeVoice?.();
+        winAny.BuddyNativeOverlay?.setBubbleListeningState?.(false);
+      } catch {
+        // ignore
+      }
+    }
+    setIsListeningSpeechRecognition(false);
+  }, [abortActiveSpeechRecOnly]);
+
+  const startContinuousRecognitionInstance = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (
+      !keepVoiceListeningRef.current ||
+      state.isAppPaused ||
+      isCourierRegistrationModalOpen ||
+      isInputOrModalPausedRef.current
+    ) {
+      return;
+    }
+
+    // 1. If running inside the Native Android .APK with Native SpeechRecognizer:
+    const winAny = window as unknown as {
+      BuddyNativeOverlay?: {
+        startNativeVoice?: () => void;
+        setBubbleListeningState?: (listening: boolean) => void;
+      };
+    };
+    if (typeof winAny.BuddyNativeOverlay?.startNativeVoice === 'function') {
+      try {
+        winAny.BuddyNativeOverlay.startNativeVoice();
+        winAny.BuddyNativeOverlay.setBubbleListeningState?.(true);
+      } catch {
+        // ignore
+      }
+      setIsListeningSpeechRecognition(true);
+      return;
+    }
+
+    // 2. Web Browser fallback (when not running inside Native Android .APK):
+    if (activeSpeechRecRef.current) {
+      return;
+    }
+
+    const SpeechRec =
+      (window as unknown as Record<string, unknown>).SpeechRecognition ||
+      (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
+
+    if (!SpeechRec || typeof SpeechRec !== 'function') {
+      setIsListeningSpeechRecognition(true);
+      return;
+    }
+
+    try {
+      const recognition = new (SpeechRec as new () => {
+        lang: string;
+        continuous: boolean;
+        interimResults: boolean;
+        onstart: (() => void) | null;
+        onresult:
+          | ((event: {
+              resultIndex?: number;
+              results: ArrayLike<{
+                isFinal?: boolean;
+                0: { transcript: string };
+              }>;
+            }) => void)
+          | null;
+        onerror: ((event?: { error?: string }) => void) | null;
+        onend: (() => void) | null;
+        start: () => void;
+        stop: () => void;
+        abort?: () => void;
+      })();
+
+      recognition.lang = 'pt-PT';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      activeSpeechRecRef.current = recognition;
+      setIsListeningSpeechRecognition(true);
+
       recognition.onstart = () => {
         setIsListeningSpeechRecognition(true);
       };
@@ -8442,62 +8499,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         const latestRaw = (latestItem?.[0]?.transcript || '').trim();
         const isFinal = Boolean(latestItem?.isFinal);
 
-        if (!latestRaw) return;
-
-        // 1. Show the Live Transcript Feedback Pill near the green bubble
-        showLiveMicTranscriptFeedback(latestRaw);
-
-        // Also update the 45% live voice transcription drawer if open
-        setLiveVoiceTranscription((prev) =>
-          prev
-            ? {
-                ...prev,
-                transcriptText: latestRaw,
-                fullTargetText: latestRaw,
-              }
-            : null
-        );
-
-        // 2. Normalize transcript (lowercase + strip accents)
-        const norm = latestRaw
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .trim();
-
-        const hasWakeWord = phoneticWakeAliases.some((alias) => {
-          const re = new RegExp(`\\b${alias}\\b`, 'i');
-          return re.test(norm) || norm.includes(alias);
-        });
-
-        const matchedDirectCmd = directHighPriorityCommands.find((cmd) =>
-          norm.includes(
-            cmd
-              .normalize('NFD')
-              .replace(/[\u0300-\u036f]/g, '')
-          )
-        );
-
-        const shouldExecuteNow =
-          Boolean(matchedDirectCmd) || (isFinal && (hasWakeWord || norm.length >= 3));
-
-        if (shouldExecuteNow) {
-          const nowMs = Date.now();
-          const lastExec = lastExecutedVoicePhraseRef.current;
-          if (lastExec.phrase === norm && nowMs - lastExec.ts < 2200) {
-            return;
-          }
-          lastExecutedVoicePhraseRef.current = { phrase: norm, ts: nowMs };
-          // Conclude Stage 2 pass cleanly while keeping Stage 1 VAD stream open & Emerald Green bubble active!
+        const executed = processIncomingVoiceTranscript(latestRaw, isFinal);
+        if (executed) {
           activeSpeechRecRef.current = null;
           try {
             recognition.stop();
           } catch {
             // ignore
           }
-          executeVoiceCommandPt(
-            hasWakeWord || matchedDirectCmd ? latestRaw : `Buddy ${latestRaw}`
-          );
         }
       };
 
@@ -8506,20 +8515,16 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         activeSpeechRecRef.current = null;
         if (errCode === 'not-allowed' || errCode === 'service-not-allowed') {
           keepVoiceListeningRef.current = false;
-          isMicStreamOpenRef.current = false;
           setIsListeningSpeechRecognition(false);
           showLiveMicTranscriptFeedback(
             'Microfone bloqueado pelo navegador — permita o acesso no cadeado'
           );
         }
-        // For 'no-speech' or 'aborted', keep Stage 1 VAD active (isListeningSpeechRecognition remains true if keepVoiceListeningRef is true)
       };
 
       recognition.onend = () => {
         activeSpeechRecRef.current = null;
-        // Do NOT auto-restart in an infinite onend loop!
-        // Stage 1 Silent Audio VAD keeps the bubble Emerald Green and triggers Stage 2 only when human voice energy crosses threshold.
-        if (!keepVoiceListeningRef.current && !isMicStreamOpenRef.current) {
+        if (!keepVoiceListeningRef.current) {
           setIsListeningSpeechRecognition(false);
         }
       };
@@ -8529,11 +8534,10 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       activeSpeechRecRef.current = null;
     }
   }, [
-    executeVoiceCommandPt,
     isCourierRegistrationModalOpen,
+    processIncomingVoiceTranscript,
     showLiveMicTranscriptFeedback,
     state.isAppPaused,
-    state.voiceActivationConfig.customTriggerWord,
   ]);
 
   useEffect(() => {
@@ -8541,107 +8545,15 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       startContinuousRecognitionInstance;
   }, [startContinuousRecognitionInstance]);
 
-  // Stage 1: Open Persistent Silent Audio VAD Monitor (AudioContext + AnalyserNode)
-  const startSilentVadMonitor = useCallback(async () => {
-    if (typeof window === 'undefined') return;
-    if (isMicStreamOpenRef.current && vadAnalyserRef.current) {
-      return;
-    }
-
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        return;
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-
-      if (!keepVoiceListeningRef.current) {
-        stream.getTracks().forEach((t) => t.stop());
-        return;
-      }
-
-      vadMediaStreamRef.current = stream;
-      isMicStreamOpenRef.current = true;
-
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-
-      if (!AudioCtx) return;
-
-      const audioCtx = new AudioCtx();
-      vadAudioContextRef.current = audioCtx;
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.4;
-      source.connect(analyser);
-      vadAnalyserRef.current = analyser;
-
-      const dataArray = new Uint8Array(analyser.fftSize);
-
-      if (vadIntervalRef.current !== null) {
-        window.clearInterval(vadIntervalRef.current);
-      }
-
-      // Lightweight 200ms ref loop: strictly inside useRef, ZERO setState calls on frames!
-      vadIntervalRef.current = window.setInterval(() => {
-        if (
-          !keepVoiceListeningRef.current ||
-          !vadAnalyserRef.current ||
-          isInputOrModalPausedRef.current ||
-          isSpeakingTtsRef.current ||
-          activeSpeechRecRef.current
-        ) {
-          return;
-        }
-
-        if (vadAudioContextRef.current?.state === 'suspended') {
-          vadAudioContextRef.current.resume().catch(() => {});
-        }
-
-        vadAnalyserRef.current.getByteTimeDomainData(dataArray);
-        let sumSquares = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          const normalized = (dataArray[i] - 128) / 128;
-          sumSquares += normalized * normalized;
-        }
-        const rms = Math.sqrt(sumSquares / dataArray.length);
-
-        // Human voice energy threshold (~0.022 RMS): launch single clean Stage 2 SpeechRecognition pass
-        if (rms > 0.022) {
-          const now = Date.now();
-          if (now - lastVadSpeechTriggerTsRef.current > 1400) {
-            lastVadSpeechTriggerTsRef.current = now;
-            startContinuousRecognitionInstanceRef.current?.();
-          }
-        }
-      }, 200);
-    } catch {
-      // Fallback: if getUserMedia is busy or unsupported, Stage 2 push-to-talk still works
-    }
-  }, []);
-
   const startContinuousVoiceMic = useCallback(() => {
     hasUnlockedMicOnFirstTouchRef.current = true;
     keepVoiceListeningRef.current = true;
     setIsListeningSpeechRecognition(true);
     showLiveMicTranscriptFeedback(
-      'Escuta VAD Contínua Ativa • Diga "Buddy..." ou toque'
+      '🎙️ Microfone Ativo • Diga "Buddy..." ou o seu comando'
     );
-    startSilentVadMonitor();
     startContinuousRecognitionInstance();
-  }, [
-    showLiveMicTranscriptFeedback,
-    startSilentVadMonitor,
-    startContinuousRecognitionInstance,
-  ]);
+  }, [showLiveMicTranscriptFeedback, startContinuousRecognitionInstance]);
 
   const toggleVoiceMicListening = useCallback(() => {
     if (isListeningSpeechRecognition || keepVoiceListeningRef.current) {

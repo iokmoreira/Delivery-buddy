@@ -1,14 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Required on Android 11-16 (API 30+) so SpeechRecognizer can bind to system speech recognition service -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+
     <!-- Network & WebView OTA -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- System Overlay Floating Bubble over Uber Eats / Glovo / Bolt Food -->
+    <!-- System Overlay Floating Bubble over Uber Eats / Glovo / Bolt Food & Task Reordering -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
 
-    <!-- Continuous Hands-Free Microphone VAD & Voice Wake-Word ("Buddy...") -->
+    <!-- Continuous Hands-Free Microphone & Native SpeechRecognizer ("Buddy...") -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
@@ -46,7 +57,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Native System Overlay Floating Bubble ("DB" 56dp) & Continuous Voice Foreground Service -->
+        <!-- Native System Overlay Floating Bubble ("DB" 62dp) & Continuous Voice Foreground Service -->
         <service
             android:name=".BuddyOverlayService"
             android:enabled="true"
