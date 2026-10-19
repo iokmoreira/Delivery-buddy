@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
@@ -24,6 +25,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
 import java.lang.ref.WeakReference;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import org.json.JSONObject;
@@ -39,15 +41,22 @@ public class MainActivity extends BridgeActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private SpeechRecognizer speechRecognizer;
     private Intent recognizerIntent;
-    private boolean keepListening = false;
+
+    // Strictly OFF (false) by default on startup — never auto-starts without user tap!
+    private volatile boolean keepListening = false;
     private boolean isRecognizerListening = false;
     private boolean isInForeground = true;
+    private long lastDirectJavaCommandTs = 0L;
+    private String lastForwardedPartial = "";
 
     private final Runnable restartRecognizerRunnable = new Runnable() {
         @Override
         public void run() {
             if (keepListening) {
                 startNativeSpeechRecognizerInternal();
+            } else {
+                destroySpeechRecognizerInternal();
+                BuddyOverlayService.updateListeningState(MainActivity.this, false);
             }
         }
     };
@@ -56,6 +65,10 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         instanceRef = new WeakReference<>(this);
+
+        // Strictly ensure mic is OFF on launch
+        keepListening = false;
+        isRecognizerListening = false;
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         requestRuntimePermissionsIfNeeded();
@@ -96,10 +109,18 @@ public class MainActivity extends BridgeActivity {
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "pt-PT");
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+        // Extended silence windows so Android One UI does not cut off and blink every 2 seconds
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 10000L);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 4000L);
     }
 
     private void startNativeSpeechRecognizerInternal() {
-        if (!keepListening) return;
+        if (!keepListening) {
+            destroySpeechRecognizerInternal();
+            BuddyOverlayService.updateListeningState(MainActivity.this, false);
+            return;
+        }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
@@ -117,12 +138,20 @@ public class MainActivity extends BridgeActivity {
                 speechRecognizer.setRecognitionListener(new RecognitionListener() {
                     @Override
                     public void onReadyForSpeech(Bundle params) {
+                        if (!keepListening) {
+                            destroySpeechRecognizerInternal();
+                            return;
+                        }
                         isRecognizerListening = true;
                         BuddyOverlayService.updateListeningState(MainActivity.this, true);
                     }
 
                     @Override
                     public void onBeginningOfSpeech() {
+                        if (!keepListening) {
+                            destroySpeechRecognizerInternal();
+                            return;
+                        }
                         isRecognizerListening = true;
                     }
 
@@ -139,21 +168,43 @@ public class MainActivity extends BridgeActivity {
                         isRecognizerListening = false;
                         if (keepListening) {
                             mainHandler.removeCallbacks(restartRecognizerRunnable);
-                            mainHandler.postDelayed(restartRecognizerRunnable, 300);
+                            mainHandler.postDelayed(restartRecognizerRunnable, 900);
+                        } else {
+                            destroySpeechRecognizerInternal();
+                            BuddyOverlayService.updateListeningState(MainActivity.this, false);
                         }
                     }
 
                     @Override
                     public void onError(int error) {
                         isRecognizerListening = false;
-                        // Destroy & recreate on recognizer busy/client error to prevent stuck state
+                        if (!keepListening) {
+                            destroySpeechRecognizerInternal();
+                            BuddyOverlayService.updateListeningState(MainActivity.this, false);
+                            return;
+                        }
+
+                        if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                            keepListening = false;
+                            destroySpeechRecognizerInternal();
+                            BuddyOverlayService.updateListeningState(MainActivity.this, false);
+                            notifyWebViewListeningState(false);
+                            return;
+                        }
+
                         if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY
                             || error == SpeechRecognizer.ERROR_CLIENT) {
                             destroySpeechRecognizerInternal();
+                            if (keepListening) {
+                                mainHandler.removeCallbacks(restartRecognizerRunnable);
+                                mainHandler.postDelayed(restartRecognizerRunnable, 1500);
+                            }
+                            return;
                         }
+
                         if (keepListening) {
                             mainHandler.removeCallbacks(restartRecognizerRunnable);
-                            mainHandler.postDelayed(restartRecognizerRunnable, 350);
+                            mainHandler.postDelayed(restartRecognizerRunnable, 1200);
                         } else {
                             BuddyOverlayService.updateListeningState(MainActivity.this, false);
                         }
@@ -162,30 +213,39 @@ public class MainActivity extends BridgeActivity {
                     @Override
                     public void onResults(Bundle results) {
                         isRecognizerListening = false;
-                        if (results != null) {
+                        lastForwardedPartial = "";
+                        if (keepListening && results != null) {
                             ArrayList<String> matches = results.getStringArrayList(
                                 SpeechRecognizer.RESULTS_RECOGNITION
                             );
                             if (matches != null && !matches.isEmpty()) {
                                 String bestText = matches.get(0);
-                                forwardTranscriptToWebView(bestText, true);
+                                handleRecognizedSpeech(bestText, true);
                             }
                         }
                         if (keepListening) {
                             mainHandler.removeCallbacks(restartRecognizerRunnable);
-                            mainHandler.postDelayed(restartRecognizerRunnable, 300);
+                            mainHandler.postDelayed(restartRecognizerRunnable, 800);
+                        } else {
+                            destroySpeechRecognizerInternal();
+                            BuddyOverlayService.updateListeningState(MainActivity.this, false);
                         }
                     }
 
                     @Override
                     public void onPartialResults(Bundle partialResults) {
-                        if (partialResults != null) {
-                            ArrayList<String> partials = partialResults.getStringArrayList(
-                                SpeechRecognizer.RESULTS_RECOGNITION
-                            );
-                            if (partials != null && !partials.isEmpty()) {
-                                String partialText = partials.get(0);
-                                forwardTranscriptToWebView(partialText, false);
+                        if (!keepListening || partialResults == null) return;
+                        ArrayList<String> partials = partialResults.getStringArrayList(
+                            SpeechRecognizer.RESULTS_RECOGNITION
+                        );
+                        if (partials != null && !partials.isEmpty()) {
+                            String partialText = partials.get(0);
+                            if (partialText != null && !partialText.trim().isEmpty()) {
+                                String trimmed = partialText.trim();
+                                if (!trimmed.equalsIgnoreCase(lastForwardedPartial)) {
+                                    lastForwardedPartial = trimmed;
+                                    handleRecognizedSpeech(trimmed, false);
+                                }
                             }
                         }
                     }
@@ -196,8 +256,9 @@ public class MainActivity extends BridgeActivity {
                 });
             }
 
-            if (!isRecognizerListening) {
+            if (!isRecognizerListening && keepListening) {
                 isRecognizerListening = true;
+                lastForwardedPartial = "";
                 speechRecognizer.startListening(recognizerIntent);
                 BuddyOverlayService.updateListeningState(MainActivity.this, true);
             }
@@ -205,14 +266,19 @@ public class MainActivity extends BridgeActivity {
             isRecognizerListening = false;
             if (keepListening) {
                 mainHandler.removeCallbacks(restartRecognizerRunnable);
-                mainHandler.postDelayed(restartRecognizerRunnable, 500);
+                mainHandler.postDelayed(restartRecognizerRunnable, 1500);
             }
         }
     }
 
     private void destroySpeechRecognizerInternal() {
         isRecognizerListening = false;
+        mainHandler.removeCallbacks(restartRecognizerRunnable);
         if (speechRecognizer != null) {
+            try {
+                speechRecognizer.stopListening();
+            } catch (Exception ignored) {
+            }
             try {
                 speechRecognizer.cancel();
             } catch (Exception ignored) {
@@ -225,22 +291,40 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    private void forwardTranscriptToWebView(final String text, final boolean isFinal) {
-        if (text == null || text.trim().isEmpty()) return;
+    private String normalizeText(String raw) {
+        if (raw == null) return "";
+        String nfd = Normalizer.normalize(raw.toLowerCase().trim(), Normalizer.Form.NFD);
+        return nfd.replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
+    }
 
-        // Also check directly in Java if the user spoke "maximizar" / "abrir" while minimized in background
-        String lower = text.toLowerCase();
-        if (!isInForeground && (
-            lower.contains("maximizar")
-            || lower.contains("maximizer")
-            || lower.contains("maximiz")
-            || lower.contains("abrir")
-            || lower.contains("mostrar tela")
-            || lower.contains("restaurar")
-        )) {
-            bringActivityToFrontNow();
+    private void handleRecognizedSpeech(final String text, final boolean isFinal) {
+        if (!keepListening || text == null || text.trim().isEmpty()) return;
+
+        String norm = normalizeText(text);
+        long now = SystemClock.uptimeMillis();
+
+        // Direct Java-level execution for "minimizar" and "maximizar" / "abrir" in onPartialResults & onResults
+        if (now - lastDirectJavaCommandTs > 2200L) {
+            if (norm.contains("minimizar")
+                || norm.contains("minimizer")
+                || norm.contains("minimiz")
+                || norm.contains("modo invisivel")
+                || norm.contains("esconder")
+                || norm.contains("ocultar")) {
+                lastDirectJavaCommandTs = now;
+                minimizeToFloatingBubbleNow();
+            } else if (norm.contains("maximizar")
+                || norm.contains("maximizer")
+                || norm.contains("maximiz")
+                || norm.contains("abrir")
+                || norm.contains("mostrar tela")
+                || norm.contains("restaurar")) {
+                lastDirectJavaCommandTs = now;
+                bringActivityToFrontNow();
+            }
         }
 
+        // Forward both partial and final transcripts to WebView so React executes all commands ("aceitar", "recusar", "iniciar entrega", "finalizar entrega", "modo chuva", "mapa", "finanças", "início", etc.)
         if (getBridge() != null && getBridge().getWebView() != null) {
             final WebView webView = getBridge().getWebView();
             webView.post(new Runnable() {
@@ -250,6 +334,22 @@ public class MainActivity extends BridgeActivity {
                     String js = "window.onBuddyNativeTranscript && window.onBuddyNativeTranscript("
                         + quoted + ", " + (isFinal ? "true" : "false") + ");";
                     webView.evaluateJavascript(js, null);
+                }
+            });
+        }
+    }
+
+    private void notifyWebViewListeningState(final boolean listening) {
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            final WebView webView = getBridge().getWebView();
+            webView.post(new Runnable() {
+                @Override
+                public void run() {
+                    webView.evaluateJavascript(
+                        "window.onBuddyNativeListeningState && window.onBuddyNativeListeningState("
+                            + (listening ? "true" : "false") + ");",
+                        null
+                    );
                 }
             });
         }
@@ -270,40 +370,62 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    private void bringActivityToFrontNow() {
-        BuddyOverlayService.hideBubble(this);
-        try {
-            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-            if (am != null) {
-                am.moveTaskToFront(getTaskId(), ActivityManager.MOVE_TASK_WITH_HOME);
+    private void minimizeToFloatingBubbleNow() {
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (ensureOverlayPermission()) {
+                    BuddyOverlayService.showBubble(MainActivity.this, keepListening);
+                    moveTaskToBack(true);
+                }
             }
-        } catch (Exception ignored) {
-        }
+        });
+    }
 
-        Intent bringFrontIntent = new Intent(this, MainActivity.class);
-        bringFrontIntent.setAction(Intent.ACTION_MAIN);
-        bringFrontIntent.addCategory(Intent.CATEGORY_LAUNCHER);
-        bringFrontIntent.addFlags(
-            Intent.FLAG_ACTIVITY_NEW_TASK
-                | Intent.FLAG_ACTIVITY_SINGLE_TOP
-                | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                | Intent.FLAG_ACTIVITY_CLEAR_TOP
-        );
-        bringFrontIntent.putExtra("RESTORE_FROM_BUBBLE", true);
+    private void bringActivityToFrontNow() {
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                BuddyOverlayService.hideBubble(MainActivity.this);
+                try {
+                    ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+                    if (am != null) {
+                        am.moveTaskToFront(getTaskId(), ActivityManager.MOVE_TASK_WITH_HOME);
+                    }
+                } catch (Exception ignored) {
+                }
 
-        try {
-            int pendingFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                ? (PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)
-                : PendingIntent.FLAG_UPDATE_CURRENT;
-            PendingIntent pi = PendingIntent.getActivity(this, 7703, bringFrontIntent, pendingFlags);
-            pi.send();
-        } catch (Exception ignored) {
-        }
+                Intent bringFrontIntent = new Intent(MainActivity.this, MainActivity.class);
+                bringFrontIntent.setAction(Intent.ACTION_MAIN);
+                bringFrontIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+                bringFrontIntent.addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                );
+                bringFrontIntent.putExtra("RESTORE_FROM_BUBBLE", true);
 
-        try {
-            startActivity(bringFrontIntent);
-        } catch (Exception ignored) {
-        }
+                try {
+                    int pendingFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                        ? (PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)
+                        : PendingIntent.FLAG_UPDATE_CURRENT;
+                    PendingIntent pi = PendingIntent.getActivity(
+                        MainActivity.this,
+                        7703,
+                        bringFrontIntent,
+                        pendingFlags
+                    );
+                    pi.send();
+                } catch (Exception ignored) {
+                }
+
+                try {
+                    startActivity(bringFrontIntent);
+                } catch (Exception ignored) {
+                }
+            }
+        });
     }
 
     @Override
@@ -327,7 +449,7 @@ public class MainActivity extends BridgeActivity {
     public void onPause() {
         super.onPause();
         isInForeground = false;
-        // Automatically show the floating DB bubble whenever MainActivity goes to the background
+        // Show the floating DB bubble whenever MainActivity goes to the background
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)) {
             BuddyOverlayService.showBubble(this, keepListening);
         }
@@ -345,7 +467,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onDestroy() {
         keepListening = false;
-        mainHandler.removeCallbacks(restartRecognizerRunnable);
         destroySpeechRecognizerInternal();
         super.onDestroy();
     }
@@ -401,7 +522,6 @@ public class MainActivity extends BridgeActivity {
                 @Override
                 public void run() {
                     keepListening = false;
-                    mainHandler.removeCallbacks(restartRecognizerRunnable);
                     destroySpeechRecognizerInternal();
                     BuddyOverlayService.updateListeningState(MainActivity.this, false);
                 }
@@ -410,25 +530,12 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public void minimizeToFloatingBubble() {
-            mainHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (ensureOverlayPermission()) {
-                        BuddyOverlayService.showBubble(MainActivity.this, keepListening);
-                        moveTaskToBack(true);
-                    }
-                }
-            });
+            minimizeToFloatingBubbleNow();
         }
 
         @JavascriptInterface
         public void maximizeFromBubble() {
-            mainHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    bringActivityToFrontNow();
-                }
-            });
+            bringActivityToFrontNow();
         }
 
         @JavascriptInterface
@@ -436,6 +543,10 @@ public class MainActivity extends BridgeActivity {
             mainHandler.post(new Runnable() {
                 @Override
                 public void run() {
+                    if (!listening) {
+                        keepListening = false;
+                        destroySpeechRecognizerInternal();
+                    }
                     BuddyOverlayService.updateListeningState(MainActivity.this, listening);
                 }
             });

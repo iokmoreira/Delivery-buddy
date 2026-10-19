@@ -45,7 +45,7 @@ jobs:
           npx cap sync android
           mv capacitor.config.ts.bak capacitor.config.ts || true
 
-      - name: 7. Inject Native Overlay Service & Bridge (SYSTEM_ALERT_WINDOW)
+      - name: 7. Inject Native Overlay Service, Bridge & Persistent Keystore + Dynamic versionCode
         run: |
           rm -f android/app/src/main/java/com/pbg/deliverybuddy/MainActivity.java
           rm -f android/app/src/main/java/com/pbg/deliverybuddy/*.kt
@@ -53,6 +53,37 @@ jobs:
           cp -f android-native-template/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           cp -f android-native-template/BuddyOverlayService.java android/app/src/main/java/com/pbg/deliverybuddy/BuddyOverlayService.java
           cp -f android-native-template/MainActivity.java android/app/src/main/java/com/pbg/deliverybuddy/MainActivity.java
+
+          # Copy persistent deterministic keystore to both android/app/ and ~/.android/debug.keystore
+          mkdir -p ~/.android
+          cp -f android-native-template/buddy-debug.keystore ~/.android/debug.keystore
+          cp -f android-native-template/buddy-debug.keystore android/app/buddy-debug.keystore
+
+          # Dynamically set versionCode = $((100 + GITHUB_RUN_NUMBER)) and configure signingConfigs.debug
+          VER_CODE=$((100 + GITHUB_RUN_NUMBER))
+          VER_NAME="2.2.${GITHUB_RUN_NUMBER}"
+          echo "Setting versionCode=${VER_CODE} and versionName=${VER_NAME}"
+          sed -i "s/versionCode 1/versionCode ${VER_CODE}/g" android/app/build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"${VER_NAME}\"/g" android/app/build.gradle
+
+          cat << 'EOF' >> android/app/build.gradle
+
+          android {
+              signingConfigs {
+                  debug {
+                      storeFile file('buddy-debug.keystore')
+                      storePassword 'android'
+                      keyAlias 'androiddebugkey'
+                      keyPassword 'android'
+                  }
+              }
+              buildTypes {
+                  debug {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          EOF
 
       - name: 8. Compile & Sign Android APK (Delivery-Buddy-Amarante.apk)
         working-directory: android

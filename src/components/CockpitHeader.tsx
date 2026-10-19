@@ -122,21 +122,21 @@ export const CockpitHeader: React.FC = () => {
             onClick={toggleVoiceMicListening}
             title={
               isListeningSpeechRecognition
-                ? `🎙️ Microfone Aberto (Escutando "${triggerWordLabel}...") — Toque para Pausar`
-                : `🎙️ Ativar Microfone Contínuo ("${triggerWordLabel}...")`
+                ? `🎙️ Microfone Aberto (Escutando "${triggerWordLabel}...") — Toque para Desligar`
+                : `🎙️ Microfone Desligado — Toque para Ativar ("${triggerWordLabel}...")`
             }
             aria-label="Alternar Microfone Contínuo Buddy"
             className={`h-7 rounded-lg px-1.5 flex items-center gap-1 text-[10px] font-bold cursor-pointer transition border whitespace-nowrap ${
               isListeningSpeechRecognition
                 ? 'bg-emerald-500 text-white border-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.6)]'
                 : isDaylight
-                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
-                  : 'bg-emerald-950/60 hover:bg-emerald-900/70 text-emerald-300 border-emerald-800/80'
+                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
             }`}
           >
             <Mic className="h-3 w-3 shrink-0" />
-            <span className="truncate max-w-[54px]">
-              &ldquo;{triggerWordLabel}&rdquo;
+            <span className="truncate max-w-[64px]">
+              &ldquo;{triggerWordLabel}&rdquo; {isListeningSpeechRecognition ? 'ON' : 'OFF'}
             </span>
           </button>
 

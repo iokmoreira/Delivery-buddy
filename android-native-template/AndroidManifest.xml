@@ -57,12 +57,12 @@
             </intent-filter>
         </activity>
 
-        <!-- Native System Overlay Floating Bubble ("DB" 62dp) & Continuous Voice Foreground Service -->
+        <!-- Native System Overlay Floating Bubble ("DB" 62dp) Foreground Service -->
         <service
             android:name=".BuddyOverlayService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="microphone|location" />
+            android:foregroundServiceType="location" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

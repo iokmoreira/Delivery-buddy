@@ -2868,7 +2868,7 @@ Solicita-se a revisão imediata do cálculo cartográfico deste trecho e o créd
     (text: string) => {
       setLastSpokenTranscript(text);
       isSpeakingTtsRef.current = true;
-      // Stop active recognition if any so mic doesn't hear Buddy's own voice
+      // Stop Web SpeechRecognition if running in web mode so mic doesn't hear Buddy's own voice
       if (activeSpeechRecRef.current) {
         try {
           activeSpeechRecRef.current.onend = null;
@@ -2879,8 +2879,6 @@ Solicita-se a revisão imediata do cálculo cartográfico deste trecho e o créd
         }
         activeSpeechRecRef.current = null;
       }
-      keepVoiceListeningRef.current = false;
-      setIsListeningSpeechRecognition(false);
       speakWithBuddyVoiceEngine({
         text,
         rate: buddyVoiceRate,
@@ -3838,22 +3836,32 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     [cancelSpeechNow]
   );
 
-  // Sync listening state with Native Android Overlay Service bubble if running inside .APK
+  // Sync listening state with Native Android Overlay Service bubble & hard-stop mic when OFF
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const winAny = window as unknown as {
       BuddyNativeOverlay?: {
         setBubbleListeningState?: (listening: boolean) => void;
+        stopNativeVoice?: () => void;
       };
       __onNativeBubbleRestore?: () => void;
+      onBuddyNativeListeningState?: (listening: boolean) => void;
     };
     try {
       winAny.BuddyNativeOverlay?.setBubbleListeningState?.(
         isListeningSpeechRecognition
       );
+      if (!isListeningSpeechRecognition) {
+        keepVoiceListeningRef.current = false;
+        winAny.BuddyNativeOverlay?.stopNativeVoice?.();
+      }
     } catch {
       // ignore
     }
+    winAny.onBuddyNativeListeningState = (listening: boolean) => {
+      keepVoiceListeningRef.current = Boolean(listening);
+      setIsListeningSpeechRecognition(Boolean(listening));
+    };
     winAny.__onNativeBubbleRestore = () => {
       setState((prev) =>
         prev.isBubbleMinimized ? { ...prev, isBubbleMinimized: false } : prev
@@ -4946,7 +4954,6 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       window.clearTimeout(watchdogRestartTimerRef.current);
       watchdogRestartTimerRef.current = null;
     }
-    keepVoiceListeningRef.current = false;
     if (activeSpeechRecRef.current) {
       try {
         activeSpeechRecRef.current.onend = null;
@@ -4958,7 +4965,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       }
       activeSpeechRecRef.current = null;
     }
-    setIsListeningSpeechRecognition(false);
+    if (!keepVoiceListeningRef.current) {
+      setIsListeningSpeechRecognition(false);
+    }
     setIsPttActive(false);
   }, []);
 
@@ -8240,7 +8249,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const processIncomingVoiceTranscript = useCallback(
     (rawTranscript: string, isFinal: boolean): boolean => {
-      if (isInputOrModalPausedRef.current) return false;
+      if (isInputOrModalPausedRef.current || isSpeakingTtsRef.current) {
+        return false;
+      }
       const latestRaw = (rawTranscript || '').trim();
       if (!latestRaw) return false;
 
@@ -8325,6 +8336,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         'mapa',
         'financas',
         'finanças',
+        'inicio',
+        'início',
         'quantos estafetas',
         'estafetas online',
         'quanto ta pagando',
@@ -9746,10 +9759,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
       let receivedRealSpeech = false;
 
-      // Try Web Speech API with interimResults = true & continuous = true
+      // Try Web Speech API ONLY when not running inside the Native Android .APK
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const w = window as any;
-      const SpeechRec = w.SpeechRecognition || w.webkitSpeechRecognition;
+      const SpeechRec = !w.BuddyNativeOverlay
+        ? w.SpeechRecognition || w.webkitSpeechRecognition
+        : null;
       if (SpeechRec) {
         try {
           const rec = new SpeechRec();
