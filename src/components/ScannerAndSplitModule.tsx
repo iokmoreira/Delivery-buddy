@@ -66,6 +66,7 @@ export const ScannerAndSplitModule: React.FC = () => {
     roadHazards,
     personalGoals,
     addManualDeliveryRecord,
+    openTranslatorModal,
   } = useEstafetas();
 
   const isDaylight = themeMode === 'DAYLIGHT';
@@ -695,21 +696,42 @@ export const ScannerAndSplitModule: React.FC = () => {
 
           {/* TOP SECTION: Última Entrega (Glovo Rider Rounded Style) */}
           <section className="rounded-3xl bg-zinc-900/95 border border-zinc-800 p-4 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
-              <div className="flex items-center gap-2.5">
-                <span className="h-3 w-3 rounded-full bg-emerald-400 shrink-0" />
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-[#00E5FF] shrink-0" />
                 <h2 className="text-xl font-bold text-zinc-100">
                   Última Entrega
                 </h2>
               </div>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 text-sm font-bold text-zinc-100 flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap"
-              >
-                <Camera className="h-4 w-4 text-emerald-400 shrink-0" />
-                <span>📷 Ler Pedido</span>
-              </button>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => openTranslatorModal('TRADUTOR')}
+                  style={{
+                    backgroundColor: '#0B0F17',
+                    borderColor: '#00E5FF',
+                    color: '#00E5FF',
+                  }}
+                  className="rounded-xl border px-3 py-1.5 text-xs sm:text-sm font-extrabold flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap shadow-[0_2px_10px_rgba(0,229,255,0.18)]"
+                >
+                  <span>🌍 Tradutor &amp; Libras</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    backgroundColor: isDaylight ? '#FFFFFF' : '#111827',
+                    borderColor: isDaylight
+                      ? '#CBD5E1'
+                      : 'rgba(0, 229, 255, 0.35)',
+                    color: isDaylight ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="rounded-xl border px-3 py-1.5 text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+                >
+                  <Camera className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                  <span>📷 Ler Pedido</span>
+                </button>
+              </div>
             </div>
 
             {earningsTodayByApp.lastDelivery ? (
@@ -1044,21 +1066,42 @@ export const ScannerAndSplitModule: React.FC = () => {
           ===================================================================== */}
       {hasActiveOrder && (
         <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800 p-3.5 space-y-3 shadow-sm">
-          {/* Panel Top Header: Full Title + Verdict Badge */}
+          {/* Panel Top Header: Full Title + Translator & Libras + Verdict Badge */}
           <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+              <span className="h-2.5 w-2.5 rounded-full bg-[#00E5FF] animate-ping shrink-0" />
               <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-100">
                 DADOS DA CORRIDA ATUAL
               </h2>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => openTranslatorModal('TRADUTOR')}
+                style={{
+                  backgroundColor: '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: '#00E5FF',
+                }}
+                className="rounded-lg border px-2.5 py-1 text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition"
+              >
+                <span>🌍 Tradutor &amp; Libras</span>
+              </button>
               <span
-                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-extrabold ${
+                style={
                   auditMetrics.verdictCode === 'ACEITAR'
-                    ? 'bg-emerald-500 text-slate-950'
-                    : 'bg-rose-600 text-white'
+                    ? {
+                        backgroundColor: '#0B0F17',
+                        borderColor: '#00E5FF',
+                        color: '#00E5FF',
+                      }
+                    : undefined
+                }
+                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-extrabold border ${
+                  auditMetrics.verdictCode === 'ACEITAR'
+                    ? ''
+                    : 'bg-rose-600 border-rose-500 text-white'
                 }`}
               >
                 {auditMetrics.verdictCode === 'ACEITAR' ? (

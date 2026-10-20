@@ -935,6 +935,43 @@ interface EstafetasContextValue {
   resetMascotImagesToBuiltin: () => void;
   bubbleRestingPreset: BubbleRestingPreset;
   setBubbleRestingPreset: (preset: BubbleRestingPreset) => void;
+  // Simultaneous Translator & Libras ("Mãos do Buddy")
+  isTranslatorModalOpen: boolean;
+  setIsTranslatorModalOpen: (open: boolean) => void;
+  translatorActiveTab: 'TRADUTOR' | 'LIBRAS';
+  setTranslatorActiveTab: (tab: 'TRADUTOR' | 'LIBRAS') => void;
+  translatorTargetLang:
+    | 'en-US'
+    | 'fr-FR'
+    | 'es-ES'
+    | 'de-DE'
+    | 'it-IT'
+    | 'uk-UA'
+    | 'hi-IN'
+    | 'zh-CN';
+  setTranslatorTargetLang: (
+    lang:
+      | 'en-US'
+      | 'fr-FR'
+      | 'es-ES'
+      | 'de-DE'
+      | 'it-IT'
+      | 'uk-UA'
+      | 'hi-IN'
+      | 'zh-CN'
+  ) => void;
+  openTranslatorModal: (
+    initialTab?: 'TRADUTOR' | 'LIBRAS',
+    initialLang?:
+      | 'en-US'
+      | 'fr-FR'
+      | 'es-ES'
+      | 'de-DE'
+      | 'it-IT'
+      | 'uk-UA'
+      | 'hi-IN'
+      | 'zh-CN'
+  ) => void;
 }
 
 export interface AutoDetectedOfferBannerState {
@@ -2023,6 +2060,45 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
   const [lastAutoDetectedOfferBanner, setLastAutoDetectedOfferBanner] =
     useState<AutoDetectedOfferBannerState | null>(null);
   const autoOfferBannerTimerRef = useRef<number | null>(null);
+
+  const [isTranslatorModalOpen, setIsTranslatorModalOpen] =
+    useState<boolean>(false);
+  const [translatorActiveTab, setTranslatorActiveTab] = useState<
+    'TRADUTOR' | 'LIBRAS'
+  >('TRADUTOR');
+  const [translatorTargetLang, setTranslatorTargetLang] = useState<
+    | 'en-US'
+    | 'fr-FR'
+    | 'es-ES'
+    | 'de-DE'
+    | 'it-IT'
+    | 'uk-UA'
+    | 'hi-IN'
+    | 'zh-CN'
+  >('en-US');
+
+  const openTranslatorModal = useCallback(
+    (
+      initialTab: 'TRADUTOR' | 'LIBRAS' = 'TRADUTOR',
+      initialLang?:
+        | 'en-US'
+        | 'fr-FR'
+        | 'es-ES'
+        | 'de-DE'
+        | 'it-IT'
+        | 'uk-UA'
+        | 'hi-IN'
+        | 'zh-CN'
+    ) => {
+      setTranslatorActiveTab(initialTab);
+      if (initialLang) {
+        setTranslatorTargetLang(initialLang);
+      }
+      setIsBubbleMinimized(false);
+      setIsTranslatorModalOpen(true);
+    },
+    []
+  );
 
   // Auto-enable Night Mode between 20:00 and 07:00 unless user manually changed theme in this session
   useEffect(() => {
@@ -8137,7 +8213,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         lower.includes('dinheiro') ||
         lower.includes('carteira') ||
         lower.includes('predefini') ||
-        lower.includes('calculadora');
+        lower.includes('calculadora') ||
+        lower.includes('traduz') ||
+        lower.includes('tradutor') ||
+        lower.includes('libras') ||
+        lower.includes('gestual') ||
+        lower.includes('maos do buddy');
 
       if (
         (lower.includes('maximizar') ||
@@ -8376,6 +8457,62 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           clean,
           actionSummary
         );
+      }
+      // ---------------------------------------------------------------------
+      // 1D. SIMULTANEOUS TRANSLATOR & LIBRAS ("MÃOS DO BUDDY") VOICE TRIGGER
+      // ---------------------------------------------------------------------
+      else if (
+        /traduz|tradutor|libras|lingua gestual|maos do buddy|surdo|ingles|frances|espanhol|alemao|italiano|ucraniano|hindi|mandarim|chines/.test(
+          lower
+        )
+      ) {
+        const wantLibras =
+          lower.includes('libras') ||
+          lower.includes('gestual') ||
+          lower.includes('maos do buddy') ||
+          lower.includes('surdo');
+
+        const detectedLang:
+          | 'en-US'
+          | 'fr-FR'
+          | 'es-ES'
+          | 'de-DE'
+          | 'it-IT'
+          | 'uk-UA'
+          | 'hi-IN'
+          | 'zh-CN' = lower.includes('frances')
+          ? 'fr-FR'
+          : lower.includes('espanhol')
+            ? 'es-ES'
+            : lower.includes('alemao')
+              ? 'de-DE'
+              : lower.includes('italiano')
+                ? 'it-IT'
+                : lower.includes('ucraniano')
+                  ? 'uk-UA'
+                  : lower.includes('hindi')
+                    ? 'hi-IN'
+                    : lower.includes('mandarim') || lower.includes('chines')
+                      ? 'zh-CN'
+                      : 'en-US';
+
+        openTranslatorModal(
+          wantLibras ? 'LIBRAS' : 'TRADUTOR',
+          detectedLang
+        );
+
+        commandMatched = wantLibras
+          ? '"Abrir Libras — Mãos do Buddy"'
+          : '"Abrir Tradutor Simultâneo"';
+        actionSummary = wantLibras
+          ? 'Ecrã Libras (Mãos do Buddy) aberto para comunicação visual com o cliente.'
+          : 'Tradutor simultâneo Estafeta e Cliente aberto.';
+        showLiveMicTranscriptFeedback(
+          `✅ Comando: "${clean}" → ${actionSummary}`,
+          clean,
+          actionSummary
+        );
+        speakTextPt(actionSummary);
       }
       // ---------------------------------------------------------------------
       // 2. DEEP-LINK VOICE OPENING ("Mapa", "Finanças", "Buddys", "Ajustes", "Início")
@@ -12782,6 +12919,13 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         resetMascotImagesToBuiltin,
         bubbleRestingPreset,
         setBubbleRestingPreset,
+        isTranslatorModalOpen,
+        setIsTranslatorModalOpen,
+        translatorActiveTab,
+        setTranslatorActiveTab,
+        translatorTargetLang,
+        setTranslatorTargetLang,
+        openTranslatorModal,
       }}
     >
       {children}

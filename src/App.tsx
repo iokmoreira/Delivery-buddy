@@ -21,6 +21,7 @@ import {
   InteractiveManualAndHelpDrawer,
   MenuMaisHubView,
 } from './components/InteractiveManualAndHelpDrawer';
+import { TranslatorAndSignLanguageModal } from './components/TranslatorAndSignLanguageModal';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -395,6 +396,9 @@ const AppCockpitShell: React.FC = () => {
 
         {/* Interactive Onboarding Manual (4 Steps) & Contextual "?" Help Sheet */}
         <InteractiveManualAndHelpDrawer />
+
+        {/* Simultaneous Voice Translator & Libras ("Mãos do Buddy") Modal */}
+        <TranslatorAndSignLanguageModal />
 
         {/* Main Application UI (Hidden when minimized into Micro-Logo Mode) */}
         {!isBubbleMinimized && (

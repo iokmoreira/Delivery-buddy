@@ -60,6 +60,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
     setIsCourierRegistrationModalOpen,
     refreshLiveGpsPosition,
     activePlatforms,
+    openTranslatorModal,
   } = useEstafetas();
 
   // Strict Sub-Tab Order: [Chat] | [Walkie] | [Blog] (SOS moved to persistent floating bubble)
@@ -717,15 +718,24 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
         </div>
       </div>
 
-      {/* Strict 3-Tab Sub-Tab Bar: [Chat] | [Walkie] | [Blog] */}
-      <div className="bg-zinc-900 p-1 rounded-xl grid grid-cols-3 gap-1 border border-zinc-800/80">
+      {/* 4-Tab Sub-Tab Bar: [Chat] | [Walkie] | [Blog] | [🌍 Tradutor] */}
+      <div className="bg-zinc-900 p-1 rounded-xl grid grid-cols-4 gap-1 border border-zinc-800/80">
         <button
           type="button"
           onClick={() => setSubTab('CHAT')}
-          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate ${
+          style={
             subTab === 'CHAT'
-              ? 'bg-white text-zinc-950 font-bold'
-              : 'text-zinc-400 hover:text-zinc-100'
+              ? {
+                  backgroundColor: '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: '#00E5FF',
+                }
+              : undefined
+          }
+          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate border ${
+            subTab === 'CHAT'
+              ? 'font-extrabold'
+              : 'border-transparent text-zinc-400 hover:text-zinc-100'
           }`}
         >
           Chat
@@ -733,10 +743,19 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
         <button
           type="button"
           onClick={() => setSubTab('WALKIE')}
-          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate ${
+          style={
             subTab === 'WALKIE'
-              ? 'bg-white text-zinc-950 font-bold'
-              : 'text-zinc-400 hover:text-zinc-100'
+              ? {
+                  backgroundColor: '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: '#00E5FF',
+                }
+              : undefined
+          }
+          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate border ${
+            subTab === 'WALKIE'
+              ? 'font-extrabold'
+              : 'border-transparent text-zinc-400 hover:text-zinc-100'
           }`}
         >
           Walkie
@@ -744,13 +763,34 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
         <button
           type="button"
           onClick={() => setSubTab('BLOG')}
-          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate ${
+          style={
             subTab === 'BLOG'
-              ? 'bg-white text-zinc-950 font-bold'
-              : 'text-zinc-400 hover:text-zinc-100'
+              ? {
+                  backgroundColor: '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: '#00E5FF',
+                }
+              : undefined
+          }
+          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate border ${
+            subTab === 'BLOG'
+              ? 'font-extrabold'
+              : 'border-transparent text-zinc-400 hover:text-zinc-100'
           }`}
         >
           Blog
+        </button>
+        <button
+          type="button"
+          onClick={() => openTranslatorModal('TRADUTOR')}
+          style={{
+            backgroundColor: '#0B0F17',
+            borderColor: '#00E5FF',
+            color: '#00E5FF',
+          }}
+          className="rounded-lg border py-1.5 px-2 text-xs font-extrabold transition cursor-pointer truncate shadow-[0_0_10px_rgba(0,229,255,0.2)]"
+        >
+          🌍 Tradutor
         </button>
       </div>
 

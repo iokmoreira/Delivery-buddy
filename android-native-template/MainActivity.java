@@ -1026,7 +1026,14 @@ public class MainActivity extends BridgeActivity {
             || norm.contains("emerg")
             || norm.contains("socorro")
             || norm.contains("ajuda")
-            || norm.contains("acidente");
+            || norm.contains("acidente")
+            || norm.contains("traduz")
+            || norm.contains("tradutor")
+            || norm.contains("libras")
+            || norm.contains("gestual")
+            || norm.contains("ingles")
+            || norm.contains("frances")
+            || norm.contains("espanhol");
     }
 
     private boolean isActionableFastCommand(String norm) {
@@ -1513,6 +1520,50 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void speakText(final String text) {
             speakWithNativeTts(text);
+        }
+
+        @JavascriptInterface
+        public void speakTextWithLang(final String text, final String langTag, final float rate) {
+            if (text == null || text.trim().isEmpty()) return;
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if (nativeTts == null || !nativeTtsReady) {
+                            speakWithNativeTts(text);
+                            return;
+                        }
+                        try {
+                            nativeTts.stop();
+                        } catch (Exception ignored) {
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && langTag != null && !langTag.trim().isEmpty()) {
+                            Locale targetLocale = Locale.forLanguageTag(langTag.trim());
+                            nativeTts.setLanguage(targetLocale);
+                        }
+                        float clampedRate = Math.max(0.85f, Math.min(1.4f, rate > 0 ? rate : 1.02f));
+                        nativeTts.setPitch(0.98f);
+                        nativeTts.setSpeechRate(clampedRate);
+                        final String utteranceId = "buddy_foreign_tts_" + System.currentTimeMillis();
+                        lastUtteranceId = utteranceId;
+                        notifyWebViewSpeakingState(true);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            Bundle params = new Bundle();
+                            params.putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC);
+                            params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f);
+                            nativeTts.speak(text.trim(), TextToSpeech.QUEUE_FLUSH, params, utteranceId);
+                        } else {
+                            java.util.HashMap<String, String> params = new java.util.HashMap<>();
+                            params.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_MUSIC));
+                            params.put(TextToSpeech.Engine.KEY_PARAM_VOLUME, "1.0");
+                            params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId);
+                            nativeTts.speak(text.trim(), TextToSpeech.QUEUE_FLUSH, params);
+                        }
+                    } catch (Exception ignored) {
+                        notifyWebViewSpeakingState(false);
+                    }
+                }
+            });
         }
 
         @JavascriptInterface
