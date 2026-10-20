@@ -5,6 +5,14 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss()],
+  esbuild: {
+    drop: ['console', 'debugger'],
+    legalComments: 'none',
+  },
+  build: {
+    sourcemap: false,
+    minify: 'esbuild',
+  },
   server: {
     port: 5173,
     host: true,

@@ -62,11 +62,15 @@ jobs:
           cp -f android-native-template/MainActivity.java android/app/src/main/java/com/pbg/deliverybuddy/MainActivity.java
           cp -f android-native-template/accessibility_service_config.xml android/app/src/main/res/xml/accessibility_service_config.xml
 
-          # Delete legacy geometric vector XML icons and mipmap-anydpi-v26 so Android uses the real 3D Robot PNG launcher icons
-          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          # Remove legacy geometric vector XML drawables and install centered Adaptive + Legacy 3D Robot Launcher Icons
           rm -f android/app/src/main/res/drawable/ic_launcher_foreground.xml
           rm -f android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
           rm -f android/app/src/main/res/drawable/ic_launcher_background.xml
+          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
+          mkdir -p android/app/src/main/res/values
+          cp -f android-native-template/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          cp -f android-native-template/mipmap-anydpi-v26/ic_launcher_round.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          cp -f android-native-template/values/ic_launcher_background.xml android/app/src/main/res/values/ic_launcher_background.xml
 
           # Copy real 3-Pose 3D Robot drawables for the native Android floating bubble
           mkdir -p android/app/src/main/res/drawable
@@ -74,7 +78,7 @@ jobs:
           cp -f android-native-template/drawable/buddy_pause.png android/app/src/main/res/drawable/buddy_pause.png
           cp -f android-native-template/drawable/buddy_delivery.png android/app/src/main/res/drawable/buddy_delivery.png
 
-          # Copy real 3D Robot Pose 1 launcher icons into all mipmap-* folders
+          # Copy centered 3D Robot Pose 3 (Jetpack) launcher icons into all mipmap-* folders
           for density in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
             mkdir -p "android/app/src/main/res/${density}"
             cp -f "android-native-template/${density}/ic_launcher.png" "android/app/src/main/res/${density}/ic_launcher.png"

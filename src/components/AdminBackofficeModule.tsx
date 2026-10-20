@@ -81,7 +81,10 @@ export const AdminBackofficeModule: React.FC = () => {
     buddyMascotImages,
     uploadThreePoseMascotSheet,
     resetMascotImagesToBuiltin,
+    themeMode,
   } = useEstafetas();
+
+  const isDaylight = themeMode === 'DAYLIGHT';
 
   const [subTab, setSubTab] = useState<
     'IA_SKILLS' | 'KYC' | 'RECLAMACOES_ALERTAS' | 'SUPORTE_ATIVO'
@@ -346,37 +349,91 @@ export const AdminBackofficeModule: React.FC = () => {
   return (
     <div className="space-y-3">
       {/* Top 4-Tab Segmented Switcher (CEO Admin Dashboard) */}
-      <div className="bg-zinc-900 p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-1.5 border border-amber-500/35 shadow-md">
+      <div
+        style={{
+          backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
+          borderColor: isDaylight ? '#CBD5E1' : 'rgba(0, 229, 255, 0.35)',
+        }}
+        className="p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-1.5 border shadow-md"
+      >
         <button
           type="button"
           onClick={() => setSubTab('IA_SKILLS')}
-          className={`rounded-xl py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-            subTab === 'IA_SKILLS'
-              ? 'bg-emerald-500 text-slate-950 shadow-sm'
-              : 'text-zinc-200 hover:text-white bg-zinc-950/70'
-          }`}
+          style={{
+            backgroundColor:
+              subTab === 'IA_SKILLS'
+                ? '#0B0F17'
+                : isDaylight
+                  ? '#F8FAFC'
+                  : '#111827',
+            borderColor:
+              subTab === 'IA_SKILLS'
+                ? '#00E5FF'
+                : isDaylight
+                  ? '#E2E8F0'
+                  : 'rgba(0, 229, 255, 0.2)',
+            color:
+              subTab === 'IA_SKILLS'
+                ? '#00E5FF'
+                : isDaylight
+                  ? '#090D16'
+                  : '#FFFFFF',
+          }}
+          className="rounded-xl border py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5"
         >
           <span>📊 Online Agora &amp; Projeções</span>
         </button>
         <button
           type="button"
           onClick={() => setSubTab('KYC')}
-          className={`rounded-xl py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-            subTab === 'KYC'
-              ? 'bg-emerald-500 text-slate-950 shadow-sm'
-              : 'text-zinc-200 hover:text-white bg-zinc-950/70'
-          }`}
+          style={{
+            backgroundColor:
+              subTab === 'KYC'
+                ? '#0B0F17'
+                : isDaylight
+                  ? '#F8FAFC'
+                  : '#111827',
+            borderColor:
+              subTab === 'KYC'
+                ? '#00E5FF'
+                : isDaylight
+                  ? '#E2E8F0'
+                  : 'rgba(0, 229, 255, 0.2)',
+            color:
+              subTab === 'KYC'
+                ? '#00E5FF'
+                : isDaylight
+                  ? '#090D16'
+                  : '#FFFFFF',
+          }}
+          className="rounded-xl border py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5"
         >
-          <span>✅ Requisições de Aceitação ({totalRegisteredCount})</span>
+          <span>✓ Requisições de Aceitação ({totalRegisteredCount})</span>
         </button>
         <button
           type="button"
           onClick={() => setSubTab('RECLAMACOES_ALERTAS')}
-          className={`rounded-xl py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-            subTab === 'RECLAMACOES_ALERTAS'
-              ? 'bg-emerald-500 text-slate-950 shadow-sm'
-              : 'text-zinc-200 hover:text-white bg-zinc-950/70'
-          }`}
+          style={{
+            backgroundColor:
+              subTab === 'RECLAMACOES_ALERTAS'
+                ? '#0B0F17'
+                : isDaylight
+                  ? '#F8FAFC'
+                  : '#111827',
+            borderColor:
+              subTab === 'RECLAMACOES_ALERTAS'
+                ? '#00E5FF'
+                : isDaylight
+                  ? '#E2E8F0'
+                  : 'rgba(0, 229, 255, 0.2)',
+            color:
+              subTab === 'RECLAMACOES_ALERTAS'
+                ? '#00E5FF'
+                : isDaylight
+                  ? '#090D16'
+                  : '#FFFFFF',
+          }}
+          className="rounded-xl border py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5"
         >
           <span>
             ⚠️ Reclamações &amp; Alertas (
@@ -388,11 +445,27 @@ export const AdminBackofficeModule: React.FC = () => {
         <button
           type="button"
           onClick={() => setSubTab('SUPORTE_ATIVO')}
-          className={`rounded-xl py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-            subTab === 'SUPORTE_ATIVO'
-              ? 'bg-emerald-500 text-slate-950 shadow-sm'
-              : 'text-zinc-200 hover:text-white bg-zinc-950/70'
-          }`}
+          style={{
+            backgroundColor:
+              subTab === 'SUPORTE_ATIVO'
+                ? '#0B0F17'
+                : isDaylight
+                  ? '#F8FAFC'
+                  : '#111827',
+            borderColor:
+              subTab === 'SUPORTE_ATIVO'
+                ? '#00E5FF'
+                : isDaylight
+                  ? '#E2E8F0'
+                  : 'rgba(0, 229, 255, 0.2)',
+            color:
+              subTab === 'SUPORTE_ATIVO'
+                ? '#00E5FF'
+                : isDaylight
+                  ? '#090D16'
+                  : '#FFFFFF',
+          }}
+          className="rounded-xl border py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5"
         >
           <span>💬 Central de Suporte Ativo ({supportMessages.length})</span>
         </button>
@@ -408,7 +481,7 @@ export const AdminBackofficeModule: React.FC = () => {
           className="rounded-2xl bg-zinc-900/95 border border-zinc-800/80 p-3.5 space-y-3.5 shadow-lg"
         >
           {/* CEO Executive Live KPIs & 30d / 90d / 1-Year Growth Projections */}
-          <div className="rounded-2xl bg-zinc-950 border border-emerald-500/40 p-3.5 space-y-3">
+          <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
                 <h3 className="text-base font-extrabold text-white flex items-center gap-2">
@@ -418,165 +491,208 @@ export const AdminBackofficeModule: React.FC = () => {
                   Centro Operacional Ativo: <strong className="text-emerald-400">Amarante (Raio 35 km)</strong> • Sincronização em Tempo Real
                 </p>
               </div>
-              <span className="rounded-full bg-emerald-500/20 border border-emerald-400/50 px-3 py-1 text-xs font-extrabold text-emerald-300">
+              <span
+                style={{
+                  backgroundColor: '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: '#00E5FF',
+                }}
+                className="rounded-full border px-3 py-1 text-xs font-extrabold"
+              >
                 ● {liveOnlineCount} Online Agora
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-3 gap-2">
               <div
                 style={{
-                  backgroundColor: '#F8FAFC',
-                  borderColor: '#CBD5E1',
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.28)',
                 }}
-                className="rounded-xl border p-3"
+                className="rounded-xl border p-2.5 min-w-0"
               >
-                <span className="block text-xs font-bold text-slate-600">
+                <span
+                  style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
+                  className="block text-xs font-bold truncate"
+                >
                   Online Agora
                 </span>
                 <span
-                  style={{ color: '#0284C7' }}
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
                   className="block text-2xl font-extrabold mt-0.5"
                 >
                   {liveOnlineCount}
                 </span>
-                <span className="block text-[11px] font-semibold text-slate-500">
+                <span
+                  style={{ color: isDaylight ? '#64748B' : '#94A3B8' }}
+                  className="block text-[11px] font-semibold truncate"
+                >
                   No Mapa (Amarante)
                 </span>
               </div>
               <div
                 style={{
-                  backgroundColor: '#F8FAFC',
-                  borderColor: '#CBD5E1',
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.28)',
                 }}
-                className="rounded-xl border p-3"
+                className="rounded-xl border p-2.5 min-w-0"
               >
-                <span className="block text-xs font-bold text-slate-600">
+                <span
+                  style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
+                  className="block text-xs font-bold truncate"
+                >
                   Contas Registadas
                 </span>
                 <span
-                  style={{ color: '#0F172A' }}
+                  style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
                   className="block text-2xl font-extrabold mt-0.5"
                 >
                   {totalRegisteredCount}
                 </span>
-                <span className="block text-[11px] font-semibold text-slate-500">
+                <span
+                  style={{ color: isDaylight ? '#64748B' : '#94A3B8' }}
+                  className="block text-[11px] font-semibold truncate"
+                >
                   Estafetas Verificados
                 </span>
               </div>
               <div
                 style={{
-                  backgroundColor: '#F8FAFC',
-                  borderColor: '#CBD5E1',
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.28)',
                 }}
-                className="rounded-xl border p-3"
+                className="rounded-xl border p-2.5 min-w-0"
               >
-                <span className="block text-xs font-bold text-slate-600">
+                <span
+                  style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
+                  className="block text-xs font-bold truncate"
+                >
                   Hub Regional
                 </span>
                 <span
-                  style={{ color: '#0F172A' }}
-                  className="block text-base sm:text-lg font-extrabold mt-0.5 leading-tight"
+                  style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                  className="block text-sm sm:text-base font-extrabold mt-1 leading-snug"
                 >
                   Amarante
                 </span>
                 <span
-                  style={{ color: '#0284C7' }}
-                  className="block text-[11px] font-extrabold"
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  className="block text-[11px] font-extrabold mt-0.5"
                 >
-                  Raio 35 km • 100% Ativo
+                  Raio 35 km
                 </span>
               </div>
             </div>
 
-            {/* 30-Day / 90-Day / 1-Year Growth Projections (High-Contrast Dark Slate & Deep Cyan on Clean Light-Slate Cards) */}
+            {/* 30-Day / 90-Day / 1-Year Growth Projections (Strict Light/Dark Theme) */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
               <div
                 style={{
-                  backgroundColor: '#F8FAFC',
-                  borderColor: '#CBD5E1',
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.28)',
                 }}
                 className="rounded-xl border p-3 space-y-1"
               >
                 <span
-                  style={{ color: '#0F172A' }}
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
                   className="text-xs font-extrabold block"
                 >
                   📈 Projeção 30 Dias
                 </span>
                 <span
-                  style={{ color: '#0F172A' }}
+                  style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
                   className="text-xl font-extrabold block"
                 >
                   28 Estafetas Ativos
                 </span>
                 <span
-                  style={{ color: '#0284C7' }}
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
                   className="text-xs font-extrabold block"
                 >
                   Receita B2B Est.: € 420 / mês
                 </span>
-                <span className="text-[11px] font-semibold text-slate-600 block">
+                <span
+                  style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
+                  className="text-[11px] font-semibold block"
+                >
                   Consolidação Amarante, Vila Meã e Lixa
                 </span>
               </div>
 
               <div
                 style={{
-                  backgroundColor: '#F8FAFC',
-                  borderColor: '#CBD5E1',
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.28)',
                 }}
                 className="rounded-xl border p-3 space-y-1"
               >
                 <span
-                  style={{ color: '#0F172A' }}
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
                   className="text-xs font-extrabold block"
                 >
                   🚀 Projeção 90 Dias
                 </span>
                 <span
-                  style={{ color: '#0F172A' }}
+                  style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
                   className="text-xl font-extrabold block"
                 >
                   85 Estafetas Ativos
                 </span>
                 <span
-                  style={{ color: '#0284C7' }}
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
                   className="text-xs font-extrabold block"
                 >
                   Receita B2B Est.: € 1.450 / mês
                 </span>
-                <span className="text-[11px] font-semibold text-slate-600 block">
+                <span
+                  style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
+                  className="text-[11px] font-semibold block"
+                >
                   Expansão Tâmega e Sousa (Felgueiras / Marco)
                 </span>
               </div>
 
               <div
                 style={{
-                  backgroundColor: '#F8FAFC',
-                  borderColor: '#CBD5E1',
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.28)',
                 }}
                 className="rounded-xl border p-3 space-y-1"
               >
                 <span
-                  style={{ color: '#0F172A' }}
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
                   className="text-xs font-extrabold block"
                 >
                   📊 Projeção 1 Ano (12 Meses)
                 </span>
                 <span
-                  style={{ color: '#0F172A' }}
+                  style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
                   className="text-xl font-extrabold block"
                 >
                   340 Estafetas Ativos
                 </span>
                 <span
-                  style={{ color: '#0284C7' }}
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
                   className="text-xs font-extrabold block"
                 >
                   Receita B2B Est.: € 5.800 / mês
                 </span>
-                <span className="text-[11px] font-semibold text-slate-600 block">
+                <span
+                  style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
+                  className="text-[11px] font-semibold block"
+                >
                   Rede Regional Norte + Seguros &amp; Oficinas B2B
                 </span>
               </div>
@@ -943,28 +1059,37 @@ export const AdminBackofficeModule: React.FC = () => {
               </div>
 
               {/* 1. Live Connection Status Badge */}
-              <span className="rounded-lg px-2.5 py-1 text-[10px] font-bold flex items-center gap-1.5 border bg-emerald-500/15 text-emerald-300 border-emerald-500/40">
+              <span
+                style={{
+                  backgroundColor: '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: '#00E5FF',
+                }}
+                className="rounded-lg px-2.5 py-1 text-[10px] font-extrabold flex items-center gap-1.5 border"
+              >
+                <span className="h-2 w-2 rounded-full bg-[#00E5FF] shadow-[0_0_6px_rgba(0,229,255,0.9)]" />
                 <span>
                   {isSupabaseOnline
-                    ? '🟢 Ligado ao Supabase (Ativo • WebSockets Online)'
-                    : '🟢 Ligado ao Supabase (Ativo)'}
+                    ? 'Ligado ao Supabase (Ativo • WebSockets Online)'
+                    : 'Ligado ao Supabase (Ativo)'}
                 </span>
               </span>
             </div>
 
-            {/* 2. Credential Inputs (Persisted in localStorage) */}
+            {/* 2. Credential Inputs (Persisted in localStorage & Masked by Default) */}
             <div className="space-y-2">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-300 block">
-                  1. URL DO PROJETO SUPABASE (Project URL)
+                  1. URL DO PROJETO SUPABASE (Project URL — Oculto por Segurança)
                 </label>
                 <input
-                  type="url"
+                  type="password"
+                  autoComplete="off"
                   value={supabaseUrlDraft}
                   onChange={(e) =>
                     setSupabaseUrlDraft(sanitizeSupabaseUrlInput(e.target.value))
                   }
-                  placeholder="https://xxxxxxxxxxxx.supabase.co"
+                  placeholder="••••••••••••••••••••••••••••"
                   aria-label="1. URL DO PROJETO SUPABASE (Project URL)"
                   className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
                 />
@@ -972,10 +1097,11 @@ export const AdminBackofficeModule: React.FC = () => {
 
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-300 block">
-                  2. CHAVE API PÚBLICA (anon / public key)
+                  2. CHAVE API PÚBLICA (anon / public key — Oculta por Segurança)
                 </label>
                 <input
                   type="password"
+                  autoComplete="off"
                   value={supabaseKeyDraft}
                   onChange={(e) =>
                     setSupabaseKeyDraft(sanitizeSupabaseKeyInput(e.target.value))
@@ -1324,20 +1450,25 @@ export const AdminBackofficeModule: React.FC = () => {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
               <span className="text-base font-extrabold text-zinc-100 flex items-center gap-1.5">
-                <Users className="h-4 w-4 text-emerald-400" />
+                <Users className="h-4 w-4 text-[#00E5FF]" />
                 <span>
-                  ✅ Requisições de Aceitação &amp; Controlo de Contas ({totalRegisteredCount})
+                  ✓ Requisições de Aceitação &amp; Controlo de Contas ({totalRegisteredCount})
                 </span>
               </span>
               <span className="text-xs text-zinc-400 block mt-0.5">
                 Aprove ou bloqueie contas de estafetas com 1 toque (sincronizado com{' '}
-                <code className="text-emerald-300">public.couriers</code> e registos locais).
+                <code className="text-[#00E5FF]">public.couriers</code> e registos locais).
               </span>
             </div>
             <button
               type="button"
               onClick={() => setIsCourierRegistrationModalOpen(true)}
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-extrabold cursor-pointer transition shrink-0"
+              style={{
+                backgroundColor: '#0B0F17',
+                borderColor: '#00E5FF',
+                color: '#00E5FF',
+              }}
+              className="rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition shrink-0"
             >
               {realCourierProfile
                 ? `Editar Meu Registo (${realCourierProfile.name})`
@@ -1348,7 +1479,7 @@ export const AdminBackofficeModule: React.FC = () => {
           {/* Local Registered Accounts on Device */}
           {localAccounts.length > 0 && (
             <div className="space-y-2">
-              <span className="text-xs font-extrabold text-emerald-300 block">
+              <span className="text-xs font-extrabold text-[#00E5FF] block">
                 Contas Registadas (Acesso App &amp; Login):
               </span>
               {localAccounts.map((acc) => {
@@ -1364,10 +1495,19 @@ export const AdminBackofficeModule: React.FC = () => {
                           {acc.username}
                         </span>
                         <span
-                          className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold ${
+                          style={
                             status === 'BLOQUEADO'
-                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              ? undefined
+                              : {
+                                  backgroundColor: '#0B0F17',
+                                  borderColor: '#00E5FF',
+                                  color: '#00E5FF',
+                                }
+                          }
+                          className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold border ${
+                            status === 'BLOQUEADO'
+                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                              : ''
                           }`}
                         >
                           {status === 'BLOQUEADO' ? '🚫 BLOQUEADO' : '✓ APROVADO'}
@@ -1384,10 +1524,19 @@ export const AdminBackofficeModule: React.FC = () => {
                         onClick={() =>
                           handleToggleLocalAccountStatus(acc.username, 'APROVADO')
                         }
-                        className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                        style={
                           status !== 'BLOQUEADO'
-                            ? 'bg-emerald-500 text-slate-950'
-                            : 'bg-zinc-900 border border-zinc-700 text-zinc-300'
+                            ? {
+                                backgroundColor: '#0B0F17',
+                                borderColor: '#00E5FF',
+                                color: '#00E5FF',
+                              }
+                            : undefined
+                        }
+                        className={`rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                          status !== 'BLOQUEADO'
+                            ? ''
+                            : 'bg-zinc-900 border-zinc-700 text-zinc-300'
                         }`}
                       >
                         ✓ Aprovar
@@ -1424,7 +1573,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   <div
                     key={c.id}
                     className={`rounded-xl bg-zinc-950 p-3 space-y-2 border ${
-                      isSelf ? 'border-emerald-500/50' : 'border-zinc-800/80'
+                      isSelf ? 'border-[#00E5FF]/50' : 'border-zinc-800/80'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -1433,7 +1582,14 @@ export const AdminBackofficeModule: React.FC = () => {
                           <span className="text-sm font-extrabold text-zinc-100">
                             {cleanFullName}
                           </span>
-                          <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          <span
+                            style={{
+                              backgroundColor: '#0B0F17',
+                              borderColor: '#00E5FF',
+                              color: '#00E5FF',
+                            }}
+                            className="rounded px-1.5 py-0.5 text-[10px] font-bold border"
+                          >
                             ● ONLINE NO MAPA ({c.lastActiveText})
                           </span>
                           <span className="rounded bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-bold text-zinc-300">
@@ -1450,10 +1606,19 @@ export const AdminBackofficeModule: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => updateAdminCourierKycStatus(c.id, 'Ativo')}
-                          className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                          style={
                             c.kycStatus === 'Ativo'
-                              ? 'bg-emerald-500 text-slate-950'
-                              : 'bg-zinc-900 border border-zinc-800 text-zinc-300'
+                              ? {
+                                  backgroundColor: '#0B0F17',
+                                  borderColor: '#00E5FF',
+                                  color: '#00E5FF',
+                                }
+                              : undefined
+                          }
+                          className={`rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                            c.kycStatus === 'Ativo'
+                              ? ''
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-300'
                           }`}
                         >
                           ✓ Aprovar
@@ -1501,9 +1666,11 @@ export const AdminBackofficeModule: React.FC = () => {
             {visibleComplaints.length === 0 ? (
               <div
                 style={{
-                  backgroundColor: '#F8FAFC',
-                  borderColor: '#E2E8F0',
-                  color: '#475569',
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
+                  borderColor: isDaylight
+                    ? '#E2E8F0'
+                    : 'rgba(0, 229, 255, 0.25)',
+                  color: isDaylight ? '#475569' : '#94A3B8',
                 }}
                 className="rounded-xl border p-4 text-center text-xs font-bold"
               >
@@ -1517,8 +1684,10 @@ export const AdminBackofficeModule: React.FC = () => {
                     <div
                       key={rc.id}
                       style={{
-                        backgroundColor: '#FFFFFF',
-                        borderColor: '#E2E8F0',
+                        backgroundColor: isDaylight ? '#FFFFFF' : '#111827',
+                        borderColor: isDaylight
+                          ? '#E2E8F0'
+                          : 'rgba(0, 229, 255, 0.28)',
                       }}
                       className="rounded-xl border p-3 space-y-2 shadow-2xs"
                     >
@@ -1526,7 +1695,7 @@ export const AdminBackofficeModule: React.FC = () => {
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
                           <span
                             style={{
-                              backgroundColor: '#0F172A',
+                              backgroundColor: '#0B0F17',
                               borderColor: '#00E5FF',
                               color: '#00E5FF',
                             }}
@@ -1535,7 +1704,9 @@ export const AdminBackofficeModule: React.FC = () => {
                             {rc.platform}
                           </span>
                           <span
-                            style={{ color: '#0F172A' }}
+                            style={{
+                              color: isDaylight ? '#090D16' : '#FFFFFF',
+                            }}
                             className="text-xs font-extrabold leading-snug"
                           >
                             {rc.title}
@@ -1543,9 +1714,11 @@ export const AdminBackofficeModule: React.FC = () => {
                         </div>
                         <span
                           style={{
-                            backgroundColor: '#F1F5F9',
-                            borderColor: '#CBD5E1',
-                            color: '#334155',
+                            backgroundColor: isDaylight ? '#F1F5F9' : '#0B0F17',
+                            borderColor: isDaylight
+                              ? '#CBD5E1'
+                              : 'rgba(0, 229, 255, 0.35)',
+                            color: isDaylight ? '#334155' : '#00E5FF',
                           }}
                           className="rounded-md border px-2 py-0.5 text-[10px] font-extrabold shrink-0"
                         >
@@ -1554,7 +1727,7 @@ export const AdminBackofficeModule: React.FC = () => {
                       </div>
 
                       <p
-                        style={{ color: '#334155' }}
+                        style={{ color: isDaylight ? '#334155' : '#E2E8F0' }}
                         className="text-xs leading-relaxed font-medium"
                       >
                         {rc.description}
@@ -1564,31 +1737,50 @@ export const AdminBackofficeModule: React.FC = () => {
                         typeof rc.realLegalKm === 'number' && (
                           <div
                             style={{
-                              backgroundColor: '#F8FAFC',
-                              borderColor: '#CBD5E1',
+                              backgroundColor: isDaylight
+                                ? '#F8FAFC'
+                                : '#0B0F17',
+                              borderColor: isDaylight
+                                ? '#CBD5E1'
+                                : 'rgba(0, 229, 255, 0.25)',
                             }}
                             className="rounded-lg border px-2.5 py-1.5 flex items-center justify-between gap-2 flex-wrap text-xs"
                           >
                             <span
-                              style={{ color: '#475569' }}
+                              style={{
+                                color: isDaylight ? '#475569' : '#94A3B8',
+                              }}
                               className="font-bold"
                             >
                               Discrepância de Rota (Anunciado vs. Real):
                             </span>
                             <span
-                              style={{ color: '#0F172A' }}
+                              style={{
+                                color: isDaylight ? '#090D16' : '#FFFFFF',
+                              }}
                               className="font-extrabold"
                             >
                               {rc.appAnnouncedKm.toFixed(1)} km →{' '}
-                              <strong style={{ color: '#0284C7' }}>
+                              <strong
+                                style={{
+                                  color: isDaylight ? '#00838F' : '#00E5FF',
+                                }}
+                              >
                                 {rc.realLegalKm.toFixed(1)} km reais
                               </strong>
                             </span>
                           </div>
                         )}
 
-                      {/* 2 Actionable Admin Buttons: ✅ Publicar Alerta no Mapa & 🗑️ Arquivar */}
-                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 flex-wrap">
+                      {/* 2 Actionable Admin Buttons: ✓ Publicar Alerta no Mapa & 🗑️ Arquivar */}
+                      <div
+                        style={{
+                          borderColor: isDaylight
+                            ? '#F1F5F9'
+                            : 'rgba(0, 229, 255, 0.15)',
+                        }}
+                        className="flex items-center justify-end gap-2 pt-1 border-t flex-wrap"
+                      >
                         <button
                           type="button"
                           onClick={() => {
@@ -1605,18 +1797,16 @@ export const AdminBackofficeModule: React.FC = () => {
                             }
                           }}
                           style={{
-                            backgroundColor: isPublished
-                              ? '#E0F2FE'
-                              : '#0F172A',
-                            borderColor: isPublished ? '#0284C7' : '#00E5FF',
-                            color: isPublished ? '#0369A1' : '#00E5FF',
+                            backgroundColor: '#0B0F17',
+                            borderColor: '#00E5FF',
+                            color: '#00E5FF',
                           }}
                           className="rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:opacity-95"
                         >
                           <span>
                             {isPublished
-                              ? '✅ Alerta Publicado no Mapa'
-                              : '✅ Publicar Alerta no Mapa'}
+                              ? '✓ Alerta Publicado no Mapa'
+                              : '✓ Publicar Alerta no Mapa'}
                           </span>
                         </button>
 
@@ -1626,11 +1816,13 @@ export const AdminBackofficeModule: React.FC = () => {
                             setArchivedComplaintIds((prev) => [...prev, rc.id])
                           }
                           style={{
-                            backgroundColor: '#F8FAFC',
-                            borderColor: '#CBD5E1',
-                            color: '#475569',
+                            backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
+                            borderColor: isDaylight
+                              ? '#CBD5E1'
+                              : 'rgba(148, 163, 184, 0.35)',
+                            color: isDaylight ? '#475569' : '#94A3B8',
                           }}
-                          className="rounded-xl border px-3 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer transition hover:bg-slate-100"
+                          className="rounded-xl border px-3 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer transition hover:opacity-90"
                         >
                           <span>🗑️ Arquivar</span>
                         </button>
@@ -1655,20 +1847,22 @@ export const AdminBackofficeModule: React.FC = () => {
                   <div
                     key={haz.id}
                     style={{
-                      backgroundColor: '#F8FAFC',
-                      borderColor: '#E2E8F0',
+                      backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
+                      borderColor: isDaylight
+                        ? '#E2E8F0'
+                        : 'rgba(0, 229, 255, 0.25)',
                     }}
                     className="rounded-xl border p-2.5 flex items-center justify-between gap-2"
                   >
                     <div>
                       <span
-                        style={{ color: '#0F172A' }}
+                        style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
                         className="text-xs font-extrabold block"
                       >
                         {haz.hazardType} — {haz.streetLocation}
                       </span>
                       <span
-                        style={{ color: '#475569' }}
+                        style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
                         className="text-[11px] font-medium block"
                       >
                         Reportado por {haz.reporterName} • {haz.reportedAt} (
@@ -1683,7 +1877,7 @@ export const AdminBackofficeModule: React.FC = () => {
           {/* Streamlined Send Official Admin Broadcast Card */}
           <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-3">
             <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
-              <Megaphone className="h-4 w-4 text-[#0284C7]" />
+              <Megaphone className="h-4 w-4 text-[#00E5FF]" />
               <span>Enviar Comunicado Oficial à Frota</span>
             </span>
 
@@ -1694,11 +1888,13 @@ export const AdminBackofficeModule: React.FC = () => {
                   setTargetType(e.target.value as AdminBroadcastTargetType)
                 }
                 style={{
-                  backgroundColor: '#FFFFFF',
-                  borderColor: '#CBD5E1',
-                  color: '#0F172A',
+                  backgroundColor: isDaylight ? '#FFFFFF' : '#111827',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.28)',
+                  color: isDaylight ? '#090D16' : '#FFFFFF',
                 }}
-                className="w-full rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#0284C7]"
+                className="w-full rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#00E5FF]"
               >
                 <option value="TODOS_ESTAFETAS">Todos os Estafetas</option>
                 <option value="ZONA_ESPECIFICA">
@@ -1712,11 +1908,13 @@ export const AdminBackofficeModule: React.FC = () => {
                 onChange={(e) => setMsgTitle(e.target.value)}
                 placeholder="Título do comunicado..."
                 style={{
-                  backgroundColor: '#FFFFFF',
-                  borderColor: '#CBD5E1',
-                  color: '#0F172A',
+                  backgroundColor: isDaylight ? '#FFFFFF' : '#111827',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.28)',
+                  color: isDaylight ? '#090D16' : '#FFFFFF',
                 }}
-                className="w-full rounded-xl border px-3 py-2 text-xs font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#0284C7]"
+                className="w-full rounded-xl border px-3 py-2 text-xs font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#00E5FF]"
               />
               <input
                 type="text"
@@ -1725,16 +1923,18 @@ export const AdminBackofficeModule: React.FC = () => {
                 onChange={(e) => setMsgBody(e.target.value)}
                 placeholder="Mensagem curta para os estafetas..."
                 style={{
-                  backgroundColor: '#FFFFFF',
-                  borderColor: '#CBD5E1',
-                  color: '#0F172A',
+                  backgroundColor: isDaylight ? '#FFFFFF' : '#111827',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.28)',
+                  color: isDaylight ? '#090D16' : '#FFFFFF',
                 }}
-                className="w-full rounded-xl border px-3 py-2 text-xs font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#0284C7]"
+                className="w-full rounded-xl border px-3 py-2 text-xs font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#00E5FF]"
               />
               <button
                 type="submit"
                 style={{
-                  backgroundColor: '#0F172A',
+                  backgroundColor: '#0B0F17',
                   borderColor: '#00E5FF',
                   color: '#00E5FF',
                 }}
@@ -1751,19 +1951,21 @@ export const AdminBackofficeModule: React.FC = () => {
                   <div
                     key={b.id}
                     style={{
-                      backgroundColor: '#F8FAFC',
-                      borderColor: '#E2E8F0',
+                      backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
+                      borderColor: isDaylight
+                        ? '#E2E8F0'
+                        : 'rgba(0, 229, 255, 0.25)',
                     }}
                     className="rounded-xl border p-2.5 text-xs"
                   >
                     <span
-                      style={{ color: '#0F172A' }}
+                      style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
                       className="font-extrabold block"
                     >
                       {b.title}
                     </span>
                     <span
-                      style={{ color: '#475569' }}
+                      style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
                       className="text-[11px] font-medium"
                     >
                       {b.body}
@@ -1784,7 +1986,7 @@ export const AdminBackofficeModule: React.FC = () => {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
               <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-[#0284C7]" />
+                <MessageSquare className="h-4 w-4 text-[#00E5FF]" />
                 <span>💬 Central de Suporte Ativo (Tempo Real)</span>
               </h3>
               <p className="text-xs text-zinc-400">
@@ -1793,9 +1995,9 @@ export const AdminBackofficeModule: React.FC = () => {
             </div>
             <span
               style={{
-                backgroundColor: '#ECFEFF',
+                backgroundColor: '#0B0F17',
                 borderColor: '#00E5FF',
-                color: '#0E7490',
+                color: '#00E5FF',
               }}
               className="rounded-full border px-3 py-1 text-xs font-extrabold"
             >

@@ -33,13 +33,13 @@ const config: CapacitorConfig = {
   server: {
     ...(otaServerUrl ? { url: otaServerUrl, cleartext: true } : {}),
     androidScheme: 'https',
-    allowNavigation: ['*'],
+    allowNavigation: ['iokmoreira.github.io', 'localhost', '127.0.0.1', '*'],
   },
   android: {
     allowMixedContent: true,
     captureInput: true,
-    webContentsDebuggingEnabled: true,
-    backgroundColor: '#00000000',
+    webContentsDebuggingEnabled: false,
+    backgroundColor: '#05070B',
   },
 };
 

@@ -130,14 +130,27 @@ public class MainActivity extends BridgeActivity {
 
         if (getBridge() != null && getBridge().getWebView() != null) {
             final WebView webView = getBridge().getWebView();
+            // Anti-Copy & Security Hardening: Disable remote Chrome DevTools WebView inspection
+            WebView.setWebContentsDebuggingEnabled(false);
             WebSettings settings = webView.getSettings();
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
             settings.setGeolocationEnabled(true);
+            settings.setAllowFileAccessFromFileURLs(false);
+            settings.setAllowUniversalAccessFromFileURLs(false);
             settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
             settings.setMediaPlaybackRequiresUserGesture(false);
             webView.clearCache(true);
             webView.addJavascriptInterface(new BuddyNativeOverlayBridge(), "BuddyNativeOverlay");
+
+            // Package Integrity Check (Anti-Repackaging)
+            final String pkgName = getPackageName();
+            if (pkgName != null
+                && !pkgName.equals("com.pbg.deliverybuddy")
+                && !pkgName.equals("com.deliverybuddy.app")) {
+                finish();
+                return;
+            }
 
             webView.setWebChromeClient(new WebChromeClient() {
                 @Override
@@ -1454,7 +1467,12 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public int getNativeBridgeVersion() {
-            return 12;
+            return 13;
+        }
+
+        @JavascriptInterface
+        public String getAppPackageName() {
+            return getPackageName();
         }
 
         @JavascriptInterface

@@ -140,6 +140,59 @@ const AppCockpitShell: React.FC = () => {
   const themeClass =
     themeMode === 'DAYLIGHT' ? 'theme-daylight' : 'theme-night';
 
+  const isAuthorizedOrigin = React.useMemo(() => {
+    if (typeof window === 'undefined') return true;
+    const host = (window.location.hostname || '').toLowerCase();
+    const winAny = window as unknown as {
+      BuddyNativeOverlay?: {
+        getAppPackageName?: () => string;
+      };
+    };
+    const nativePkg =
+      typeof winAny.BuddyNativeOverlay?.getAppPackageName === 'function'
+        ? winAny.BuddyNativeOverlay.getAppPackageName()
+        : '';
+    if (
+      nativePkg &&
+      nativePkg !== 'com.pbg.deliverybuddy' &&
+      nativePkg !== 'com.deliverybuddy.app'
+    ) {
+      return false;
+    }
+    const allowedHosts = [
+      'iokmoreira.github.io',
+      'localhost',
+      '127.0.0.1',
+      '',
+    ];
+    return allowedHosts.includes(host) || host.endsWith('.github.io');
+  }, []);
+
+  if (!isAuthorizedOrigin) {
+    return (
+      <div
+        style={{ backgroundColor: '#05070B', color: '#FFFFFF' }}
+        className="min-h-screen flex items-center justify-center p-6 text-center"
+      >
+        <div
+          style={{
+            backgroundColor: '#0B0F17',
+            borderColor: '#00E5FF',
+          }}
+          className="max-w-sm w-full rounded-2xl border p-6 space-y-3"
+        >
+          <Shield className="h-8 w-8 text-[#00E5FF] mx-auto" />
+          <h1 className="text-base font-extrabold text-white">
+            Delivery Buddy — Proteção Anti-Clone Ativa
+          </h1>
+          <p className="text-xs text-[#94A3B8]">
+            Esta aplicação apenas pode ser executada no pacote oficial Android ou no domínio oficial Delivery Buddy.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const isChromeMascotUploadBridgeMode =
     typeof window !== 'undefined' &&
     window.location.search.includes('upload_mascot=1');
@@ -262,7 +315,7 @@ const AppCockpitShell: React.FC = () => {
                 <button
                   type="button"
                   onClick={cancelCrashCountdown}
-                  style={{ backgroundColor: '#10b981', color: '#022c22' }}
+                  style={{ backgroundColor: '#00E5FF', color: '#05070B' }}
                   className="w-full rounded-2xl py-3.5 px-4 text-sm font-black cursor-pointer shadow-lg"
                 >
                   ✓ ESTOU BEM — CANCELAR ALERTA
@@ -308,8 +361,12 @@ const AppCockpitShell: React.FC = () => {
           !isBatteryCharging &&
           !batteryBannerDismissed && (
             <div
-              style={{ backgroundColor: '#064e3b', color: '#ecfdf5' }}
-              className="mx-3 mt-1 rounded-lg px-2.5 py-1 text-[10px] font-bold flex items-center justify-between gap-2"
+              style={{
+                backgroundColor: '#0B0F17',
+                borderColor: '#00E5FF',
+                color: '#00E5FF',
+              }}
+              className="mx-3 mt-1 rounded-lg border px-2.5 py-1 text-[10px] font-bold flex items-center justify-between gap-2"
             >
               <span>
                 🔋 Modo Sobrevivência de Bateria Ativo ({batteryLevelPct}% • Poupança Extrema)
@@ -343,11 +400,22 @@ const AppCockpitShell: React.FC = () => {
         {!isBubbleMinimized && (
           <>
             {isAdminView ? (
-              <header className="sticky top-0 z-40 min-h-14 py-2.5 bg-zinc-950/95 border-b border-slate-200 px-4 flex items-center justify-between gap-2 flex-wrap shadow-xs">
+              <header
+                style={{
+                  backgroundColor:
+                    themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#05070B',
+                  borderColor:
+                    themeMode === 'DAYLIGHT'
+                      ? '#E2E8F0'
+                      : 'rgba(0, 229, 255, 0.25)',
+                  color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                }}
+                className="sticky top-0 z-40 min-h-14 py-2.5 border-b px-4 flex items-center justify-between gap-2 flex-wrap shadow-xs"
+              >
                 <div className="flex items-center gap-2">
                   <span
                     style={{
-                      backgroundColor: '#0F172A',
+                      backgroundColor: '#0B0F17',
                       border: '1.5px solid #00E5FF',
                     }}
                     className="h-7 w-7 rounded-full flex items-center justify-center shrink-0 shadow-[0_2px_8px_rgba(0,229,255,0.2)]"
@@ -370,29 +438,33 @@ const AppCockpitShell: React.FC = () => {
                       />
                       <circle cx="12" cy="1.8" r="1.4" fill="#00E5FF" />
                       <rect
-                        x="4"
+                        x="3.5"
                         y="5"
-                        width="16"
-                        height="13"
-                        rx="6.5"
-                        fill="#F8FAFC"
+                        width="17"
+                        height="13.5"
+                        rx="6.75"
+                        fill="#0B0F17"
                         stroke="#00E5FF"
-                        strokeWidth="1.6"
+                        strokeWidth="1.8"
                       />
                       <rect
-                        x="6.5"
+                        x="6.2"
                         y="8"
-                        width="11"
-                        height="6.5"
-                        rx="3.2"
-                        fill="#0F172A"
+                        width="11.6"
+                        height="6.8"
+                        rx="3.4"
+                        fill="#05070B"
+                        stroke="#00E5FF"
+                        strokeWidth="1.2"
                       />
-                      <circle cx="9.6" cy="11.2" r="1.3" fill="#00E5FF" />
-                      <circle cx="14.4" cy="11.2" r="1.3" fill="#00E5FF" />
+                      <circle cx="9.6" cy="11.4" r="1.4" fill="#00E5FF" />
+                      <circle cx="14.4" cy="11.4" r="1.4" fill="#00E5FF" />
                     </svg>
                   </span>
                   <span
-                    style={{ color: '#0F172A' }}
+                    style={{
+                      color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                    }}
                     className="text-base font-extrabold tracking-tight"
                   >
                     Painel de Administrador
@@ -403,9 +475,13 @@ const AppCockpitShell: React.FC = () => {
                     type="button"
                     onClick={() => setIsOfficialManualModalOpen(true)}
                     style={{
-                      backgroundColor: '#F8FAFC',
-                      borderColor: '#CBD5E1',
-                      color: '#0F172A',
+                      backgroundColor:
+                        themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+                      borderColor:
+                        themeMode === 'DAYLIGHT'
+                          ? '#CBD5E1'
+                          : 'rgba(0, 229, 255, 0.35)',
+                      color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
                     }}
                     className="rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:border-[#00E5FF]"
                   >
@@ -418,7 +494,7 @@ const AppCockpitShell: React.FC = () => {
                       setActiveTab('scanner');
                     }}
                     style={{
-                      backgroundColor: '#0F172A',
+                      backgroundColor: '#0B0F17',
                       borderColor: '#00E5FF',
                       color: '#00E5FF',
                     }}

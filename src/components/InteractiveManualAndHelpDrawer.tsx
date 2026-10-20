@@ -414,7 +414,7 @@ export const ActivePlatformsSelectorGroup: React.FC<{
         <span className="text-xs font-extrabold text-zinc-200">
           {titleOverride || 'Em que aplicações fazes entregas?'}
         </span>
-        <span className="text-[10px] font-semibold text-emerald-400">
+        <span className="text-[10px] font-semibold text-[#00B8D4]">
           {selectedPlatforms.length} selecionada(s)
         </span>
       </div>
@@ -433,9 +433,19 @@ export const ActivePlatformsSelectorGroup: React.FC<{
                   ? 'Mantém pelo menos 1 aplicação selecionada'
                   : `Selecionar ${platform}`
               }
+              style={
+                isChecked
+                  ? {
+                      backgroundColor: '#0B0F17',
+                      borderColor: '#00E5FF',
+                      color: '#00E5FF',
+                      boxShadow: '0 2px 10px rgba(0, 229, 255, 0.22)',
+                    }
+                  : undefined
+              }
               className={`rounded-xl py-2.5 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 border transition cursor-pointer whitespace-nowrap ${
                 isChecked
-                  ? 'bg-emerald-600 text-white border-emerald-400 shadow-sm'
+                  ? 'border-[#00E5FF]'
                   : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
               }`}
             >
@@ -1688,11 +1698,12 @@ export const MenuMaisHubView: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {/* Unified Monochromatic Slate & Light Neon Blue Quick Actions Grid */}
+      {/* Unified Monochromatic Slate & Light Neon Blue Quick Actions Grid (Strict Light/Dark Theme) */}
       <div
         style={{
-          backgroundColor: '#FFFFFF',
-          borderColor: '#E2E8F0',
+          backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+          borderColor:
+            themeMode === 'DAYLIGHT' ? '#E2E8F0' : 'rgba(0, 229, 255, 0.25)',
         }}
         className="rounded-2xl border p-3 shadow-xs space-y-2"
       >
@@ -1701,9 +1712,12 @@ export const MenuMaisHubView: React.FC = () => {
             type="button"
             onClick={() => setIsDirectApkShareModalOpen(true)}
             style={{
-              backgroundColor: '#F8FAFC',
-              borderColor: '#E2E8F0',
-              color: '#0F172A',
+              backgroundColor: themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#111827',
+              borderColor:
+                themeMode === 'DAYLIGHT'
+                  ? '#E2E8F0'
+                  : 'rgba(0, 229, 255, 0.28)',
+              color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
             }}
             className="w-full rounded-xl border py-2.5 px-3 text-left flex items-center justify-between gap-2.5 cursor-pointer transition hover:border-[#00E5FF]"
           >
@@ -1711,32 +1725,45 @@ export const MenuMaisHubView: React.FC = () => {
               <span
                 style={{
                   backgroundColor: 'rgba(0, 229, 255, 0.14)',
-                  borderColor: 'rgba(0, 184, 212, 0.35)',
-                  color: '#00838F',
+                  borderColor: 'rgba(0, 229, 255, 0.45)',
+                  color: '#00E5FF',
                 }}
                 className="h-9 w-9 rounded-xl border flex items-center justify-center shrink-0"
               >
-                <Download className="h-4 w-4 text-[#00B8D4]" />
+                <Download className="h-4 w-4 text-[#00E5FF]" />
               </span>
               <div className="min-w-0">
-                <span className="block text-sm font-extrabold text-[#0F172A] truncate">
+                <span
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="block text-sm font-extrabold truncate"
+                >
                   Enviar App / QR Code APK
                 </span>
-                <span className="block text-xs text-slate-500 truncate">
+                <span
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+                  }}
+                  className="block text-xs truncate"
+                >
                   Partilhar instalação direta com colegas
                 </span>
               </div>
             </div>
-            <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+            <ChevronRight className="h-4 w-4 text-[#00E5FF] shrink-0" />
           </button>
 
           <button
             type="button"
             onClick={() => setIsLiveSupportModalOpen(true)}
             style={{
-              backgroundColor: '#F8FAFC',
-              borderColor: '#E2E8F0',
-              color: '#0F172A',
+              backgroundColor: themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#111827',
+              borderColor:
+                themeMode === 'DAYLIGHT'
+                  ? '#E2E8F0'
+                  : 'rgba(0, 229, 255, 0.28)',
+              color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
             }}
             className="w-full rounded-xl border py-2.5 px-3 text-left flex items-center justify-between gap-2.5 cursor-pointer transition hover:border-[#00E5FF]"
           >
@@ -1744,23 +1771,33 @@ export const MenuMaisHubView: React.FC = () => {
               <span
                 style={{
                   backgroundColor: 'rgba(0, 229, 255, 0.14)',
-                  borderColor: 'rgba(0, 184, 212, 0.35)',
-                  color: '#00838F',
+                  borderColor: 'rgba(0, 229, 255, 0.45)',
+                  color: '#00E5FF',
                 }}
                 className="h-9 w-9 rounded-xl border flex items-center justify-center shrink-0 text-base"
               >
                 💬
               </span>
               <div className="min-w-0">
-                <span className="block text-sm font-extrabold text-[#0F172A] truncate">
+                <span
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="block text-sm font-extrabold truncate"
+                >
                   Suporte em Tempo Real
                 </span>
-                <span className="block text-xs text-slate-500 truncate">
+                <span
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+                  }}
+                  className="block text-xs truncate"
+                >
                   Linha direta com a coordenação
                 </span>
               </div>
             </div>
-            <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+            <ChevronRight className="h-4 w-4 text-[#00E5FF] shrink-0" />
           </button>
         </div>
       </div>
@@ -1888,9 +1925,15 @@ export const MenuMaisHubView: React.FC = () => {
           <div className="flex items-center gap-2 shrink-0">
             <span
               style={{
-                backgroundColor: '#F0F9FF',
-                borderColor: '#7DD3FC',
-                color: '#0369A1',
+                backgroundColor:
+                  themeMode === 'DAYLIGHT'
+                    ? '#F0F9FF'
+                    : 'rgba(0, 229, 255, 0.14)',
+                borderColor:
+                  themeMode === 'DAYLIGHT'
+                    ? '#00B8D4'
+                    : 'rgba(0, 229, 255, 0.45)',
+                color: themeMode === 'DAYLIGHT' ? '#00838F' : '#00E5FF',
               }}
               className="rounded-lg border px-2.5 py-0.5 text-xs font-extrabold"
             >
@@ -1909,23 +1952,41 @@ export const MenuMaisHubView: React.FC = () => {
             {/* Natural Male pt-BR Voice Engine Tuning Card */}
             <div
               style={{
-                backgroundColor: '#F8FAFC',
-                borderColor: '#E2E8F0',
+                backgroundColor:
+                  themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#111827',
+                borderColor:
+                  themeMode === 'DAYLIGHT'
+                    ? '#E2E8F0'
+                    : 'rgba(0, 229, 255, 0.25)',
               }}
               className="rounded-xl border p-3 space-y-2.5"
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <span className="text-sm font-extrabold text-[#0F172A] flex items-center gap-1.5">
-                    <Volume2 className="h-4 w-4 text-[#00B8D4] shrink-0" />
+                  <span
+                    style={{
+                      color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                    }}
+                    className="text-sm font-extrabold flex items-center gap-1.5"
+                  >
+                    <Volume2 className="h-4 w-4 text-[#00E5FF] shrink-0" />
                     <span>
                       Velocidade da Voz (pt-BR Masculina):{' '}
                       {buddyVoiceRate.toFixed(2)}x
                     </span>
                   </span>
-                  <span className="block text-xs text-slate-600">
+                  <span
+                    style={{
+                      color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+                    }}
+                    className="block text-xs"
+                  >
                     Voz Ativa:{' '}
-                    <strong className="text-[#0284C7]">
+                    <strong
+                      style={{
+                        color: themeMode === 'DAYLIGHT' ? '#00838F' : '#00E5FF',
+                      }}
+                    >
                       {resolvedPtBrVoiceName}
                     </strong>{' '}
                     • Pitch 0.95 • Sem Eco
@@ -1938,7 +1999,7 @@ export const MenuMaisHubView: React.FC = () => {
                     speakTextPt('Uber: 6,20 limpos, 1,55 por km. Vale a pena.')
                   }
                   style={{
-                    backgroundColor: '#0F172A',
+                    backgroundColor: '#0B0F17',
                     borderColor: '#00E5FF',
                     color: '#00E5FF',
                   }}
@@ -1950,7 +2011,14 @@ export const MenuMaisHubView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-slate-600">1.00x</span>
+                <span
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+                  }}
+                  className="text-xs font-bold"
+                >
+                  1.00x
+                </span>
                 <input
                   type="range"
                   min="1.0"
@@ -1959,17 +2027,24 @@ export const MenuMaisHubView: React.FC = () => {
                   value={buddyVoiceRate}
                   onChange={(e) => setBuddyVoiceRate(Number(e.target.value))}
                   aria-label="Velocidade da Voz do Buddy"
-                  className="flex-1 accent-[#00B8D4] cursor-pointer"
+                  className="flex-1 accent-[#00E5FF] cursor-pointer"
                 />
-                <span className="text-xs font-bold text-slate-600">1.50x</span>
+                <span
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+                  }}
+                  className="text-xs font-bold"
+                >
+                  1.50x
+                </span>
                 {Math.abs(buddyVoiceRate - 1.15) >= 0.01 && (
                   <button
                     type="button"
                     onClick={() => setBuddyVoiceRate(1.15)}
                     style={{
-                      backgroundColor: '#E0F2FE',
-                      borderColor: '#7DD3FC',
-                      color: '#0369A1',
+                      backgroundColor: '#0B0F17',
+                      borderColor: '#00E5FF',
+                      color: '#00E5FF',
                     }}
                     className="rounded-lg border px-2 py-0.5 text-xs font-bold cursor-pointer"
                   >
@@ -1979,14 +2054,22 @@ export const MenuMaisHubView: React.FC = () => {
               </div>
             </div>
 
-            {/* 3 Bundled 3D Poses Status Preview (Clean Light-Slate Cards + #00E5FF Active Border) */}
+            {/* 3 Bundled 3D Poses Status Preview (Theme-Aware Cards + #00E5FF Active Border) */}
             <div className="grid grid-cols-3 gap-2">
               <div
                 style={{
                   backgroundColor:
-                    currentMascotState === 'ACTIVE' ? '#ECFEFF' : '#F8FAFC',
+                    themeMode === 'DAYLIGHT'
+                      ? currentMascotState === 'ACTIVE'
+                        ? '#ECFEFF'
+                        : '#FFFFFF'
+                      : '#111827',
                   borderColor:
-                    currentMascotState === 'ACTIVE' ? '#00E5FF' : '#E2E8F0',
+                    currentMascotState === 'ACTIVE'
+                      ? '#00E5FF'
+                      : themeMode === 'DAYLIGHT'
+                        ? '#E2E8F0'
+                        : 'rgba(0, 229, 255, 0.25)',
                 }}
                 className="rounded-xl p-2.5 flex flex-col items-center text-center border-2 transition"
               >
@@ -1997,7 +2080,12 @@ export const MenuMaisHubView: React.FC = () => {
                     className="h-full w-full object-contain"
                   />
                 </div>
-                <span className="text-xs font-extrabold text-[#0F172A]">
+                <span
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="text-xs font-extrabold"
+                >
                   1. Online
                 </span>
               </div>
@@ -2005,9 +2093,17 @@ export const MenuMaisHubView: React.FC = () => {
               <div
                 style={{
                   backgroundColor:
-                    currentMascotState === 'INACTIVE' ? '#ECFEFF' : '#F8FAFC',
+                    themeMode === 'DAYLIGHT'
+                      ? currentMascotState === 'INACTIVE'
+                        ? '#ECFEFF'
+                        : '#FFFFFF'
+                      : '#111827',
                   borderColor:
-                    currentMascotState === 'INACTIVE' ? '#00E5FF' : '#E2E8F0',
+                    currentMascotState === 'INACTIVE'
+                      ? '#00E5FF'
+                      : themeMode === 'DAYLIGHT'
+                        ? '#E2E8F0'
+                        : 'rgba(0, 229, 255, 0.25)',
                 }}
                 className="rounded-xl p-2.5 flex flex-col items-center text-center border-2 transition"
               >
@@ -2018,7 +2114,12 @@ export const MenuMaisHubView: React.FC = () => {
                     className="h-full w-full object-contain"
                   />
                 </div>
-                <span className="text-xs font-extrabold text-[#0F172A]">
+                <span
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="text-xs font-extrabold"
+                >
                   2. Pausa
                 </span>
               </div>
@@ -2026,9 +2127,17 @@ export const MenuMaisHubView: React.FC = () => {
               <div
                 style={{
                   backgroundColor:
-                    currentMascotState === 'DELIVERY' ? '#ECFEFF' : '#F8FAFC',
+                    themeMode === 'DAYLIGHT'
+                      ? currentMascotState === 'DELIVERY'
+                        ? '#ECFEFF'
+                        : '#FFFFFF'
+                      : '#111827',
                   borderColor:
-                    currentMascotState === 'DELIVERY' ? '#00E5FF' : '#E2E8F0',
+                    currentMascotState === 'DELIVERY'
+                      ? '#00E5FF'
+                      : themeMode === 'DAYLIGHT'
+                        ? '#E2E8F0'
+                        : 'rgba(0, 229, 255, 0.25)',
                 }}
                 className="rounded-xl p-2.5 flex flex-col items-center text-center border-2 transition"
               >
@@ -2039,13 +2148,18 @@ export const MenuMaisHubView: React.FC = () => {
                     className="h-full w-full object-contain"
                   />
                 </div>
-                <span className="text-xs font-extrabold text-[#0F172A]">
+                <span
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="text-xs font-extrabold"
+                >
                   3. Entrega 🚀
                 </span>
               </div>
             </div>
 
-            {/* Configurable Floating Bubble Resting Position Selector (Clean Light-Slate Cards) */}
+            {/* Configurable Floating Bubble Resting Position Selector (Theme-Aware Cards) */}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-sm font-extrabold text-zinc-100">
@@ -2053,9 +2167,9 @@ export const MenuMaisHubView: React.FC = () => {
                 </span>
                 <span
                   style={{
-                    backgroundColor: '#ECFEFF',
+                    backgroundColor: '#0B0F17',
                     borderColor: '#00E5FF',
-                    color: '#0E7490',
+                    color: '#00E5FF',
                   }}
                   className="rounded-full border px-2.5 py-0.5 text-xs font-extrabold"
                 >
@@ -2074,21 +2188,37 @@ export const MenuMaisHubView: React.FC = () => {
                       aria-pressed={isSelected}
                       onClick={() => setBubbleRestingPreset(opt.id)}
                       style={{
-                        backgroundColor: isSelected ? '#ECFEFF' : '#F8FAFC',
-                        borderColor: isSelected ? '#00E5FF' : '#E2E8F0',
-                        color: '#0F172A',
+                        backgroundColor:
+                          themeMode === 'DAYLIGHT'
+                            ? isSelected
+                              ? '#ECFEFF'
+                              : '#FFFFFF'
+                            : '#111827',
+                        borderColor: isSelected
+                          ? '#00E5FF'
+                          : themeMode === 'DAYLIGHT'
+                            ? '#E2E8F0'
+                            : 'rgba(0, 229, 255, 0.25)',
+                        color:
+                          themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
                       }}
                       className="rounded-xl px-3 py-2.5 text-left border-2 transition cursor-pointer flex items-center justify-between gap-2"
                     >
                       <div className="min-w-0">
                         <span
-                          style={{ color: '#0F172A' }}
+                          style={{
+                            color:
+                              themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                          }}
                           className="block text-sm font-extrabold truncate"
                         >
                           {opt.label}
                         </span>
                         <span
-                          style={{ color: '#475569' }}
+                          style={{
+                            color:
+                              themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+                          }}
                           className="block text-xs truncate"
                         >
                           {opt.shortDesc}
@@ -2096,9 +2226,19 @@ export const MenuMaisHubView: React.FC = () => {
                       </div>
                       <span
                         style={{
-                          backgroundColor: isSelected ? '#0F172A' : '#FFFFFF',
-                          borderColor: isSelected ? '#00E5FF' : '#CBD5E1',
-                          color: isSelected ? '#00E5FF' : '#64748B',
+                          backgroundColor: isSelected
+                            ? '#0B0F17'
+                            : 'transparent',
+                          borderColor: isSelected
+                            ? '#00E5FF'
+                            : themeMode === 'DAYLIGHT'
+                              ? '#CBD5E1'
+                              : 'rgba(0, 229, 255, 0.35)',
+                          color: isSelected
+                            ? '#00E5FF'
+                            : themeMode === 'DAYLIGHT'
+                              ? '#64748B'
+                              : '#94A3B8',
                         }}
                         className="h-5 w-5 rounded-full border flex items-center justify-center text-xs font-black shrink-0"
                       >
@@ -2348,13 +2488,17 @@ export const MenuMaisHubView: React.FC = () => {
                 type="button"
                 onClick={() => setIsOfficialManualModalOpen(true)}
                 style={{
-                  backgroundColor: '#F8FAFC',
-                  borderColor: '#E2E8F0',
-                  color: '#0F172A',
+                  backgroundColor:
+                    themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#111827',
+                  borderColor:
+                    themeMode === 'DAYLIGHT'
+                      ? '#E2E8F0'
+                      : 'rgba(0, 229, 255, 0.28)',
+                  color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
                 }}
                 className="rounded-xl border py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition hover:border-[#00E5FF]"
               >
-                <BookOpen className="h-4 w-4 text-[#00B8D4] shrink-0" />
+                <BookOpen className="h-4 w-4 text-[#00E5FF] shrink-0" />
                 <span>Manual de Uso &amp; Comandos</span>
               </button>
 
@@ -2362,14 +2506,23 @@ export const MenuMaisHubView: React.FC = () => {
                 type="button"
                 onClick={toggleWakeLock}
                 style={{
-                  backgroundColor: wakeLockEnabled ? '#ECFEFF' : '#F8FAFC',
-                  borderColor: wakeLockEnabled ? '#00E5FF' : '#E2E8F0',
-                  color: '#0F172A',
+                  backgroundColor:
+                    themeMode === 'DAYLIGHT'
+                      ? wakeLockEnabled
+                        ? '#ECFEFF'
+                        : '#FFFFFF'
+                      : '#111827',
+                  borderColor: wakeLockEnabled
+                    ? '#00E5FF'
+                    : themeMode === 'DAYLIGHT'
+                      ? '#E2E8F0'
+                      : 'rgba(0, 229, 255, 0.28)',
+                  color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
                 }}
                 className="rounded-xl py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border"
               >
                 {wakeLockEnabled ? (
-                  <Lock className="h-4 w-4 text-[#00B8D4] shrink-0" />
+                  <Lock className="h-4 w-4 text-[#00E5FF] shrink-0" />
                 ) : (
                   <Unlock className="h-4 w-4 text-slate-400 shrink-0" />
                 )}
@@ -2582,11 +2735,12 @@ export const MenuMaisHubView: React.FC = () => {
           type="button"
           onClick={logoutSession}
           style={{
-            backgroundColor: '#F8FAFC',
-            borderColor: '#CBD5E1',
-            color: '#334155',
+            backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+            borderColor:
+              themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.25)',
+            color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
           }}
-          className="w-full rounded-xl border py-2.5 px-4 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition hover:bg-slate-100"
+          className="w-full rounded-xl border py-2.5 px-4 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition hover:border-[#00E5FF]"
         >
           <LogOut className="h-4 w-4 text-rose-500 shrink-0" />
           <span>Terminar Sessão / Trocar Conta</span>

@@ -93,7 +93,7 @@ export const OperationalHubSelectorModal: React.FC<{
           >
             <div>
               <div className="text-lg font-extrabold text-white flex items-center gap-2">
-                <span>🟢 Amarante &amp; Tâmega</span>
+                <span>🔵 Amarante &amp; Tâmega</span>
               </div>
               <p className="text-base font-bold text-emerald-300 mt-0.5">
                 Ativo — Raio 35 km (Bloqueio Regional)
@@ -197,16 +197,22 @@ export const DirectApkShareModal: React.FC<{
         </div>
 
         {/* Scannable QR Code Card */}
-        <div className="rounded-2xl bg-white p-4 flex flex-col items-center justify-center text-center shadow-lg">
+        <div className="qr-code-surface rounded-2xl bg-white p-4 flex flex-col items-center justify-center text-center shadow-lg">
           <img
             src={qrImageUrl}
             alt="QR Code Delivery-Buddy-Amarante.apk"
             className="w-48 h-48 object-contain rounded-xl"
           />
-          <span className="text-base font-extrabold text-zinc-900 mt-2">
+          <span
+            style={{ color: '#090D16' }}
+            className="text-base font-extrabold mt-2"
+          >
             Delivery-Buddy-Amarante.apk
           </span>
-          <span className="text-sm font-bold text-emerald-700">
+          <span
+            style={{ color: '#00838F' }}
+            className="text-sm font-bold"
+          >
             1 Toque → Baixar e Instalar Direto no Android
           </span>
         </div>
@@ -217,10 +223,14 @@ export const DirectApkShareModal: React.FC<{
             href={whatsappShareUrl}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ backgroundColor: '#16a34a', color: '#ffffff' }}
-            className="w-full rounded-2xl py-3.5 px-4 text-lg font-extrabold flex items-center justify-center gap-2 shadow-lg cursor-pointer no-underline transition hover:opacity-95"
+            style={{
+              backgroundColor: '#0B0F17',
+              borderColor: '#00E5FF',
+              color: '#00E5FF',
+            }}
+            className="w-full rounded-2xl border-2 py-3.5 px-4 text-lg font-extrabold flex items-center justify-center gap-2 shadow-lg cursor-pointer no-underline transition hover:opacity-95"
           >
-            <span>🟢 Enviar pelo WhatsApp</span>
+            <span>📲 Enviar pelo WhatsApp</span>
           </a>
 
           <a
@@ -1254,23 +1264,34 @@ export const ShiftRadarModule: React.FC = () => {
 
   return (
     <div className="space-y-2.5">
-      {/* ACTIVE OPERATIONAL HUB BADGE (35 KM REGIONAL LOCK) */}
+      {/* ACTIVE OPERATIONAL HUB BADGE (35 KM REGIONAL LOCK — NO TRUNCATION ON AMARANTE) */}
       <button
         type="button"
         onClick={() => setIsHubSelectorModalOpen(true)}
-        className={`w-full rounded-2xl border px-3.5 py-2.5 flex items-center justify-between gap-2 cursor-pointer transition shadow-sm ${
-          isDaylight
-            ? 'bg-white border-emerald-500/40 text-slate-900 hover:bg-emerald-50/50'
-            : 'bg-zinc-900/95 border-emerald-500/40 text-white hover:bg-zinc-900'
-        }`}
+        style={{
+          backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
+          borderColor: isDaylight ? '#00B8D4' : '#00E5FF',
+          color: isDaylight ? '#090D16' : '#FFFFFF',
+        }}
+        className="w-full rounded-2xl border px-3 py-2 flex items-center justify-between gap-2 cursor-pointer transition shadow-xs"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shrink-0" />
-          <span className="text-base font-extrabold truncate">
-            📍 Centro: Amarante (Raio 35 km)
+          <span className="h-2.5 w-2.5 rounded-full bg-[#00E5FF] shadow-[0_0_8px_rgba(0,229,255,0.85)] shrink-0" />
+          <span
+            style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+            className="text-sm font-extrabold whitespace-nowrap"
+          >
+            📍 Centro: Amarante (35 km)
           </span>
         </div>
-        <span className="rounded-xl bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-1 text-base font-bold text-emerald-400 shrink-0">
+        <span
+          style={{
+            backgroundColor: '#0B0F17',
+            borderColor: '#00E5FF',
+            color: '#00E5FF',
+          }}
+          className="rounded-xl border px-2.5 py-1 text-xs font-extrabold shrink-0 whitespace-nowrap"
+        >
           Mudar Centro
         </span>
       </button>

@@ -28,19 +28,29 @@
 
 @layer base {
   html,
-  body,
-  button,
-  input,
-  select,
-  textarea {
-    background-color: #f1f5f9;
-    color: #0f172a;
+  body {
+    background-color: #f8fafc;
+    color: #090d16;
     font-family: "Nunito", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
     letter-spacing: -0.005em;
+  }
+
+  button {
+    background-color: transparent;
+    color: inherit;
+    font-family: "Nunito", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    font-variant-numeric: tabular-nums;
+  }
+
+  input,
+  select,
+  textarea {
+    font-family: "Nunito", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    font-variant-numeric: tabular-nums;
   }
 }
 
@@ -106,53 +116,61 @@
 }
 
 /* ============================================================================
-   HIGH-LEGIBILITY "DAYLIGHT CLEAN" THEME (DEFAULT: .theme-daylight)
-   App Backdrop: #F1F5F9 (bg-slate-100)
-   Cards: Pure White (#FFFFFF) with soft elevation & subtle slate-200 border
-   Primary Text: Crisp Charcoal (#0F172A / text-slate-900)
-   Secondary Labels: Slate-500 (#64748B)
+   STRICT 2-COLOR LIGHT MODE THEME (.theme-daylight)
+   Main Background: Ice White (#F8FAFC)
+   Cards & Accordion Rows: Pure White (#FFFFFF)
+   Primary Text: Deep Black/Slate (#090D16)
+   Borders & Accents: Light Neon Blue (#00B8D4 / #00E5FF)
    ============================================================================ */
 #app-audit-root.theme-daylight {
-  background-color: #f1f5f9 !important;
-  color: #0f172a !important;
+  background-color: #f8fafc !important;
+  color: #090d16 !important;
 }
 
 #app-audit-root.theme-daylight .bg-zinc-950,
 #app-audit-root.theme-daylight .bg-zinc-950\/95,
 #app-audit-root.theme-daylight .bg-zinc-950\/90,
 #app-audit-root.theme-daylight .bg-zinc-950\/85,
-#app-audit-root.theme-daylight .bg-zinc-950\/80 {
-  background-color: #f8fafc !important;
-  color: #0f172a !important;
+#app-audit-root.theme-daylight .bg-zinc-950\/80,
+#app-audit-root.theme-daylight .bg-zinc-950\/70,
+#app-audit-root.theme-daylight .bg-zinc-950\/60 {
+  background-color: #ffffff !important;
+  color: #090d16 !important;
 }
 
 /* Main shell backdrop in Daylight mode */
 #app-audit-root.theme-daylight > .daylight-shell-backdrop {
-  background-color: #f1f5f9 !important;
+  background-color: #f8fafc !important;
 }
 
-/* Cards in Daylight mode: Pure White with soft elevation */
+/* Cards in Daylight mode: Pure White with Neon-Blue / Crisp Slate borders */
 #app-audit-root.theme-daylight section,
 #app-audit-root.theme-daylight .bg-zinc-900,
 #app-audit-root.theme-daylight .bg-zinc-900\/95,
 #app-audit-root.theme-daylight .bg-zinc-900\/90,
-#app-audit-root.theme-daylight .bg-zinc-900\/80 {
+#app-audit-root.theme-daylight .bg-zinc-900\/80,
+#app-audit-root.theme-daylight .bg-slate-900,
+#app-audit-root.theme-daylight .bg-slate-900\/95 {
   background-color: #ffffff !important;
-  border-color: rgba(226, 232, 240, 0.85) !important;
-  box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.06), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
+  color: #090d16 !important;
+  border-color: rgba(0, 184, 212, 0.28) !important;
+  box-shadow: 0 2px 10px -2px rgba(9, 13, 22, 0.06);
 }
 
 #app-audit-root.theme-daylight .bg-zinc-800,
-#app-audit-root.theme-daylight .bg-zinc-800\/80 {
-  background-color: #e2e8f0 !important;
-  color: #0f172a !important;
+#app-audit-root.theme-daylight .bg-zinc-800\/80,
+#app-audit-root.theme-daylight .bg-slate-800 {
+  background-color: #f1f5f9 !important;
+  color: #090d16 !important;
 }
 
-/* Borders in Daylight mode: Soft Slate-200 instead of dark zinc-800 */
+/* Borders in Daylight mode */
 #app-audit-root.theme-daylight .border-zinc-900,
 #app-audit-root.theme-daylight .border-zinc-800,
+#app-audit-root.theme-daylight .border-zinc-800\/90,
 #app-audit-root.theme-daylight .border-zinc-800\/80,
-#app-audit-root.theme-daylight .border-zinc-700 {
+#app-audit-root.theme-daylight .border-zinc-700,
+#app-audit-root.theme-daylight .divide-zinc-800 > :not([hidden]) ~ :not([hidden]) {
   border-color: #e2e8f0 !important;
 }
 
@@ -162,105 +180,174 @@
   border-color: #ef4444 !important;
 }
 
-/* Typography in Daylight mode */
+/* Typography in Daylight mode: Deep Black (#090D16) */
 #app-audit-root.theme-daylight .text-slate-900,
 #app-audit-root.theme-daylight .text-zinc-100,
 #app-audit-root.theme-daylight .text-zinc-200,
+#app-audit-root.theme-daylight .text-slate-100,
+#app-audit-root.theme-daylight .text-slate-200,
 #app-audit-root.theme-daylight .bg-zinc-950 .text-white,
 #app-audit-root.theme-daylight .bg-zinc-900 .text-white,
+#app-audit-root.theme-daylight .bg-zinc-900\/95 .text-white,
 #app-audit-root.theme-daylight .dark\:text-zinc-100,
 #app-audit-root.theme-daylight .dark\:text-white {
-  color: #0f172a !important;
+  color: #090d16 !important;
 }
 
-#app-audit-root.theme-night .text-slate-900 {
-  color: #ffffff !important;
+#app-audit-root.theme-daylight .text-zinc-300,
+#app-audit-root.theme-daylight .text-slate-300 {
+  color: #1e293b !important;
 }
 
-#app-audit-root.theme-daylight .text-zinc-300 {
-  color: #334155 !important;
-}
-
-#app-audit-root.theme-daylight .text-zinc-400 {
+#app-audit-root.theme-daylight .text-zinc-400,
+#app-audit-root.theme-daylight .text-slate-400 {
   color: #475569 !important;
 }
 
 #app-audit-root.theme-daylight .text-zinc-500,
-#app-audit-root.theme-daylight .text-zinc-600 {
+#app-audit-root.theme-daylight .text-zinc-600,
+#app-audit-root.theme-daylight .text-slate-500 {
   color: #64748b !important;
 }
 
-/* High-contrast accent text in Daylight mode so pale cyan/amber/indigo never wash out on white cards */
+/* High-contrast accent text in Daylight mode */
 #app-audit-root.theme-daylight .text-emerald-200,
 #app-audit-root.theme-daylight .text-emerald-300,
 #app-audit-root.theme-daylight .text-emerald-400,
 #app-audit-root.theme-daylight .text-sky-300,
 #app-audit-root.theme-daylight .text-sky-400 {
-  color: #0284c7 !important;
+  color: #00838f !important;
 }
 
 #app-audit-root.theme-daylight .text-amber-200,
 #app-audit-root.theme-daylight .text-amber-300,
 #app-audit-root.theme-daylight .text-amber-400 {
-  color: #0f172a !important;
+  color: #090d16 !important;
 }
 
 #app-audit-root.theme-daylight .text-indigo-300,
 #app-audit-root.theme-daylight .text-indigo-400 {
-  color: #0369a1 !important;
+  color: #00838f !important;
 }
 
 #app-audit-root.theme-daylight .text-rose-300 {
   color: #be123c !important;
 }
 
-/* Active buttons & active segmented pills in Daylight mode: Deep Charcoal with White Text */
+/* Active buttons & active segmented pills in Daylight mode */
 #app-audit-root.theme-daylight button.bg-white.text-zinc-950,
 #app-audit-root.theme-daylight span.bg-white.text-zinc-950 {
-  background-color: #0f172a !important;
-  color: #ffffff !important;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+  background-color: #090d16 !important;
+  color: #00e5ff !important;
+  border: 1px solid #00e5ff !important;
+  box-shadow: 0 2px 8px rgba(0, 229, 255, 0.2);
 }
 
 /* Inputs, Selects & Textareas in Daylight mode */
 #app-audit-root.theme-daylight input,
 #app-audit-root.theme-daylight select,
 #app-audit-root.theme-daylight textarea {
-  background-color: #f8fafc !important;
-  color: #0f172a !important;
+  background-color: #ffffff !important;
+  color: #090d16 !important;
   border-color: #cbd5e1 !important;
 }
 
 /* ============================================================================
-   SOFT DARK MODE THEME (.theme-night)
-   Backdrop: Soft Slate (#0F172A / bg-slate-900)
-   Cards: Soft Slate-800 (#1E293B / bg-slate-800)
-   Text: Crisp Slate-100 (#F8FAFC)
+   STRICT 2-COLOR DARK MODE THEME (.theme-night)
+   Main Background: Pure Black (#05070B)
+   Every Card, Accordion Header, Inner Row & Input: Obsidian Black (#0B0F17 / #111827)
+   Primary Text: Pure White (#FFFFFF)
+   Secondary Text: Light Cyan/Silver (#94A3B8)
+   Borders & Accents: Light Neon Blue (#00E5FF / rgba(0, 229, 255, 0.25))
+   ZERO white cards allowed in Dark Mode!
    ============================================================================ */
 #app-audit-root.theme-night {
-  background-color: #0f172a !important;
-  color: #f8fafc !important;
+  background-color: #05070b !important;
+  color: #ffffff !important;
+}
+
+#app-audit-root.theme-night > .daylight-shell-backdrop {
+  background-color: #05070b !important;
+  border-color: rgba(0, 229, 255, 0.18) !important;
 }
 
 #app-audit-root.theme-night .bg-zinc-950,
 #app-audit-root.theme-night .bg-zinc-950\/95,
-#app-audit-root.theme-night .bg-zinc-950\/90 {
-  background-color: #0f172a !important;
+#app-audit-root.theme-night .bg-zinc-950\/90,
+#app-audit-root.theme-night .bg-zinc-950\/85,
+#app-audit-root.theme-night .bg-zinc-950\/80,
+#app-audit-root.theme-night .bg-zinc-950\/70,
+#app-audit-root.theme-night .bg-zinc-950\/60 {
+  background-color: #0b0f17 !important;
+  color: #ffffff !important;
 }
 
 #app-audit-root.theme-night section,
 #app-audit-root.theme-night .bg-zinc-900,
 #app-audit-root.theme-night .bg-zinc-900\/95,
 #app-audit-root.theme-night .bg-zinc-900\/90,
-#app-audit-root.theme-night .bg-zinc-900\/80 {
-  background-color: #1e293b !important;
-  border-color: rgba(51, 65, 85, 0.6) !important;
-  box-shadow: 0 4px 12px -2px rgba(2, 6, 23, 0.35);
+#app-audit-root.theme-night .bg-zinc-900\/80,
+#app-audit-root.theme-night .bg-slate-900,
+#app-audit-root.theme-night .bg-slate-900\/95,
+#app-audit-root.theme-night .bg-white:not(.qr-code-surface),
+#app-audit-root.theme-night .bg-white\/95,
+#app-audit-root.theme-night .bg-slate-50,
+#app-audit-root.theme-night .bg-slate-100 {
+  background-color: #0b0f17 !important;
+  color: #ffffff !important;
+  border-color: rgba(0, 229, 255, 0.25) !important;
+  box-shadow: 0 4px 14px -2px rgba(0, 0, 0, 0.6);
+}
+
+#app-audit-root.theme-night .bg-zinc-800,
+#app-audit-root.theme-night .bg-zinc-800\/80,
+#app-audit-root.theme-night .bg-slate-800 {
+  background-color: #111827 !important;
+  color: #ffffff !important;
 }
 
 #app-audit-root.theme-night .border-zinc-900,
 #app-audit-root.theme-night .border-zinc-800,
+#app-audit-root.theme-night .border-zinc-800\/90,
 #app-audit-root.theme-night .border-zinc-800\/80,
-#app-audit-root.theme-night .border-zinc-700 {
-  border-color: rgba(51, 65, 85, 0.65) !important;
+#app-audit-root.theme-night .border-zinc-700,
+#app-audit-root.theme-night .border-slate-200,
+#app-audit-root.theme-night .border-slate-300,
+#app-audit-root.theme-night .divide-zinc-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(0, 229, 255, 0.25) !important;
+}
+
+#app-audit-root.theme-night .text-slate-900,
+#app-audit-root.theme-night .text-slate-800,
+#app-audit-root.theme-night .text-zinc-900,
+#app-audit-root.theme-night .text-zinc-100,
+#app-audit-root.theme-night .text-zinc-200,
+#app-audit-root.theme-night .text-white {
+  color: #ffffff !important;
+}
+
+#app-audit-root.theme-night .text-zinc-300,
+#app-audit-root.theme-night .text-zinc-400,
+#app-audit-root.theme-night .text-slate-400,
+#app-audit-root.theme-night .text-slate-500,
+#app-audit-root.theme-night .text-slate-600 {
+  color: #94a3b8 !important;
+}
+
+#app-audit-root.theme-night .text-emerald-200,
+#app-audit-root.theme-night .text-emerald-300,
+#app-audit-root.theme-night .text-emerald-400,
+#app-audit-root.theme-night .text-sky-300,
+#app-audit-root.theme-night .text-sky-400,
+#app-audit-root.theme-night .text-indigo-300,
+#app-audit-root.theme-night .text-indigo-400 {
+  color: #00e5ff !important;
+}
+
+#app-audit-root.theme-night input,
+#app-audit-root.theme-night select,
+#app-audit-root.theme-night textarea {
+  background-color: #111827 !important;
+  color: #ffffff !important;
+  border-color: rgba(0, 229, 255, 0.28) !important;
 }

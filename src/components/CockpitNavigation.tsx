@@ -9,7 +9,7 @@ import { AppTabId } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
 import { playBuddyOpenChime } from '../services/voiceEngine';
 
-const CURRENT_OTA_BUILD_VERSION = 'v3.3.0-neon-ui-admin-clean';
+const CURRENT_OTA_BUILD_VERSION = 'v3.4.0-darkmode-fix-security';
 const LAST_SEEN_OTA_BUILD_KEY = 'buddy_last_seen_ota_build_v1';
 const PENDING_OTA_TOAST_KEY = 'buddy_pending_ota_toast_v1';
 
@@ -164,11 +164,11 @@ export const CockpitNavigation: React.FC = () => {
       className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none"
     >
       <div
-        className={`max-w-[440px] mx-auto backdrop-blur-md border-t px-2 py-1 grid grid-cols-5 gap-1 items-center pointer-events-auto transition-colors ${
-          isDaylight
-            ? 'bg-white/95 border-slate-200/80 shadow-lg'
-            : 'bg-[#090e13]/95 border-slate-800 shadow-2xl'
-        }`}
+        style={{
+          backgroundColor: isDaylight ? '#FFFFFF' : '#05070B',
+          borderColor: isDaylight ? '#E2E8F0' : 'rgba(0, 229, 255, 0.25)',
+        }}
+        className="max-w-[440px] mx-auto backdrop-blur-md border-t px-2 py-1 grid grid-cols-5 gap-1 items-center pointer-events-auto transition-colors shadow-2xl"
       >
         {bottomNavItems.map((item) => {
           const isActive = item.isSecondaryGroup
@@ -239,13 +239,14 @@ export const CockpitNavigation: React.FC = () => {
                     className="select-none pointer-events-none block mx-auto"
                   />
                   <span
-                    className={`text-xs leading-none whitespace-nowrap font-extrabold tracking-tight mt-1 ${
-                      isActive
-                        ? 'text-[#00B8D4]'
+                    style={{
+                      color: isActive
+                        ? '#00E5FF'
                         : isDaylight
-                          ? 'text-slate-800'
-                          : 'text-white'
-                    }`}
+                          ? '#090D16'
+                          : '#FFFFFF',
+                    }}
+                    className="text-xs leading-none whitespace-nowrap font-extrabold tracking-tight mt-1"
                   >
                     {item.label}
                   </span>
@@ -264,10 +265,17 @@ export const CockpitNavigation: React.FC = () => {
                 }
                 setActiveTab(item.id);
               }}
-              className={`rounded-xl py-1.5 px-1 flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${
-                isActive
-                  ? 'bg-slate-950 text-white font-semibold shadow-xs'
-                  : 'bg-transparent text-slate-500 hover:text-slate-900'
+              style={{
+                backgroundColor: isActive ? '#0B0F17' : 'transparent',
+                borderColor: isActive ? '#00E5FF' : 'transparent',
+                color: isActive
+                  ? '#00E5FF'
+                  : isDaylight
+                    ? '#475569'
+                    : '#94A3B8',
+              }}
+              className={`rounded-xl py-1.5 px-1 flex flex-col items-center justify-center gap-0.5 transition cursor-pointer border ${
+                isActive ? 'font-extrabold shadow-xs' : 'font-semibold'
               }`}
             >
               {item.icon}
