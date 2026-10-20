@@ -151,10 +151,14 @@ import {
   BuddyMascotImagesSet,
   BuddyMascotState,
   clearCustomMascotImagesFromStorage,
+  getOrCreateMascotSyncId,
   loadSavedBubbleRestingPreset,
   loadSavedMascotImages,
+  pollMascotImagesFromCloudBridge,
   saveBubbleRestingPreset,
+  saveMascotImagesToStorage,
   sliceThreePoseMascotSheetFile,
+  sliceThreePoseMascotSheetFromDataUrl,
   syncBubbleRestingPresetToNativeBridge,
   syncMascotImagesToNativeBridge,
   syncMascotStateToNativeBridge,
@@ -920,7 +924,12 @@ interface EstafetasContextValue {
   buddyMascotImages: BuddyMascotImagesSet;
   currentMascotState: BuddyMascotState;
   currentMascotImageUrl: string;
-  uploadThreePoseMascotSheet: (file: File) => Promise<void>;
+  uploadThreePoseMascotSheet: (file: File | Blob) => Promise<void>;
+  uploadThreePoseMascotSheetFromDataUrl: (
+    dataUrl: string
+  ) => Promise<BuddyMascotImagesSet>;
+  applyCustomMascotImagesSet: (images: BuddyMascotImagesSet) => void;
+  mascotSyncId: string;
   resetMascotImagesToBuiltin: () => void;
   bubbleRestingPreset: BubbleRestingPreset;
   setBubbleRestingPreset: (preset: BubbleRestingPreset) => void;
@@ -6449,11 +6458,85 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     syncBubbleRestingPresetToNativeBridge(bubbleRestingPreset);
   }, [bubbleRestingPreset]);
 
-  const uploadThreePoseMascotSheet = useCallback(async (file: File) => {
-    const sliced = await sliceThreePoseMascotSheetFile(file);
-    setBuddyMascotImages(sliced);
-    syncMascotImagesToNativeBridge(sliced);
-  }, []);
+  const [mascotSyncId] = useState<string>(() => getOrCreateMascotSyncId());
+  const lastCloudMascotBatchTsRef = useRef<number>(Date.now() - 10 * 60 * 1000);
+
+  const applyCustomMascotImagesSet = useCallback(
+    (images: BuddyMascotImagesSet) => {
+      saveMascotImagesToStorage(images);
+      setBuddyMascotImages(images);
+      syncMascotImagesToNativeBridge(images);
+      playBuddyConfirmationChime();
+      if (typeof window !== 'undefined') {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('buddy-mascot-cloud-synced', {
+              detail: { images },
+            })
+          );
+        } catch {
+          // ignore
+        }
+      }
+    },
+    []
+  );
+
+  const uploadThreePoseMascotSheet = useCallback(
+    async (file: File | Blob) => {
+      const sliced = await sliceThreePoseMascotSheetFile(file);
+      applyCustomMascotImagesSet(sliced);
+    },
+    [applyCustomMascotImagesSet]
+  );
+
+  const uploadThreePoseMascotSheetFromDataUrl = useCallback(
+    async (dataUrl: string) => {
+      const sliced = await sliceThreePoseMascotSheetFromDataUrl(dataUrl);
+      applyCustomMascotImagesSet(sliced);
+      return sliced;
+    },
+    [applyCustomMascotImagesSet]
+  );
+
+  // Automatic Real-Time Cloud Bridge Poller (Syncs 3-pose mascot uploaded in External Chrome -> App)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.search.includes('upload_mascot=1')) return;
+
+    let mounted = true;
+    const checkCloudBridge = async () => {
+      if (!mounted) return;
+      const synced = await pollMascotImagesFromCloudBridge(
+        mascotSyncId,
+        lastCloudMascotBatchTsRef
+      );
+      if (mounted && synced) {
+        applyCustomMascotImagesSet(synced);
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible' || activeTab === 'menu_mais') {
+        void checkCloudBridge();
+      }
+    }, 3500);
+
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void checkCloudBridge();
+      }
+    };
+    window.addEventListener('focus', onFocusOrVisible);
+    document.addEventListener('visibilitychange', onFocusOrVisible);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', onFocusOrVisible);
+      document.removeEventListener('visibilitychange', onFocusOrVisible);
+    };
+  }, [mascotSyncId, activeTab, applyCustomMascotImagesSet]);
 
   const resetMascotImagesToBuiltin = useCallback(() => {
     const builtin = clearCustomMascotImagesFromStorage();
@@ -12509,6 +12592,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         currentMascotState,
         currentMascotImageUrl,
         uploadThreePoseMascotSheet,
+        uploadThreePoseMascotSheetFromDataUrl,
+        applyCustomMascotImagesSet,
+        mascotSyncId,
         resetMascotImagesToBuiltin,
         bubbleRestingPreset,
         setBubbleRestingPreset,

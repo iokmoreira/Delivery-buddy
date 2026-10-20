@@ -20,6 +20,51 @@ export const BUDDY_MASCOT_IMAGES_STORAGE_KEY =
 export const BUBBLE_RESTING_PRESET_STORAGE_KEY =
   'delivery_buddy_bubble_resting_preset_v1';
 
+export const BUDDY_MASCOT_SYNC_ID_STORAGE_KEY =
+  'delivery_buddy_mascot_sync_id_v1';
+
+export const BUDDY_MASCOT_CLIPBOARD_PREFIX = '__BUDDY_MASCOT_3POSES__:';
+
+export function getOrCreateMascotSyncId(): string {
+  if (typeof window === 'undefined') return 'amarante_default';
+  try {
+    const existing = window.localStorage.getItem(
+      BUDDY_MASCOT_SYNC_ID_STORAGE_KEY
+    );
+    if (existing && /^[a-z0-9_-]{4,24}$/i.test(existing.trim())) {
+      return existing.trim().toLowerCase();
+    }
+    const courierUuid = window.localStorage.getItem('buddy_my_courier_id');
+    const cleanBase = courierUuid
+      ? courierUuid.replace(/[^a-z0-9]/gi, '').slice(0, 10).toLowerCase()
+      : Math.random().toString(36).slice(2, 10).toLowerCase();
+    const syncId = cleanBase || 'buddy01';
+    window.localStorage.setItem(BUDDY_MASCOT_SYNC_ID_STORAGE_KEY, syncId);
+    return syncId;
+  } catch {
+    return 'amarante_default';
+  }
+}
+
+export function isLegacyAndroidWebViewWithoutFileChooser(): boolean {
+  if (typeof window === 'undefined') return false;
+  const winAny = window as unknown as {
+    BuddyNativeOverlay?: {
+      getNativeBridgeVersion?: () => number;
+    };
+  };
+  if (!winAny.BuddyNativeOverlay) return false;
+  try {
+    const ver =
+      typeof winAny.BuddyNativeOverlay.getNativeBridgeVersion === 'function'
+        ? winAny.BuddyNativeOverlay.getNativeBridgeVersion()
+        : 1;
+    return ver < 11;
+  } catch {
+    return true;
+  }
+}
+
 export const BUBBLE_RESTING_PRESET_OPTIONS: {
   id: BubbleRestingPreset;
   label: string;
@@ -263,23 +308,25 @@ export function clearCustomMascotImagesFromStorage(): BuddyMascotImagesSet {
 }
 
 /**
- * Slices a 3-panel horizontal concept sheet image into 3 square circular-ready PNG data URLs:
+ * Slices a 3-panel horizontal concept sheet image (from DataURL or Image URL) into 3 square circular-ready Data URLs:
  * - Left Panel (x = 0 to w/3, y = 0 to h * 0.78) -> mascotActive (Ativo 👍)
  * - Center Panel (x = w/3 to 2*w/3, y = 0 to h * 0.78) -> mascotInactive (Inativo / De Costas)
  * - Right Panel (x = 2*w/3 to w, y = 0 to h * 0.78) -> mascotDelivery (Em Entrega 🚀)
  */
-export async function sliceThreePoseMascotSheetFile(
-  file: File
+export async function sliceThreePoseMascotSheetFromDataUrl(
+  dataUrl: string,
+  outSize = 136
 ): Promise<BuddyMascotImagesSet> {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Falha ao ler ficheiro de imagem.'));
-    reader.readAsDataURL(file);
-  });
+  // Check if dataUrl is actually a JSON package of already-sliced 3 poses from clipboard/bridge
+  const maybePreSliced = parseMascotClipboardOrJsonText(dataUrl);
+  if (maybePreSliced) {
+    saveMascotImagesToStorage(maybePreSliced);
+    return maybePreSliced;
+  }
 
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
+    el.crossOrigin = 'anonymous';
     el.onload = () => resolve(el);
     el.onerror = () => reject(new Error('Formato de imagem inválido.'));
     el.src = dataUrl;
@@ -287,21 +334,20 @@ export async function sliceThreePoseMascotSheetFile(
 
   const w = img.naturalWidth || img.width;
   const h = img.naturalHeight || img.height;
-  const panelW = w / 3;
-  // Crop out the bottom caption banner ("1 EXPLORADOR", "2 FOCO TOTAL", "3 SEMPRE MAIS LONGE")
-  const usableH = h * 0.78;
+  const isHorizontalSheet = w >= h * 1.35;
+  const panelW = isHorizontalSheet ? w / 3 : w;
+  // Crop out the bottom caption banner ("1 EXPLORADOR", "2 FOCO TOTAL", "3 SEMPRE MAIS LONGE") when horizontal 3-pose sheet
+  const usableH = isHorizontalSheet ? h * 0.78 : h;
 
-  const cropPanelToPngDataUrl = (panelIndex: 0 | 1 | 2): string => {
-    const outSize = 180;
+  const cropPanelToDataUrl = (panelIndex: 0 | 1 | 2): string => {
     const canvas = document.createElement('canvas');
     canvas.width = outSize;
     canvas.height = outSize;
     const ctx = canvas.getContext('2d');
     if (!ctx) return DEFAULT_BUILTIN_MASCOT_IMAGES.mascotActive;
 
-    const sxRaw = panelIndex * panelW;
+    const sxRaw = isHorizontalSheet ? panelIndex * panelW : 0;
     const syRaw = 0;
-    // Focus slightly inside each panel to frame the robot character cleanly in a square
     const side = Math.min(panelW * 0.94, usableH * 0.94);
     const sx = sxRaw + (panelW - side) / 2;
     const sy = syRaw + Math.max(0, (usableH - side) * 0.38);
@@ -310,18 +356,271 @@ export async function sliceThreePoseMascotSheetFile(
     ctx.fillRect(0, 0, outSize, outSize);
     ctx.drawImage(img, sx, sy, side, side, 0, 0, outSize, outSize);
 
-    return canvas.toDataURL('image/png');
+    // Use compact high-clarity JPEG (0.82) so each pose is ~2.2 KB for instant Cloud Bridge & Native Overlay sync
+    const jpegUrl = canvas.toDataURL('image/jpeg', 0.82);
+    return jpegUrl.startsWith('data:image/')
+      ? jpegUrl
+      : canvas.toDataURL('image/png');
   };
 
   const sliced: BuddyMascotImagesSet = {
-    mascotActive: cropPanelToPngDataUrl(0),
-    mascotInactive: cropPanelToPngDataUrl(1),
-    mascotDelivery: cropPanelToPngDataUrl(2),
+    mascotActive: cropPanelToDataUrl(0),
+    mascotInactive: cropPanelToDataUrl(1),
+    mascotDelivery: cropPanelToDataUrl(2),
     isCustomUploaded: true,
   };
 
   saveMascotImagesToStorage(sliced);
   return sliced;
+}
+
+export async function sliceThreePoseMascotSheetFile(
+  file: File | Blob
+): Promise<BuddyMascotImagesSet> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () =>
+      reject(new Error('Falha ao ler ficheiro de imagem.'));
+    reader.readAsDataURL(file);
+  });
+
+  return sliceThreePoseMascotSheetFromDataUrl(dataUrl);
+}
+
+export function serializeMascotImagesForClipboard(
+  images: BuddyMascotImagesSet
+): string {
+  return `${BUDDY_MASCOT_CLIPBOARD_PREFIX}${JSON.stringify({
+    mascotActive: images.mascotActive,
+    mascotInactive: images.mascotInactive,
+    mascotDelivery: images.mascotDelivery,
+    isCustomUploaded: true,
+    ts: Date.now(),
+  })}`;
+}
+
+export function parseMascotClipboardOrJsonText(
+  rawText: string
+): BuddyMascotImagesSet | null {
+  if (!rawText) return null;
+  const trimmed = rawText.trim();
+  const jsonPart = trimmed.startsWith(BUDDY_MASCOT_CLIPBOARD_PREFIX)
+    ? trimmed.slice(BUDDY_MASCOT_CLIPBOARD_PREFIX.length).trim()
+    : trimmed.startsWith('{')
+    ? trimmed
+    : '';
+  if (!jsonPart) return null;
+  try {
+    const parsed = JSON.parse(jsonPart) as Partial<BuddyMascotImagesSet>;
+    if (
+      parsed &&
+      typeof parsed.mascotActive === 'string' &&
+      parsed.mascotActive.startsWith('data:image/') &&
+      typeof parsed.mascotInactive === 'string' &&
+      parsed.mascotInactive.startsWith('data:image/') &&
+      typeof parsed.mascotDelivery === 'string' &&
+      parsed.mascotDelivery.startsWith('data:image/')
+    ) {
+      return {
+        mascotActive: parsed.mascotActive,
+        mascotInactive: parsed.mascotInactive,
+        mascotDelivery: parsed.mascotDelivery,
+        isCustomUploaded: true,
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Publishes the 3 sliced mascot poses from External Chrome to the Cloud Bridge
+ * (`ntfy.sh` instant pub/sub + Supabase `direct_messages` if configured)
+ * so the installed Delivery Buddy app receives them automatically without reinstalling the APK.
+ */
+export async function publishMascotImagesToCloudBridge(
+  images: BuddyMascotImagesSet,
+  syncId: string,
+  supabaseConfig?: { supabaseUrl?: string; supabaseAnonKey?: string }
+): Promise<boolean> {
+  const cleanSyncId =
+    (syncId || 'amarante_default').replace(/[^a-z0-9_-]/gi, '').toLowerCase() ||
+    'amarante_default';
+  const batchTs = Date.now();
+  const topics = Array.from(
+    new Set([`db_mascot_${cleanSyncId}`, 'db_mascot_amarante_global'])
+  );
+
+  // Ensure each pose fits well under 3.6 KB for ntfy.sh by downscaling if needed
+  const compressPoseForRelay = async (srcDataUrl: string): Promise<string> => {
+    if (srcDataUrl.length <= 3200) return srcDataUrl;
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error('err'));
+        el.src = srcDataUrl;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = 96;
+      canvas.height = 96;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return srcDataUrl;
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, 96, 96);
+      ctx.drawImage(img, 0, 0, 96, 96);
+      return canvas.toDataURL('image/jpeg', 0.72);
+    } catch {
+      return srcDataUrl;
+    }
+  };
+
+  const [activeCompact, inactiveCompact, deliveryCompact] = await Promise.all([
+    compressPoseForRelay(images.mascotActive),
+    compressPoseForRelay(images.mascotInactive),
+    compressPoseForRelay(images.mascotDelivery),
+  ]);
+
+  let anyOk = false;
+
+  // 1. Publish to ntfy.sh topics (instant zero-config HTTPS relay)
+  for (const topic of topics) {
+    try {
+      const poses: { pose: 'ACTIVE' | 'INACTIVE' | 'DELIVERY'; dataUrl: string }[] = [
+        { pose: 'ACTIVE', dataUrl: activeCompact },
+        { pose: 'INACTIVE', dataUrl: inactiveCompact },
+        { pose: 'DELIVERY', dataUrl: deliveryCompact },
+      ];
+      for (const item of poses) {
+        const res = await fetch(`https://ntfy.sh/${topic}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            pose: item.pose,
+            ts: batchTs,
+            syncId: cleanSyncId,
+            dataUrl: item.dataUrl,
+          }),
+        });
+        if (res.ok) anyOk = true;
+      }
+    } catch {
+      // ignore network error
+    }
+  }
+
+  // 2. Also publish to Supabase direct_messages if configured
+  const sbUrl = (supabaseConfig?.supabaseUrl || '').trim().replace(/\/+$/, '');
+  const sbKey = (supabaseConfig?.supabaseAnonKey || '').trim();
+  if (sbUrl && sbKey && sbUrl.includes('.supabase.co')) {
+    try {
+      const res = await fetch(`${sbUrl}/rest/v1/direct_messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: sbKey,
+          Authorization: `Bearer ${sbKey}`,
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          sender_id: cleanSyncId,
+          sender_callsign: 'MASCOT_CLOUD_BRIDGE',
+          recipient_id: cleanSyncId,
+          channel_type: 'DIRECT_1ON1',
+          message_body: serializeMascotImagesForClipboard({
+            mascotActive: activeCompact,
+            mascotInactive: inactiveCompact,
+            mascotDelivery: deliveryCompact,
+            isCustomUploaded: true,
+          }),
+          dictated_by_voice: false,
+          created_at: new Date().toISOString(),
+        }),
+      });
+      if (res.ok) anyOk = true;
+    } catch {
+      // ignore
+    }
+  }
+
+  return anyOk;
+}
+
+/**
+ * Polls the Cloud Bridge (`ntfy.sh`) for newly uploaded 3-pose mascot images from External Chrome.
+ */
+export async function pollMascotImagesFromCloudBridge(
+  syncId: string,
+  lastBatchTsRef: { current: number }
+): Promise<BuddyMascotImagesSet | null> {
+  const cleanSyncId =
+    (syncId || 'amarante_default').replace(/[^a-z0-9_-]/gi, '').toLowerCase() ||
+    'amarante_default';
+  const topics = [`db_mascot_${cleanSyncId}`, 'db_mascot_amarante_global'];
+
+  for (const topic of topics) {
+    try {
+      const res = await fetch(
+        `https://ntfy.sh/${topic}/json?poll=1&since=15m`,
+        {
+          method: 'GET',
+          cache: 'no-store',
+        }
+      );
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (!text.trim()) continue;
+
+      const lines = text.trim().split('\n');
+      let latestActive = '';
+      let latestInactive = '';
+      let latestDelivery = '';
+      let newestTs = lastBatchTsRef.current;
+
+      for (const line of lines) {
+        try {
+          const outer = JSON.parse(line) as { message?: string };
+          if (!outer?.message) continue;
+          const inner = JSON.parse(outer.message) as {
+            pose?: string;
+            ts?: number;
+            dataUrl?: string;
+          };
+          const msgTs = Number(inner.ts || 0);
+          if (
+            msgTs > lastBatchTsRef.current &&
+            typeof inner.dataUrl === 'string' &&
+            inner.dataUrl.startsWith('data:image/')
+          ) {
+            if (msgTs > newestTs) newestTs = msgTs;
+            if (inner.pose === 'ACTIVE') latestActive = inner.dataUrl;
+            if (inner.pose === 'INACTIVE') latestInactive = inner.dataUrl;
+            if (inner.pose === 'DELIVERY') latestDelivery = inner.dataUrl;
+          }
+        } catch {
+          // ignore malformed line
+        }
+      }
+
+      if (latestActive && latestInactive && latestDelivery) {
+        lastBatchTsRef.current = newestTs;
+        const synced: BuddyMascotImagesSet = {
+          mascotActive: latestActive,
+          mascotInactive: latestInactive,
+          mascotDelivery: latestDelivery,
+          isCustomUploaded: true,
+        };
+        saveMascotImagesToStorage(synced);
+        return synced;
+      }
+    } catch {
+      // ignore network error
+    }
+  }
+
+  return null;
 }
 
 export function loadSavedBubbleRestingPreset(): BubbleRestingPreset {

@@ -81,6 +81,9 @@ public class MainActivity extends BridgeActivity {
     private boolean isSingleShotListening = false;
     private boolean isInForeground = true;
     private boolean wasMinimizedToBubble = false;
+    private boolean isOpeningSystemPicker = false;
+    private static final int FILE_CHOOSER_REQUEST_CODE = 9201;
+    private android.webkit.ValueCallback<Uri[]> fileUploadCallback;
     private long lastDirectJavaCommandTs = 0L;
     private String lastPartialTranscript = "";
     private String pendingWakeTranscript = null;
@@ -158,6 +161,61 @@ public class MainActivity extends BridgeActivity {
                 ) {
                     if (callback != null) {
                         callback.invoke(origin, true, false);
+                    }
+                }
+
+                @Override
+                public boolean onShowFileChooser(
+                    final WebView webView,
+                    final android.webkit.ValueCallback<Uri[]> filePathCallback,
+                    final FileChooserParams fileChooserParams
+                ) {
+                    if (fileUploadCallback != null) {
+                        try {
+                            fileUploadCallback.onReceiveValue(null);
+                        } catch (Exception ignored) {
+                        }
+                        fileUploadCallback = null;
+                    }
+                    fileUploadCallback = filePathCallback;
+
+                    try {
+                        Intent contentSelectionIntent = new Intent(Intent.ACTION_GET_CONTENT);
+                        contentSelectionIntent.addCategory(Intent.CATEGORY_OPENABLE);
+                        contentSelectionIntent.setType("image/*");
+                        contentSelectionIntent.putExtra(
+                            Intent.EXTRA_MIME_TYPES,
+                            new String[] { "image/jpeg", "image/png", "image/webp", "image/*" }
+                        );
+
+                        Intent pickIntent = new Intent(
+                            Intent.ACTION_PICK,
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                        );
+                        pickIntent.setType("image/*");
+
+                        Intent chooserIntent = Intent.createChooser(
+                            contentSelectionIntent,
+                            "Selecionar Imagem na Galeria"
+                        );
+                        chooserIntent.putExtra(
+                            Intent.EXTRA_INITIAL_INTENTS,
+                            new Intent[] { pickIntent }
+                        );
+
+                        isOpeningSystemPicker = true;
+                        startActivityForResult(chooserIntent, FILE_CHOOSER_REQUEST_CODE);
+                        return true;
+                    } catch (Exception e) {
+                        isOpeningSystemPicker = false;
+                        if (fileUploadCallback != null) {
+                            try {
+                                fileUploadCallback.onReceiveValue(null);
+                            } catch (Exception ignored) {
+                            }
+                            fileUploadCallback = null;
+                        }
+                        return false;
                     }
                 }
             });
@@ -1174,8 +1232,44 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
+            isOpeningSystemPicker = false;
+            if (fileUploadCallback != null) {
+                Uri[] results = null;
+                try {
+                    if (resultCode == android.app.Activity.RESULT_OK && data != null) {
+                        String dataString = data.getDataString();
+                        android.content.ClipData clipData = data.getClipData();
+                        if (clipData != null && clipData.getItemCount() > 0) {
+                            results = new Uri[clipData.getItemCount()];
+                            for (int i = 0; i < clipData.getItemCount(); i++) {
+                                results[i] = clipData.getItemAt(i).getUri();
+                            }
+                        } else if (dataString != null) {
+                            results = new Uri[] { Uri.parse(dataString) };
+                        } else if (data.getData() != null) {
+                            results = new Uri[] { data.getData() };
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+                try {
+                    fileUploadCallback.onReceiveValue(results);
+                } catch (Exception ignored) {
+                }
+                fileUploadCallback = null;
+            }
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
+        isOpeningSystemPicker = false;
         boolean cameFromBubble = wasMinimizedToBubble;
         isInForeground = true;
         wasMinimizedToBubble = false;
@@ -1214,6 +1308,9 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onStop() {
         super.onStop();
+        if (isOpeningSystemPicker) {
+            return;
+        }
         isInForeground = false;
         wasMinimizedToBubble = true;
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)) {
@@ -1337,7 +1434,25 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public int getNativeBridgeVersion() {
-            return 10;
+            return 11;
+        }
+
+        @JavascriptInterface
+        public void openExternalBrowser(final String url) {
+            if (url == null || url.trim().isEmpty()) return;
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        isOpeningSystemPicker = true;
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url.trim()));
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(intent);
+                    } catch (Exception ignored) {
+                        isOpeningSystemPicker = false;
+                    }
+                }
+            });
         }
 
         @JavascriptInterface

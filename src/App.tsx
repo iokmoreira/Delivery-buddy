@@ -17,6 +17,7 @@ import { FloatingBubbleAndQuickMenu } from './components/FloatingBubbleAndQuickM
 import { VoiceCopilotAndSupportMacrosModule } from './components/VoiceCopilotAndSupportMacrosModule';
 import { AdminBackofficeModule } from './components/AdminBackofficeModule';
 import {
+  ChromeMascotGalleryBridgeView,
   InteractiveManualAndHelpDrawer,
   MenuMaisHubView,
 } from './components/InteractiveManualAndHelpDrawer';
@@ -138,6 +139,18 @@ const AppCockpitShell: React.FC = () => {
 
   const themeClass =
     themeMode === 'DAYLIGHT' ? 'theme-daylight' : 'theme-night';
+
+  const isChromeMascotUploadBridgeMode =
+    typeof window !== 'undefined' &&
+    window.location.search.includes('upload_mascot=1');
+
+  if (isChromeMascotUploadBridgeMode) {
+    return (
+      <div id="app-audit-root" className="min-h-screen theme-night">
+        <ChromeMascotGalleryBridgeView />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (

@@ -55,7 +55,17 @@ import {
   RoadHazardsSettingsSection,
   ZoneAgreementsSettingsSection,
 } from './ShiftRadarModule';
-import { BUBBLE_RESTING_PRESET_OPTIONS } from '../utils/buddyMascotEngine';
+import {
+  BUBBLE_RESTING_PRESET_OPTIONS,
+  BuddyMascotImagesSet,
+  DEFAULT_BUILTIN_MASCOT_IMAGES,
+  isLegacyAndroidWebViewWithoutFileChooser,
+  parseMascotClipboardOrJsonText,
+  publishMascotImagesToCloudBridge,
+  serializeMascotImagesForClipboard,
+  sliceThreePoseMascotSheetFile,
+  sliceThreePoseMascotSheetFromDataUrl,
+} from '../utils/buddyMascotEngine';
 import { RealTimeSupportPanel } from './AuthAndVerificationGate';
 
 const VEHICLE_OPTIONS: CourierRegistrationVehicle[] = [
@@ -179,13 +189,9 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
     }
   }, [isCropping, zoom, panX, panY, renderCropTo120Canvas]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== 'string') return;
+  const loadAvatarFromDataUrl = useCallback(
+    (dataUrl: string) => {
+      if (!dataUrl || !dataUrl.startsWith('data:image/')) return;
       const img = new Image();
       img.onload = () => {
         loadedImageRef.current = img;
@@ -195,10 +201,49 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
         setIsCropping(true);
         renderCropTo120Canvas(img, 1.35, 0, 0);
       };
-      img.src = result;
+      img.src = dataUrl;
+    },
+    [renderCropTo120Canvas]
+  );
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') return;
+      loadAvatarFromDataUrl(result);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  };
+
+  const handlePasteAvatar = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result === 'string') {
+                loadAvatarFromDataUrl(reader.result);
+              }
+            };
+            reader.readAsDataURL(file);
+            return;
+          }
+        }
+      }
+    }
+    const text = e.clipboardData?.getData('text/plain') || '';
+    if (text.trim().startsWith('data:image/')) {
+      e.preventDefault();
+      loadAvatarFromDataUrl(text.trim());
+    }
   };
 
   return (
@@ -237,7 +282,7 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -246,6 +291,22 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
             <Camera className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
             <span>📷 Escolher Foto (Opcional)</span>
           </button>
+          <div
+            contentEditable
+            suppressContentEditableWarning
+            onPaste={handlePasteAvatar}
+            onInput={(e) => {
+              const el = e.currentTarget;
+              const imgEl = el.querySelector('img');
+              if (imgEl && imgEl.src) {
+                loadAvatarFromDataUrl(imgEl.src);
+              }
+              el.innerHTML = '';
+            }}
+            className="rounded-xl bg-zinc-900 border border-dashed border-emerald-500/40 px-2.5 py-1.5 text-[10px] font-bold text-emerald-300 cursor-text outline-none focus:border-emerald-400"
+          >
+            📋 Colar Foto
+          </div>
           {compressedPreviewUrl && (
             <button
               type="button"
@@ -1375,13 +1436,189 @@ export const MenuMaisHubView: React.FC = () => {
     buddyMascotImages,
     currentMascotState,
     uploadThreePoseMascotSheet,
+    uploadThreePoseMascotSheetFromDataUrl,
+    applyCustomMascotImagesSet,
+    mascotSyncId,
     resetMascotImagesToBuiltin,
     bubbleRestingPreset,
     setBubbleRestingPreset,
+    aiAgentConfig,
   } = useEstafetas();
 
   const mascotFileInputRef = useRef<HTMLInputElement | null>(null);
+  const chromeBridgeAnchorRef = useRef<HTMLAnchorElement | null>(null);
   const [mascotUploadStatus, setMascotUploadStatus] = useState<string>('');
+
+  const chromeBridgeHttpsUrl = `https://iokmoreira.github.io/Delivery-buddy/?upload_mascot=1&sync_id=${encodeURIComponent(
+    mascotSyncId
+  )}${
+    aiAgentConfig?.supabaseUrl
+      ? `&sb_url=${encodeURIComponent(aiAgentConfig.supabaseUrl)}`
+      : ''
+  }${
+    aiAgentConfig?.supabaseAnonKey
+      ? `&sb_key=${encodeURIComponent(aiAgentConfig.supabaseAnonKey)}`
+      : ''
+  }`;
+
+  const chromeDirectSchemeUrl = `googlechrome://navigate?url=${chromeBridgeHttpsUrl}`;
+
+  useEffect(() => {
+    const onCloudSynced = () => {
+      setMascotUploadStatus(
+        '✓ 3 Poses sincronizadas via Chrome e aplicadas na App, Mapa e Bolinha!'
+      );
+    };
+    window.addEventListener('buddy-mascot-cloud-synced', onCloudSynced);
+    return () =>
+      window.removeEventListener('buddy-mascot-cloud-synced', onCloudSynced);
+  }, []);
+
+  const handleOpenExternalChromeBridge = useCallback(() => {
+    setMascotUploadStatus(
+      '🌐 A abrir Galeria no Chrome... Escolha a imagem das 3 poses lá e ela sincroniza automaticamente aqui!'
+    );
+    const winAny = window as unknown as {
+      BuddyNativeOverlay?: {
+        openExternalBrowser?: (url: string) => void;
+      };
+    };
+    if (typeof winAny.BuddyNativeOverlay?.openExternalBrowser === 'function') {
+      winAny.BuddyNativeOverlay.openExternalBrowser(chromeBridgeHttpsUrl);
+      return;
+    }
+    try {
+      // Trigger googlechrome:// scheme to launch Android Chrome directly from WebView
+      const a = document.createElement('a');
+      a.href = chromeDirectSchemeUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch {
+      // ignore
+    }
+  }, [chromeBridgeHttpsUrl, chromeDirectSchemeUrl]);
+
+  const handleMascotPasteEvent = async (
+    e: React.ClipboardEvent<HTMLDivElement>
+  ) => {
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            try {
+              setMascotUploadStatus('A recortar as 3 poses da imagem colada...');
+              await uploadThreePoseMascotSheet(file);
+              setMascotUploadStatus(
+                '✓ 3 Poses coladas e aplicadas na App, Mapa e Bolinha!'
+              );
+            } catch {
+              setMascotUploadStatus('Erro ao recortar a imagem colada.');
+            }
+            return;
+          }
+        }
+      }
+    }
+
+    const htmlData = e.clipboardData?.getData('text/html') || '';
+    const srcMatch = htmlData.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (srcMatch && srcMatch[1]) {
+      e.preventDefault();
+      try {
+        setMascotUploadStatus('A recortar as 3 poses da imagem colada...');
+        await uploadThreePoseMascotSheetFromDataUrl(srcMatch[1]);
+        setMascotUploadStatus(
+          '✓ 3 Poses coladas e aplicadas na App, Mapa e Bolinha!'
+        );
+        return;
+      } catch {
+        // continue to text check
+      }
+    }
+
+    const textData = (e.clipboardData?.getData('text/plain') || '').trim();
+    if (textData) {
+      const preSliced = parseMascotClipboardOrJsonText(textData);
+      if (preSliced) {
+        e.preventDefault();
+        applyCustomMascotImagesSet(preSliced);
+        setMascotUploadStatus(
+          '✓ 3 Poses coladas e aplicadas na App, Mapa e Bolinha!'
+        );
+        return;
+      }
+      if (textData.startsWith('data:image/')) {
+        e.preventDefault();
+        try {
+          setMascotUploadStatus('A recortar as 3 poses da imagem colada...');
+          await uploadThreePoseMascotSheetFromDataUrl(textData);
+          setMascotUploadStatus(
+            '✓ 3 Poses coladas e aplicadas na App, Mapa e Bolinha!'
+          );
+        } catch {
+          setMascotUploadStatus('Erro ao processar a imagem colada.');
+        }
+      }
+    }
+  };
+
+  const handleReadClipboardButton = async () => {
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.read === 'function') {
+        const clipItems = await navigator.clipboard.read();
+        for (const clipItem of clipItems) {
+          const imgType = clipItem.types.find((t) => t.startsWith('image/'));
+          if (imgType) {
+            const blob = await clipItem.getType(imgType);
+            setMascotUploadStatus(
+              'A recortar as 3 poses da área de transferência...'
+            );
+            await uploadThreePoseMascotSheet(blob);
+            setMascotUploadStatus(
+              '✓ 3 Poses lidas da área de transferência e aplicadas!'
+            );
+            return;
+          }
+        }
+      }
+    } catch {
+      // fallback to readText
+    }
+    try {
+      if (
+        navigator.clipboard &&
+        typeof navigator.clipboard.readText === 'function'
+      ) {
+        const text = (await navigator.clipboard.readText()).trim();
+        const preSliced = parseMascotClipboardOrJsonText(text);
+        if (preSliced) {
+          applyCustomMascotImagesSet(preSliced);
+          setMascotUploadStatus(
+            '✓ 3 Poses sincronizadas da área de transferência!'
+          );
+          return;
+        }
+        if (text.startsWith('data:image/')) {
+          await uploadThreePoseMascotSheetFromDataUrl(text);
+          setMascotUploadStatus(
+            '✓ 3 Poses recortadas da área de transferência!'
+          );
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    setMascotUploadStatus(
+      'Toque e segure na caixa tracejada abaixo e escolha "Colar" (ou use o botão Abrir Galeria via Chrome).'
+    );
+  };
 
   const [subPage, setSubPage] = useState<AjustesSubPageId>('LISTA_PRINCIPAL');
   const [isLiveSupportModalOpen, setIsLiveSupportModalOpen] =
@@ -1520,13 +1757,19 @@ export const MenuMaisHubView: React.FC = () => {
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button
               type="button"
-              onClick={() => mascotFileInputRef.current?.click()}
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow"
+              onClick={() => {
+                mascotFileInputRef.current?.click();
+                if (isLegacyAndroidWebViewWithoutFileChooser()) {
+                  handleOpenExternalChromeBridge();
+                }
+              }}
+              style={{ backgroundColor: '#059669', color: '#ffffff' }}
+              className="rounded-xl hover:opacity-95 text-white px-3 py-2 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow"
             >
-              <span>🤖 Carregar Imagem das 3 Poses do Buddy</span>
+              <span>🖼️ Carregar Imagem das 3 Poses do Buddy</span>
             </button>
             {buddyMascotImages.isCustomUploaded && (
               <button
@@ -1536,11 +1779,83 @@ export const MenuMaisHubView: React.FC = () => {
                   setMascotUploadStatus('Robô vetorial padrão restaurado.');
                 }}
                 title="Repor robô padrão"
-                className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2.5 py-1.5 text-[10px] font-bold cursor-pointer"
+                className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2.5 py-2 text-[10px] font-bold cursor-pointer"
               >
                 Repor
               </button>
             )}
+          </div>
+        </div>
+
+        {/* Zero-APK OTA Upload Methods: 1. External Chrome Cloud Bridge + 2. Direct Samsung Clipboard Paste Box */}
+        <div className="rounded-xl bg-zinc-950/90 border border-emerald-500/35 p-2.5 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <a
+              ref={chromeBridgeAnchorRef}
+              href={chromeDirectSchemeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                setMascotUploadStatus(
+                  '🌐 A abrir Galeria via Chrome... Selecione a imagem lá para sincronizar automaticamente!'
+                );
+              }}
+              style={{
+                backgroundColor: '#0284c7',
+                borderColor: '#38bdf8',
+                color: '#ffffff',
+              }}
+              className="rounded-xl border px-3 py-2 text-[11px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow transition text-center no-underline"
+            >
+              <span>🌐 Abrir Galeria via Chrome &amp; Sincronizar</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={() => void handleReadClipboardButton()}
+              style={{
+                backgroundColor: '#1e1b4b',
+                borderColor: '#6366f1',
+                color: '#e0e7ff',
+              }}
+              className="rounded-xl border px-3 py-2 text-[11px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow transition"
+            >
+              <span>📋 Ler Imagem Copiada (1-Toque)</span>
+            </button>
+          </div>
+
+          <div
+            contentEditable
+            suppressContentEditableWarning
+            onPaste={(e) => void handleMascotPasteEvent(e)}
+            onInput={(e) => {
+              const el = e.currentTarget;
+              const imgEl = el.querySelector('img');
+              if (imgEl && imgEl.src) {
+                const src = imgEl.src;
+                el.innerHTML = '';
+                setMascotUploadStatus('A recortar as 3 poses da imagem colada...');
+                void uploadThreePoseMascotSheetFromDataUrl(src)
+                  .then(() => {
+                    setMascotUploadStatus(
+                      '✓ 3 Poses coladas do teclado/galeria e aplicadas!'
+                    );
+                  })
+                  .catch(() => {
+                    setMascotUploadStatus('Erro ao recortar a imagem colada.');
+                  });
+                return;
+              }
+              el.innerHTML = '';
+            }}
+            style={{
+              backgroundColor: '#090d16',
+              borderColor: '#10b981',
+              color: '#a7f3d0',
+            }}
+            className="w-full rounded-xl border-2 border-dashed px-3 py-2 text-center text-[11px] font-bold cursor-text outline-none focus:ring-2 focus:ring-emerald-400"
+          >
+            📋 Toque aqui e escolha &ldquo;Colar&rdquo; (ou cole a imagem do Teclado Samsung / Galeria)
           </div>
         </div>
 
@@ -2269,6 +2584,177 @@ export const MenuMaisHubView: React.FC = () => {
           <RotateCcw className="h-3 w-3" />
           <span>Repor Dados</span>
         </button>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Full-Screen External Chrome Gallery Picker & Cloud Sync Bridge (`?upload_mascot=1&sync_id=...`)
+ * Works in Chrome where `<input type="file">` always opens the native Android Gallery,
+ * slices the 3-pose mascot image, and syncs it in real time to the installed Delivery Buddy app!
+ */
+export const ChromeMascotGalleryBridgeView: React.FC = () => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [slicedPreview, setSlicedPreview] = useState<BuddyMascotImagesSet>(
+    DEFAULT_BUILTIN_MASCOT_IMAGES
+  );
+  const [statusMessage, setStatusMessage] = useState<string>(
+    'Toque no botão verde abaixo para escolher a imagem das 3 Poses na Galeria do telemóvel.'
+  );
+  const [isSyncedSuccess, setIsSyncedSuccess] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  const searchParams =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search)
+      : new URLSearchParams();
+  const syncId = searchParams.get('sync_id') || 'amarante_default';
+  const sbUrl = searchParams.get('sb_url') || '';
+  const sbKey = searchParams.get('sb_key') || '';
+
+  const processAndSyncSlicedImages = async (sliced: BuddyMascotImagesSet) => {
+    setSlicedPreview(sliced);
+    setStatusMessage(
+      '⏳ A enviar as 3 poses em tempo real para a App Delivery Buddy...'
+    );
+    try {
+      if (
+        navigator.clipboard &&
+        typeof navigator.clipboard.writeText === 'function'
+      ) {
+        await navigator.clipboard.writeText(
+          serializeMascotImagesForClipboard(sliced)
+        );
+      }
+    } catch {
+      // ignore clipboard error
+    }
+
+    const syncedOk = await publishMascotImagesToCloudBridge(sliced, syncId, {
+      supabaseUrl: sbUrl,
+      supabaseAnonKey: sbKey,
+    });
+    setIsSyncedSuccess(true);
+    setStatusMessage(
+      syncedOk
+        ? '✅ 3 Poses Recortadas e Sincronizadas com Sucesso! Pode voltar à App Delivery Buddy agora (já estão aplicadas).'
+        : '✅ 3 Poses Recortadas e Copiadas! Volte à App Delivery Buddy (sincronização pronta).'
+    );
+  };
+
+  return (
+    <div
+      style={{ backgroundColor: '#020617', color: '#f8fafc' }}
+      className="min-h-screen w-full flex flex-col items-center justify-center p-4"
+    >
+      <div
+        style={{ backgroundColor: '#0f172a', borderColor: '#10b981' }}
+        className="w-full max-w-md rounded-3xl border-2 p-5 space-y-4 shadow-2xl"
+      >
+        <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div>
+            <span className="text-sm font-black text-emerald-400 block">
+              🤖 Delivery Buddy — Galeria &amp; Sincronização
+            </span>
+            <span className="text-[11px] text-slate-400 block">
+              Ponte de Galeria Chrome → App Instalada (ID: {syncId})
+            </span>
+          </div>
+          <a
+            href="https://iokmoreira.github.io/Delivery-buddy/"
+            className="rounded-xl bg-slate-800 px-3 py-1.5 text-[11px] font-bold text-slate-200 no-underline"
+          >
+            Abrir App Web
+          </a>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setIsProcessing(true);
+            try {
+              setStatusMessage('✂️ A recortar as 3 poses do Robô Buddy...');
+              const sliced = await sliceThreePoseMascotSheetFile(file);
+              await processAndSyncSlicedImages(sliced);
+            } catch {
+              setStatusMessage('❌ Erro ao processar a imagem selecionada.');
+            } finally {
+              setIsProcessing(false);
+              e.target.value = '';
+            }
+          }}
+        />
+
+        <button
+          type="button"
+          disabled={isProcessing}
+          onClick={() => fileInputRef.current?.click()}
+          style={{ backgroundColor: '#059669', color: '#ffffff' }}
+          className="w-full rounded-2xl py-4 px-4 text-base font-black shadow-lg cursor-pointer flex items-center justify-center gap-2 active:scale-98 transition"
+        >
+          <span>🖼️ Selecionar Imagem das 3 Poses na Galeria</span>
+        </button>
+
+        <div
+          style={{
+            backgroundColor: isSyncedSuccess ? '#064e3b' : '#1e293b',
+            borderColor: isSyncedSuccess ? '#34d399' : '#334155',
+            color: '#ffffff',
+          }}
+          className="rounded-2xl border p-3 text-xs font-extrabold text-center leading-relaxed"
+        >
+          {statusMessage}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2.5 pt-1">
+          <div className="rounded-2xl bg-slate-950 border border-emerald-500/50 p-2.5 flex flex-col items-center text-center">
+            <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-emerald-400 bg-slate-900 mb-1.5">
+              <img
+                src={slicedPreview.mascotActive}
+                alt="Pose 1 Ativo"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <span className="text-[11px] font-black text-emerald-300">
+              1. Ativo 👍
+            </span>
+            <span className="text-[9px] text-slate-400">🟢 Online</span>
+          </div>
+
+          <div className="rounded-2xl bg-slate-950 border border-slate-500/50 p-2.5 flex flex-col items-center text-center">
+            <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-slate-400 bg-slate-900 mb-1.5">
+              <img
+                src={slicedPreview.mascotInactive}
+                alt="Pose 2 Inativo"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <span className="text-[11px] font-black text-slate-200">
+              2. Inativo
+            </span>
+            <span className="text-[9px] text-slate-400">⚪ Pausa</span>
+          </div>
+
+          <div className="rounded-2xl bg-slate-950 border border-amber-500/50 p-2.5 flex flex-col items-center text-center">
+            <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-amber-400 bg-slate-900 mb-1.5">
+              <img
+                src={slicedPreview.mascotDelivery}
+                alt="Pose 3 Em Entrega"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <span className="text-[11px] font-black text-amber-300">
+              3. Entrega 🚀
+            </span>
+            <span className="text-[9px] text-slate-400">Jato DB</span>
+          </div>
+        </div>
       </div>
     </div>
   );
