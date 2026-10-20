@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { AppTabId, EphemeralVoiceCardCategory } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
+import { stopBuddySpeech } from '../services/voiceEngine';
+import { BubbleRestingPreset } from '../utils/buddyMascotEngine';
 
 type DraggableBubbleId = 'logo' | 'sos' | 'ptt' | 'buddy';
 
@@ -180,35 +182,59 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
   );
   const [isSavingVoiceSkill, setIsSavingVoiceSkill] = useState<boolean>(false);
 
-  const computeRestingLogoCoords = React.useCallback((): BubbleXY => {
-    const w = typeof window !== 'undefined' ? window.innerWidth : 400;
-    const h = typeof window !== 'undefined' ? window.innerHeight : 760;
-    const rightX = clampBubbleX(w - 72);
-    const leftX = clampBubbleX(12);
-    const bottomY = clampBubbleY(h - 150);
-    const midY = clampBubbleY(Math.round(h * 0.48));
+  const computeCoordsForPreset = React.useCallback(
+    (preset: BubbleRestingPreset): BubbleXY => {
+      const w = typeof window !== 'undefined' ? window.innerWidth : 400;
+      const h = typeof window !== 'undefined' ? window.innerHeight : 760;
+      const rightX = clampBubbleX(w - 72);
+      const leftX = clampBubbleX(12);
+      const bottomY = clampBubbleY(h - 150);
+      const midY = clampBubbleY(Math.round(h * 0.46));
 
-    if (bubbleRestingPreset === 'BOTTOM_LEFT') {
-      return { x: leftX, y: bottomY };
-    }
-    if (bubbleRestingPreset === 'MIDDLE_RIGHT') {
-      return { x: rightX, y: midY };
-    }
-    if (bubbleRestingPreset === 'MIDDLE_LEFT') {
-      return { x: leftX, y: midY };
-    }
-    return { x: rightX, y: bottomY };
-  }, [bubbleRestingPreset]);
+      if (preset === 'BOTTOM_LEFT') {
+        return { x: leftX, y: bottomY };
+      }
+      if (preset === 'MIDDLE_RIGHT') {
+        return { x: rightX, y: midY };
+      }
+      if (preset === 'MIDDLE_LEFT') {
+        return { x: leftX, y: midY };
+      }
+      return { x: rightX, y: bottomY };
+    },
+    []
+  );
+
+  const computeRestingLogoCoords = React.useCallback((): BubbleXY => {
+    return computeCoordsForPreset(bubbleRestingPreset);
+  }, [bubbleRestingPreset, computeCoordsForPreset]);
 
   // Snap to configured resting preset when minimized or when preset changes
   useEffect(() => {
     if (bubbleRestingPreset === 'CUSTOM_DRAG') return;
-    const nextLogo = computeRestingLogoCoords();
+    const nextLogo = computeCoordsForPreset(bubbleRestingPreset);
     setBubblePositions((prev) => ({
       ...prev,
       logo: nextLogo,
     }));
-  }, [bubbleRestingPreset, isBubbleMinimized, computeRestingLogoCoords]);
+  }, [bubbleRestingPreset, isBubbleMinimized, computeCoordsForPreset]);
+
+  // Listen to explicit preset tap event from Ajustes so tapping ANY preset (even re-tapping current) immediately moves the bubble!
+  useEffect(() => {
+    const handleSnapPreset = (ev: Event) => {
+      const customEv = ev as CustomEvent<{ preset?: BubbleRestingPreset }>;
+      const chosen = customEv.detail?.preset || bubbleRestingPreset;
+      if (chosen === 'CUSTOM_DRAG') return;
+      const targetCoords = computeCoordsForPreset(chosen);
+      setBubblePositions((prev) => ({
+        ...prev,
+        logo: targetCoords,
+      }));
+    };
+    window.addEventListener('buddy-snap-bubble-preset', handleSnapPreset);
+    return () =>
+      window.removeEventListener('buddy-snap-bubble-preset', handleSnapPreset);
+  }, [bubbleRestingPreset, computeCoordsForPreset]);
 
   const activeDragRef = useRef<{
     id: DraggableBubbleId;
@@ -1694,132 +1720,198 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
         </div>
       )}
 
-      {/* LIVE OPEN-METEO AMARANTE WEATHER MODAL ("Buddy clima" / "Clima" / "Tempo") */}
+      {/* LIVE OPEN-METEO AMARANTE WEATHER MODAL (Full-Height 88vh–92vh + Tap-Anywhere to Mute + Large Fechar Clima) */}
       {isAmaranteWeatherModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3"
           onClick={() => {
+            stopBuddySpeech();
             cancelSpeechNow();
             setIsAmaranteWeatherModalOpen(false);
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-slate-950 border border-emerald-500/40 p-5 text-white shadow-2xl space-y-4"
-            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md min-h-[88vh] max-h-[92vh] overflow-y-auto rounded-3xl bg-slate-950 border-2 border-emerald-500/45 p-5 text-white shadow-2xl flex flex-col justify-between gap-4 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              stopBuddySpeech();
+              cancelSpeechNow();
+            }}
+            title="Toque em qualquer área deste quadro para silenciar a voz imediatamente"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                  🌦️ Open-Meteo Tempo Real • Amarante
-                </span>
-                <h3 className="text-lg font-extrabold text-white mt-1.5">
-                  Clima Atual em Amarante
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Atualizado às {amaranteLiveWeather.updatedAt} • Lat 41.2704, Lng -8.0818
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  cancelSpeechNow();
-                  setIsAmaranteWeatherModalOpen(false);
-                }}
-                className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 text-slate-300 cursor-pointer"
-                aria-label="Fechar Clima de Amarante"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Primary Weather Metrics */}
-            <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-4xl select-none">
-                  {amaranteLiveWeather.conditionEmoji}
-                </span>
+            <div className="space-y-3.5">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-3xl font-black text-white">
-                    {isLoadingAmaranteWeather
-                      ? '...'
-                      : `${amaranteLiveWeather.temperatureC.toFixed(1)} °C`}
-                  </div>
-                  <div className="text-xs font-bold text-emerald-300">
-                    {amaranteLiveWeather.conditionLabel}
-                  </div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                    🌦️ Open-Meteo Tempo Real • Amarante
+                  </span>
+                  <h3 className="text-lg font-black text-white mt-1.5">
+                    Clima Atual em Amarante
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Atualizado às {amaranteLiveWeather.updatedAt} • Lat 41.2704,
+                    Lng -8.0818
+                  </p>
+                  <p className="text-[11px] text-emerald-300/90 mt-0.5 font-semibold">
+                    🔇 Toque em qualquer parte do quadro para calar a fala
+                  </p>
                 </div>
-              </div>
-              <div className="text-right space-y-1">
-                <div className="rounded-lg bg-slate-950 border border-slate-800 px-2.5 py-1 text-xs font-semibold text-sky-300">
-                  💧 Chuva: {amaranteLiveWeather.rainMm.toFixed(1)} mm
-                </div>
-                <div className="rounded-lg bg-slate-950 border border-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-300">
-                  💨 Vento: {amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h
-                </div>
-              </div>
-            </div>
-
-            {/* 1-Tap Rain Bonus Toggle in Finanças */}
-            <div className="rounded-xl bg-slate-900/70 border border-slate-800 p-3.5 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-extrabold text-white">
-                  ☔ Modo Chuva / Bónus de Chuva (Finanças)
-                </div>
-                <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
-                  Ativa o suplemento de piso molhado nas metas e cálculos de lucro €/km.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={toggleRainBonusFinanceActive}
-                className={`shrink-0 rounded-xl px-3.5 py-2 text-xs font-extrabold transition cursor-pointer border ${
-                  rainBonusFinanceActive
-                    ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                }`}
-              >
-                {rainBonusFinanceActive ? 'ATIVO (ON)' : 'ATIVAR'}
-              </button>
-            </div>
-
-            {/* Actions */}
-            <div className="grid grid-cols-2 gap-2.5 pt-1">
-              {isSpeakingTts ? (
                 <button
                   type="button"
-                  onClick={cancelSpeechNow}
-                  style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
-                  className="rounded-xl border border-red-400 py-2.5 px-3 text-xs font-black text-white flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <VolumeX className="h-4 w-4" />
-                  <span>🔇 Parar Fala</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const rainNote =
-                      amaranteLiveWeather.rainMm > 0
-                        ? ', com chuva'
-                        : ', sem chuva';
-                    speakTextPt(
-                      `Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}${rainNote}.`
-                    );
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    stopBuddySpeech();
+                    cancelSpeechNow();
+                    setIsAmaranteWeatherModalOpen(false);
                   }}
-                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2.5 px-3 text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 text-slate-300 cursor-pointer shrink-0"
+                  aria-label="Fechar Clima de Amarante"
                 >
-                  <Volume2 className="h-4 w-4 text-emerald-400" />
-                  <span>Ouvir em Voz Alta</span>
+                  <X className="h-4 w-4" />
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => void openAndFetchAmaranteWeather(true)}
-                className="rounded-xl bg-emerald-500 hover:bg-emerald-400 py-2.5 px-3 text-xs font-extrabold text-slate-950 flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <span>🔄 Atualizar Agora</span>
-              </button>
+              </div>
+
+              {/* Primary Weather Metrics */}
+              <div className="rounded-2xl bg-slate-900/95 border border-emerald-500/35 p-4 flex items-center justify-between shadow-md">
+                <div className="flex items-center gap-3.5">
+                  <span className="text-5xl select-none">
+                    {amaranteLiveWeather.conditionEmoji}
+                  </span>
+                  <div>
+                    <div className="text-3xl font-black text-white font-mono">
+                      {isLoadingAmaranteWeather
+                        ? '...'
+                        : `${amaranteLiveWeather.temperatureC.toFixed(1)} °C`}
+                    </div>
+                    <div className="text-xs font-extrabold text-emerald-300 mt-0.5">
+                      {amaranteLiveWeather.conditionLabel}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right space-y-1.5">
+                  <div className="rounded-xl bg-slate-950 border border-slate-800 px-3 py-1.5 text-xs font-bold text-sky-300">
+                    💧 Chuva: {amaranteLiveWeather.rainMm.toFixed(1)} mm
+                  </div>
+                  <div className="rounded-xl bg-slate-950 border border-slate-800 px-3 py-1.5 text-xs font-bold text-slate-200">
+                    💨 Vento: {amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h
+                  </div>
+                </div>
+              </div>
+
+              {/* Road & Safety Telemetry for Couriers in Amarante */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                    Estado do Piso (Amarante)
+                  </span>
+                  <span className="text-sm font-extrabold text-white mt-0.5 block">
+                    {amaranteLiveWeather.rainMm > 0
+                      ? '🌧️ Calçada Molhada / Escorregadia'
+                      : '🛣️ Piso Seco • Aderência Normal'}
+                  </span>
+                </div>
+                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                    Visibilidade &amp; Vento
+                  </span>
+                  <span className="text-sm font-extrabold text-emerald-400 mt-0.5 block">
+                    {amaranteLiveWeather.windSpeedKmh > 28
+                      ? '⚠️ Rajadas na Ponte S. Gonçalo'
+                      : '✓ Boa Visibilidade em Rota'}
+                  </span>
+                </div>
+              </div>
+
+              {/* 1-Tap Rain Bonus Toggle in Finanças */}
+              <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-extrabold text-white">
+                    ☔ Modo Chuva / Bónus de Chuva (Finanças)
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
+                    Ativa o suplemento de piso molhado nas metas e cálculos de
+                    lucro €/km.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    stopBuddySpeech();
+                    cancelSpeechNow();
+                    toggleRainBonusFinanceActive();
+                  }}
+                  className={`shrink-0 rounded-xl px-4 py-2.5 text-xs font-extrabold transition cursor-pointer border ${
+                    rainBonusFinanceActive
+                      ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                  }`}
+                >
+                  {rainBonusFinanceActive ? 'ATIVO (ON)' : 'ATIVAR'}
+                </button>
+              </div>
+
+              {/* Audio & Refresh Actions */}
+              <div className="grid grid-cols-2 gap-2.5">
+                {isSpeakingTts ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      stopBuddySpeech();
+                      cancelSpeechNow();
+                    }}
+                    style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+                    className="rounded-xl border border-red-400 py-3 px-3 text-xs font-black text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <VolumeX className="h-4 w-4" />
+                    <span>🔇 Parar Fala</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rainNote =
+                        amaranteLiveWeather.rainMm > 0
+                          ? ', com chuva'
+                          : ', sem chuva';
+                      speakTextPt(
+                        `Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}${rainNote}.`
+                      );
+                    }}
+                    className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-3 px-3 text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Volume2 className="h-4 w-4 text-emerald-400" />
+                    <span>Ouvir em Voz Alta</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void openAndFetchAmaranteWeather(true);
+                  }}
+                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-emerald-500/40 py-3 px-3 text-xs font-extrabold text-emerald-300 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>🔄 Atualizar Agora</span>
+                </button>
+              </div>
             </div>
+
+            {/* Larger, Ergonomic Bottom Close Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                stopBuddySpeech();
+                cancelSpeechNow();
+                setIsAmaranteWeatherModalOpen(false);
+              }}
+              className="py-4 text-base font-bold rounded-2xl w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg cursor-pointer transition active:scale-[0.99]"
+            >
+              Fechar Clima
+            </button>
           </div>
         </div>
       )}

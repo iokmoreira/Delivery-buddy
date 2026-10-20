@@ -20,7 +20,10 @@ import {
 import { CargoChecklistItemId } from '../types/models';
 import { HEAVY_ITEMS_DB, SCANNER_OFFER_PRESETS } from '../data/seedData';
 import { useEstafetas } from '../context/EstafetasContext';
-import { buildSurgicalOfferStreetTts } from '../services/voiceEngine';
+import {
+  buildSurgicalOfferStreetTts,
+  stopBuddySpeech,
+} from '../services/voiceEngine';
 
 export const ScannerAndSplitModule: React.FC = () => {
   const {
@@ -630,7 +633,12 @@ export const ScannerAndSplitModule: React.FC = () => {
             {/* LEFT COMPACT CARD (GANHOS): ONLY €0,00 and 0 ent. badge — Click opens Detailed Earnings Modal */}
             <button
               type="button"
-              onClick={() => setIsEarningsModalOpen(true)}
+              onClick={() => {
+                setIsEarningsModalOpen(true);
+                speakTextPt(
+                  `Hoje: ${earningsTodayByApp.total.toFixed(2).replace('.', ',')} euros líquidos em ${realCompletedDeliveries.length} entregas.`
+                );
+              }}
               title="Toque para abrir Resumo de Ganhos & Estatísticas de Hoje"
               className={`rounded-2xl border px-3.5 py-3 flex items-center justify-between cursor-pointer transition shadow-xs ${
                 isDaylight
@@ -824,119 +832,204 @@ export const ScannerAndSplitModule: React.FC = () => {
       )}
 
       {/* =====================================================================
-          DETAILED EARNINGS MODAL (Opened by tapping the Compact Ganhos Card)
+          DETAILED EARNINGS MODAL (Full-Height 88vh–92vh + Tap-Anywhere to Mute + Large Fechar Resumo)
           ===================================================================== */}
       {isEarningsModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3"
           onClick={() => {
+            stopBuddySpeech();
             cancelSpeechNow();
             setIsEarningsModalOpen(false);
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-slate-950 border border-emerald-500/40 p-5 text-white shadow-2xl space-y-4"
-            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md min-h-[88vh] max-h-[92vh] overflow-y-auto rounded-3xl bg-slate-950 border-2 border-emerald-500/45 p-5 text-white shadow-2xl flex flex-col justify-between gap-3.5 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              stopBuddySpeech();
+              cancelSpeechNow();
+            }}
+            title="Toque em qualquer área deste quadro para silenciar a voz imediatamente"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                  💰 Contabilidade Diária em Tempo Real
-                </span>
-                <h3 className="text-base font-extrabold text-white mt-1.5">
-                  Resumo de Ganhos &amp; Estatísticas de Hoje
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  cancelSpeechNow();
-                  setIsEarningsModalOpen(false);
-                }}
-                className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 px-2.5 py-1 text-xs font-bold text-slate-300 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-extrabold uppercase text-slate-400 block">
-                  Lucro Líquido Total Hoje
-                </span>
-                <span className="text-2xl font-black text-emerald-400 font-mono">
-                  {formatEurPt(earningsTodayByApp.total)}
-                </span>
-              </div>
-              <div className="text-right font-mono text-xs space-y-0.5">
-                <div className="text-slate-300">
-                  Bruto: <strong>{formatEurPt(earningsTodayByApp.totalGross)}</strong>
+            <div className="space-y-3.5">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                    💰 Contabilidade Diária em Tempo Real
+                  </span>
+                  <h3 className="text-lg font-black text-white mt-1.5 leading-snug">
+                    Resumo de Ganhos &amp; Estatísticas de Hoje
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    🔇 Toque em qualquer parte do quadro para calar a fala
+                  </p>
                 </div>
-                <div className="text-rose-400">
-                  Combustível/Desgaste:{' '}
-                  <strong>-{formatEurPt(earningsTodayByApp.fuelCostDeducted)}</strong>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    stopBuddySpeech();
+                    cancelSpeechNow();
+                    setIsEarningsModalOpen(false);
+                  }}
+                  className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 px-3 py-1.5 text-sm font-black text-slate-200 cursor-pointer shrink-0"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* 1. Lucro Líquido Total + Bruto vs. Combustível/Desgaste */}
+              <div className="rounded-2xl bg-slate-900/95 border border-emerald-500/35 p-4 flex items-center justify-between gap-3 shadow-md">
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-300 block">
+                    Lucro Líquido Total Hoje
+                  </span>
+                  <span className="text-3xl font-black text-emerald-400 font-mono leading-tight block mt-0.5">
+                    {formatEurPt(earningsTodayByApp.total)}
+                  </span>
+                </div>
+                <div className="text-right font-mono text-xs space-y-1">
+                  <div className="text-slate-200">
+                    Bruto:{' '}
+                    <strong className="text-white">
+                      {formatEurPt(earningsTodayByApp.totalGross)}
+                    </strong>
+                  </div>
+                  <div className="text-rose-400">
+                    Desgaste/Combustível:{' '}
+                    <strong>
+                      -{formatEurPt(earningsTodayByApp.fuelCostDeducted)}
+                    </strong>
+                  </div>
                 </div>
               </div>
+
+              {/* 2. Ganhos Separados por Plataforma */}
+              <div className="rounded-2xl bg-slate-900/85 border border-slate-800 p-4 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    Ganhos Separados por Plataforma
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-emerald-400">
+                    Líquido Auditado
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-800/90">
+                  <span className="font-extrabold text-slate-100 flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                    Uber Eats
+                  </span>
+                  <span className="font-mono text-sm font-black text-white">
+                    {formatEurPt(earningsTodayByApp.uber)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-800/90">
+                  <span className="font-extrabold text-slate-100 flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-amber-400" />
+                    Glovo
+                  </span>
+                  <span className="font-mono text-sm font-black text-white">
+                    {formatEurPt(earningsTodayByApp.glovo)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="font-extrabold text-slate-100 flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-sky-400" />
+                    Bolt Food
+                  </span>
+                  <span className="font-mono text-sm font-black text-white">
+                    {formatEurPt(earningsTodayByApp.bolt)}
+                  </span>
+                </div>
+              </div>
+
+              {/* 3. 4-Card KPI Grid: Entregas, KM Rodados, Média €/km, Ritmo €/h */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                    Entregas Concluídas
+                  </span>
+                  <span className="text-base font-mono font-black text-white mt-0.5 block">
+                    {realCompletedDeliveries.length} entregas
+                  </span>
+                </div>
+                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                    KM Rodados Hoje
+                  </span>
+                  <span className="text-base font-mono font-black text-white mt-0.5 block">
+                    {earningsTodayByApp.totalKm.toFixed(1)} km
+                  </span>
+                </div>
+                <div className="rounded-2xl bg-slate-900 border border-emerald-500/35 p-3">
+                  <span className="text-[10px] font-extrabold uppercase text-emerald-400 block">
+                    Média Líquida €/km
+                  </span>
+                  <span className="text-base font-mono font-black text-emerald-400 mt-0.5 block">
+                    {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')}{' '}
+                    €/km
+                  </span>
+                </div>
+                <div className="rounded-2xl bg-slate-900 border border-amber-500/30 p-3">
+                  <span className="text-[10px] font-extrabold uppercase text-amber-400 block">
+                    Ritmo €/hora
+                  </span>
+                  <span className="text-base font-mono font-black text-amber-400 mt-0.5 block">
+                    {earningsTodayByApp.avgHourlyEur.toFixed(2).replace('.', ',')}{' '}
+                    €/h
+                  </span>
+                </div>
+              </div>
+
+              {/* 4. Meta Diária % + Última Entrega */}
+              <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-extrabold text-slate-200">
+                    🎯 Meta Diária ({earningsTodayByApp.goalProgressPct}%)
+                  </span>
+                  <span className="font-mono font-black text-emerald-400">
+                    {formatEurPt(earningsTodayByApp.total)} /{' '}
+                    {formatEurPt(earningsTodayByApp.goalTargetEur)}
+                  </span>
+                </div>
+                <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    style={{ width: `${earningsTodayByApp.goalProgressPct}%` }}
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                  />
+                </div>
+                {earningsTodayByApp.lastDelivery ? (
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-300 truncate">
+                      Última ({earningsTodayByApp.lastDelivery.platform}):{' '}
+                      <strong className="text-white">
+                        {earningsTodayByApp.lastDelivery.segment}
+                      </strong>
+                    </span>
+                    <span className="font-mono font-black text-emerald-400 shrink-0">
+                      +{formatEurPt(earningsTodayByApp.lastDelivery.netProfitEur)}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="pt-1.5 text-[11px] text-slate-400">
+                    Última entrega: Nenhuma entrega registada no turno de hoje.
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="rounded-xl bg-slate-900/75 border border-slate-800 p-3.5 space-y-2 text-xs">
-              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                Ganhos Separados por Plataforma
-              </div>
-              <div className="flex items-center justify-between py-1 border-b border-slate-800">
-                <span className="font-bold text-slate-200">Uber Eats</span>
-                <span className="font-mono font-extrabold text-white">
-                  {formatEurPt(earningsTodayByApp.uber)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-1 border-b border-slate-800">
-                <span className="font-bold text-slate-200">Glovo</span>
-                <span className="font-mono font-extrabold text-white">
-                  {formatEurPt(earningsTodayByApp.glovo)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-1">
-                <span className="font-bold text-slate-200">Bolt Food</span>
-                <span className="font-mono font-extrabold text-white">
-                  {formatEurPt(earningsTodayByApp.bolt)}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl bg-slate-900 border border-slate-800 p-2.5">
-                <span className="text-[9px] font-bold uppercase text-slate-400 block">
-                  Entregas
-                </span>
-                <span className="text-sm font-mono font-black text-white mt-0.5 block">
-                  {realCompletedDeliveries.length}
-                </span>
-              </div>
-              <div className="rounded-xl bg-slate-900 border border-slate-800 p-2.5">
-                <span className="text-[9px] font-bold uppercase text-slate-400 block">
-                  Média €/km
-                </span>
-                <span className="text-sm font-mono font-black text-emerald-400 mt-0.5 block">
-                  {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')} €
-                </span>
-              </div>
-              <div className="rounded-xl bg-slate-900 border border-slate-800 p-2.5">
-                <span className="text-[9px] font-bold uppercase text-slate-400 block">
-                  Ritmo €/hora
-                </span>
-                <span className="text-sm font-mono font-black text-amber-400 mt-0.5 block">
-                  {earningsTodayByApp.avgHourlyEur.toFixed(2).replace('.', ',')} €
-                </span>
-              </div>
-            </div>
-
+            {/* 5. Larger, Ergonomic Fechar Resumo Button */}
             <button
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
+                stopBuddySpeech();
                 cancelSpeechNow();
                 setIsEarningsModalOpen(false);
               }}
-              className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs py-2.5 cursor-pointer transition"
+              className="py-4 text-base font-bold rounded-2xl w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg cursor-pointer transition active:scale-[0.99]"
             >
               Fechar Resumo
             </button>

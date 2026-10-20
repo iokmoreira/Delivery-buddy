@@ -72,15 +72,101 @@ jobs:
           # Inject Delivery Buddy Robot Mascot Adaptive Icon (#0F172A carbon background + DB Robot foreground)
           mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/drawable-v24
+          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
           mkdir -p android/app/src/main/res/values
           cp -f android-native-template/ic_launcher_foreground.xml android/app/src/main/res/drawable/ic_launcher_foreground.xml
           cp -f android-native-template/ic_launcher_foreground.xml android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
+          cp -f android-native-template/ic_launcher_background.xml android/app/src/main/res/drawable/ic_launcher_background.xml
+          cp -f android-native-template/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          cp -f android-native-template/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
           cat << 'EOF' > android/app/src/main/res/values/ic_launcher_background.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="ic_launcher_background">#0F172A</color>
           </resources>
           EOF
+
+          # Remove Capacitor blue-cross foreground PNGs and overwrite all mipmap-*/ic_launcher*.png with Delivery Buddy 3D Robot Mascot PNGs
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher_foreground.png
+          python3 - << 'PYEOF'
+          import os, struct, zlib, glob
+
+          def make_buddy_png(size):
+              pixels = bytearray()
+              cx, cy = size / 2.0, size / 2.0
+              r_outer = size * 0.44
+              r_ring = size * 0.41
+              for y in range(size):
+                  pixels.append(0)  # PNG filter type 0
+                  ny = y / float(size)
+                  for x in range(size):
+                      nx = x / float(size)
+                      dx = x - cx
+                      dy = y - cy
+                      dist = (dx*dx + dy*dy) ** 0.5
+                      # Base carbon background #0F172A (15, 23, 42)
+                      r, g, b, a = 15, 23, 42, 255
+                      # Emerald ring #10B981 (16, 185, 129)
+                      if abs(dist - r_ring) <= max(1.5, size * 0.03):
+                          r, g, b = 16, 185, 129
+                      # Green backpack on left (nx: 0.22..0.34, ny: 0.42..0.72)
+                      if 0.22 <= nx <= 0.34 and 0.42 <= ny <= 0.72:
+                          r, g, b = 16, 185, 129
+                      # Antenna stem & glowing orb
+                      if 0.48 <= nx <= 0.52 and 0.18 <= ny <= 0.28:
+                          r, g, b = 148, 163, 184
+                      if ((nx - 0.50)**2 + (ny - 0.16)**2) ** 0.5 <= 0.045:
+                          r, g, b = 52, 211, 153
+                      # White 3D Robot Head (nx: 0.30..0.70, ny: 0.27..0.54)
+                      if 0.30 <= nx <= 0.70 and 0.27 <= ny <= 0.54:
+                          r, g, b = 248, 250, 252
+                          # Dark glass visor (nx: 0.35..0.65, ny: 0.31..0.49)
+                          if 0.35 <= nx <= 0.65 and 0.31 <= ny <= 0.49:
+                              r, g, b = 9, 13, 22
+                              # Glowing emerald eyes
+                              if ((nx - 0.43)**2 + (ny - 0.39)**2) ** 0.5 <= 0.038 or ((nx - 0.57)**2 + (ny - 0.39)**2) ** 0.5 <= 0.038:
+                                  r, g, b = 52, 211, 153
+                              # Smile
+                              if 0.44 <= nx <= 0.56 and 0.44 <= ny <= 0.465:
+                                  r, g, b = 16, 185, 129
+                      # White 3D Robot Torso (nx: 0.33..0.67, ny: 0.56..0.79)
+                      if 0.33 <= nx <= 0.67 and 0.56 <= ny <= 0.79:
+                          r, g, b = 248, 250, 252
+                          # Emerald DB Chest Badge (nx: 0.40..0.60, ny: 0.60..0.74)
+                          if 0.40 <= nx <= 0.60 and 0.60 <= ny <= 0.74:
+                              r, g, b = 6, 78, 59
+                              if 0.43 <= nx <= 0.48 and 0.63 <= ny <= 0.71:
+                                  r, g, b = 52, 211, 153
+                              if 0.52 <= nx <= 0.57 and 0.63 <= ny <= 0.71:
+                                  r, g, b = 52, 211, 153
+                      # Thumbs-up emerald hand on right
+                      if ((nx - 0.74)**2 + (ny - 0.52)**2) ** 0.5 <= 0.055:
+                          r, g, b = 52, 211, 153
+                      pixels.extend((r, g, b, a))
+
+              def chunk(tag, data):
+                  return struct.pack("!I", len(data)) + tag + data + struct.pack("!I", zlib.crc32(tag + data) & 0xffffffff)
+
+              ihdr = struct.pack("!IIBBBBB", size, size, 8, 6, 0, 0, 0)
+              idat = zlib.compress(bytes(pixels), 9)
+              return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
+
+          sizes = {
+              "mipmap-mdpi": 48,
+              "mipmap-hdpi": 72,
+              "mipmap-xhdpi": 96,
+              "mipmap-xxhdpi": 144,
+              "mipmap-xxxhdpi": 192,
+          }
+          for folder, sz in sizes.items():
+              d = os.path.join("android/app/src/main/res", folder)
+              os.makedirs(d, exist_ok=True)
+              png_bytes = make_buddy_png(sz)
+              for fname in ("ic_launcher.png", "ic_launcher_round.png", "ic_launcher_foreground.png"):
+                  with open(os.path.join(d, fname), "wb") as f:
+                      f.write(png_bytes)
+          print("Generated Delivery Buddy 3D Robot Mascot PNGs for all mipmap densities.")
+          PYEOF
 
           # Copy persistent deterministic keystore to both android/app/ and ~/.android/debug.keystore
           mkdir -p ~/.android

@@ -141,6 +141,7 @@ import {
   cancelBuddySpeechNow,
   getSavedBuddyVoiceRate,
   playBuddyConfirmationChime,
+  playBuddyOpenChime,
   saveBuddyVoiceRate,
   selectBestGeminiLikePtVoice,
   speakWithBuddyVoiceEngine,
@@ -3090,7 +3091,7 @@ Solicita-se a revisão imediata do cálculo cartográfico deste trecho e o créd
       speakWithBuddyVoiceEngine({
         text,
         rate: buddyVoiceRate,
-        pitch: 1.05,
+        pitch: 0.95,
         isPaused: state.isAppPaused,
         onStart: () => {
           isSpeakingTtsRef.current = true;
@@ -4004,14 +4005,17 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         }
 
         // Web / PWA fallback when not inside Native Android .APK
-        setState((prev) =>
-          prev.isBubbleMinimized === minimized
+        setState((prev) => {
+          if (!minimized && prev.isBubbleMinimized) {
+            playBuddyOpenChime();
+          }
+          return prev.isBubbleMinimized === minimized
             ? prev
             : {
                 ...prev,
                 isBubbleMinimized: minimized,
-              }
-        );
+              };
+        });
 
         if (minimized) {
           try {
@@ -4084,6 +4088,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       setIsSpeakingTts(Boolean(speaking));
     };
     winAny.__onNativeBubbleRestore = () => {
+      playBuddyOpenChime();
       setState((prev) =>
         prev.isBubbleMinimized ? { ...prev, isBubbleMinimized: false } : prev
       );
@@ -6460,6 +6465,18 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     setBubbleRestingPresetState(preset);
     saveBubbleRestingPreset(preset);
     syncBubbleRestingPresetToNativeBridge(preset);
+    playBuddyConfirmationChime();
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(
+          new CustomEvent('buddy-snap-bubble-preset', {
+            detail: { preset },
+          })
+        );
+      } catch {
+        // ignore
+      }
+    }
   }, []);
 
   const setActivePlatforms = useCallback(

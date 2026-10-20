@@ -1,13 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ScanLine,
-  Users,
   MapPinned,
   Wallet,
   SlidersHorizontal,
 } from 'lucide-react';
 import { AppTabId } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
+import { playBuddyOpenChime } from '../services/voiceEngine';
+
+const CURRENT_OTA_BUILD_VERSION = 'v2.6.0-ptBR-1.30x';
+const LAST_SEEN_OTA_BUILD_KEY = 'buddy_last_seen_ota_build_v1';
+const PENDING_OTA_TOAST_KEY = 'buddy_pending_ota_toast_v1';
 
 export const CockpitNavigation: React.FC = () => {
   const {
@@ -16,13 +20,96 @@ export const CockpitNavigation: React.FC = () => {
     viewMode,
     setCourierWorkspaceSection,
     themeMode,
+    currentMascotState,
+    currentMascotImageUrl,
+    userPrefs,
   } = useEstafetas();
+
+  const [showOtaUpdatedPopup, setShowOtaUpdatedPopup] = useState(false);
+
+  useEffect(() => {
+    let timerId: number | undefined;
+
+    const triggerPopup = () => {
+      setShowOtaUpdatedPopup(true);
+      playBuddyOpenChime();
+      if (timerId) window.clearTimeout(timerId);
+      timerId = window.setTimeout(() => {
+        setShowOtaUpdatedPopup(false);
+      }, 5500);
+    };
+
+    try {
+      const hasOtaQuery = window.location.search.includes('ota_ts=');
+      const hasPendingFlag =
+        window.localStorage.getItem(PENDING_OTA_TOAST_KEY) === '1';
+      const lastSeenBuild = window.localStorage.getItem(
+        LAST_SEEN_OTA_BUILD_KEY
+      );
+      const isNewBuild = lastSeenBuild !== CURRENT_OTA_BUILD_VERSION;
+
+      if (hasOtaQuery || hasPendingFlag || isNewBuild) {
+        window.localStorage.setItem(
+          LAST_SEEN_OTA_BUILD_KEY,
+          CURRENT_OTA_BUILD_VERSION
+        );
+        window.localStorage.removeItem(PENDING_OTA_TOAST_KEY);
+        triggerPopup();
+      }
+    } catch {
+      // ignore storage errors
+    }
+
+    const onManualOtaToast = () => {
+      triggerPopup();
+    };
+    window.addEventListener('buddy-ota-updated-toast', onManualOtaToast);
+
+    return () => {
+      if (timerId) window.clearTimeout(timerId);
+      window.removeEventListener('buddy-ota-updated-toast', onManualOtaToast);
+    };
+  }, []);
 
   if (viewMode === 'PAINEL_ADMIN') {
     return null;
   }
 
   const isDaylight = themeMode === 'DAYLIGHT';
+  const isAnonymous = Boolean(userPrefs?.anonymousMode);
+
+  // Dynamic Buddy Mascot status badge & glow ring config
+  const buddyStatusConfig = isAnonymous
+    ? {
+        ringClass:
+          'ring-2 ring-purple-400 shadow-[0_0_14px_rgba(168,85,247,0.55)]',
+        dotClass: 'bg-purple-400',
+        badgeEmoji: '🥷',
+        statusShort: 'Anónimo',
+      }
+    : currentMascotState === 'DELIVERY'
+    ? {
+        ringClass:
+          'ring-2 ring-amber-400 shadow-[0_0_16px_rgba(245,158,11,0.65)]',
+        dotClass: 'bg-amber-400 animate-ping',
+        badgeEmoji: '🚀',
+        statusShort: 'Entrega',
+      }
+    : currentMascotState === 'INACTIVE'
+    ? {
+        ringClass:
+          'ring-2 ring-slate-400 shadow-[0_0_10px_rgba(148,163,184,0.35)]',
+        dotClass: 'bg-slate-400',
+        badgeEmoji: '⚪',
+        statusShort: 'Pausa',
+      }
+    : {
+        ringClass:
+          'ring-2 ring-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.6)]',
+        dotClass: 'bg-emerald-400',
+        badgeEmoji: '🟢',
+        statusShort: 'Online',
+      };
 
   const bottomNavItems: {
     id: AppTabId;
@@ -48,7 +135,7 @@ export const CockpitNavigation: React.FC = () => {
       id: 'walkietalkie',
       label: 'Buddys',
       section: 'AREA_PUBLICA_SOCIAL',
-      icon: <Users className="h-5 w-5 shrink-0" />,
+      icon: null,
       isCenterHighlight: true,
     },
     {
@@ -92,8 +179,35 @@ export const CockpitNavigation: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className="flex items-center justify-center"
+                className="relative flex items-center justify-center"
               >
+                {/* Animated OTA Update Speech Bubble rising directly above the center Buddy button */}
+                {showOtaUpdatedPopup && (
+                  <div
+                    role="status"
+                    onClick={() => setShowOtaUpdatedPopup(false)}
+                    style={{
+                      backgroundColor: '#064e3b',
+                      borderColor: '#34d399',
+                      color: '#ffffff',
+                    }}
+                    className="absolute -top-16 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-2xl border-2 px-3.5 py-2 shadow-[0_8px_25px_rgba(16,185,129,0.55)] animate-bounce cursor-pointer flex flex-col items-center"
+                  >
+                    <span className="text-xs font-black tracking-tight text-white flex items-center gap-1.5">
+                      <span>🤖 ✅ Aplicativo atualizado!</span>
+                    </span>
+                    <span className="text-[9px] font-mono text-emerald-200">
+                      {CURRENT_OTA_BUILD_VERSION} • Pronto
+                    </span>
+                    <div
+                      style={{
+                        borderTopColor: '#34d399',
+                      }}
+                      className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[7px] absolute -bottom-[8px] left-1/2 -translate-x-1/2"
+                    />
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
@@ -102,14 +216,28 @@ export const CockpitNavigation: React.FC = () => {
                     }
                     setActiveTab(item.id);
                   }}
-                  className={`w-15 h-15 -mt-3.5 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${
-                    isActive
-                      ? 'bg-slate-950 text-white ring-2 ring-slate-900 font-extrabold scale-105 shadow-lg'
-                      : 'bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md shadow-indigo-500/20'
-                  }`}
+                  style={{
+                    backgroundColor: isActive ? '#020617' : '#0f172a',
+                    color: '#ffffff',
+                  }}
+                  className={`w-16 h-16 -mt-4 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition cursor-pointer relative ${
+                    buddyStatusConfig.ringClass
+                  } ${isActive ? 'scale-105 font-extrabold' : 'font-bold'}`}
                 >
-                  {item.icon}
-                  <span className="text-[10px] leading-none whitespace-nowrap">
+                  <div className="relative h-9 w-9 rounded-full overflow-hidden border border-white/25 bg-slate-950 shrink-0">
+                    <img
+                      src={currentMascotImageUrl}
+                      alt={`Buddy ${buddyStatusConfig.statusShort}`}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <span
+                    title={`Estado: ${buddyStatusConfig.statusShort}`}
+                    className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-slate-950 border border-white/30 flex items-center justify-center text-[9px] leading-none shadow"
+                  >
+                    {buddyStatusConfig.badgeEmoji}
+                  </span>
+                  <span className="text-[9px] leading-none whitespace-nowrap text-white font-extrabold tracking-tight">
                     {item.label}
                   </span>
                 </button>

@@ -1614,45 +1614,67 @@ export const MenuMaisHubView: React.FC = () => {
         </div>
 
         {/* Configurable Floating Bubble Resting Position Selector */}
-        <div className="pt-2 border-t border-zinc-800 space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
+        <div className="pt-2 border-t border-zinc-800 space-y-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs font-extrabold text-zinc-100">
               📍 Posição de Repouso da Bolinha Flutuante
             </span>
-            <span className="text-[10px] font-semibold text-emerald-400">
-              Ao minimizar a App
+            <span
+              style={{
+                backgroundColor: '#064e3b',
+                borderColor: '#10b981',
+                color: '#6ee7b7',
+              }}
+              className="rounded-full border px-2.5 py-0.5 text-[10px] font-extrabold"
+            >
+              Ativo:{' '}
+              {BUBBLE_RESTING_PRESET_OPTIONS.find(
+                (o) => o.id === bubbleRestingPreset
+              )?.label || 'Canto Inferior Direito'}
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {BUBBLE_RESTING_PRESET_OPTIONS.map((opt) => {
               const isSelected = bubbleRestingPreset === opt.id;
               return (
                 <button
                   key={opt.id}
                   type="button"
+                  aria-pressed={isSelected}
                   onClick={() => setBubbleRestingPreset(opt.id)}
-                  className={`rounded-xl px-3 py-2 text-left border transition cursor-pointer flex items-center justify-between gap-2 ${
-                    isSelected
-                      ? 'bg-emerald-600/20 border-emerald-400 text-white'
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-900'
-                  }`}
+                  style={{
+                    backgroundColor: isSelected ? '#064e3b' : '#09090b',
+                    borderColor: isSelected ? '#10b981' : '#3f3f46',
+                    color: '#ffffff',
+                    boxShadow: isSelected
+                      ? '0 0 14px rgba(16, 185, 129, 0.38)'
+                      : 'none',
+                  }}
+                  className="rounded-xl px-3 py-2.5 text-left border-2 transition cursor-pointer flex items-center justify-between gap-2"
                 >
                   <div className="min-w-0">
-                    <span className="block text-[11px] font-extrabold truncate">
+                    <span
+                      style={{ color: isSelected ? '#ecfdf5' : '#f4f4f5' }}
+                      className="block text-xs font-extrabold truncate"
+                    >
                       {opt.label}
                     </span>
-                    <span className="block text-[9px] text-zinc-400 truncate">
+                    <span
+                      style={{ color: isSelected ? '#a7f3d0' : '#a1a1aa' }}
+                      className="block text-[10px] truncate"
+                    >
                       {opt.shortDesc}
                     </span>
                   </div>
                   <span
-                    className={`h-4 w-4 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
-                      isSelected
-                        ? 'bg-emerald-500 text-zinc-950'
-                        : 'bg-zinc-800 text-zinc-500'
-                    }`}
+                    style={{
+                      backgroundColor: isSelected ? '#10b981' : '#27272a',
+                      borderColor: isSelected ? '#6ee7b7' : '#52525b',
+                      color: isSelected ? '#022c22' : '#71717a',
+                    }}
+                    className="h-5 w-5 rounded-full border flex items-center justify-center text-xs font-black shrink-0"
                   >
-                    {isSelected ? '✓' : ''}
+                    {isSelected ? '✓' : '○'}
                   </span>
                 </button>
               );
@@ -1661,24 +1683,24 @@ export const MenuMaisHubView: React.FC = () => {
         </div>
       </div>
 
-      {/* Gemini-Style Natural Voice Engine Tuning Card (1.15x Default +15% Faster) */}
+      {/* Natural Male pt-BR Voice Engine Tuning Card (1.30x Default +30% Faster) */}
       <div className="rounded-xl bg-zinc-900/95 border border-indigo-500/35 p-3 space-y-2.5">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div>
             <span className="text-xs font-extrabold text-zinc-100 flex items-center gap-1.5">
               <Volume2 className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
               <span>
-                Velocidade da Voz: {buddyVoiceRate.toFixed(2)}x (
-                {Math.abs(buddyVoiceRate - 1.15) < 0.01
-                  ? '+15% Rápida — Padrão'
+                Velocidade da Voz (pt-BR Masculina): {buddyVoiceRate.toFixed(2)}x (
+                {Math.abs(buddyVoiceRate - 1.3) < 0.01
+                  ? '+30% Rápida — Padrão'
                   : `${Math.round((buddyVoiceRate - 1) * 100)}% Rápida`}
                 )
               </span>
             </span>
             <span className="block text-[10px] text-zinc-400">
-              Timbre Neural Prioritário:{' '}
+              Voz Masculina pt-BR Prioritária:{' '}
               <strong className="text-indigo-300">{resolvedPtBrVoiceName}</strong>{' '}
-              • Pitch 1.0 • Telemetria &lt;2s
+              • Pitch 0.95 • Sem Eco
             </span>
           </div>
 
@@ -1707,13 +1729,13 @@ export const MenuMaisHubView: React.FC = () => {
             className="flex-1 accent-indigo-500 cursor-pointer"
           />
           <span className="text-[10px] font-mono text-zinc-400">1.50x</span>
-          {Math.abs(buddyVoiceRate - 1.15) >= 0.01 && (
+          {Math.abs(buddyVoiceRate - 1.3) >= 0.01 && (
             <button
               type="button"
-              onClick={() => setBuddyVoiceRate(1.15)}
+              onClick={() => setBuddyVoiceRate(1.3)}
               className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 px-2 py-0.5 text-[10px] font-mono font-bold cursor-pointer"
             >
-              Repor 1.15x
+              Repor 1.30x
             </button>
           )}
         </div>
@@ -2003,6 +2025,12 @@ export const MenuMaisHubView: React.FC = () => {
         <button
           type="button"
           onClick={() => {
+            try {
+              window.localStorage.setItem('buddy_pending_ota_toast_v1', '1');
+              window.dispatchEvent(new CustomEvent('buddy-ota-updated-toast'));
+            } catch {
+              // ignore
+            }
             const winAny = window as unknown as {
               BuddyNativeOverlay?: {
                 reloadOtaNow?: () => void;
@@ -2231,8 +2259,8 @@ export const MenuMaisHubView: React.FC = () => {
         </button>
       </div>
 
-      {/* Discrete Session Footer */}
-      <div className="flex items-center justify-between px-1 pt-1">
+      {/* Discrete Session Footer (Repor Dados only — Terminar Sessão is in the top Profile card) */}
+      <div className="flex items-center justify-start px-1 pt-1">
         <button
           type="button"
           onClick={resetAllToSeed}
@@ -2240,17 +2268,6 @@ export const MenuMaisHubView: React.FC = () => {
         >
           <RotateCcw className="h-3 w-3" />
           <span>Repor Dados</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            logoutSession();
-            switchOrCreateNewCourierProfileOnDevice();
-          }}
-          className="rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 px-2.5 py-1 text-[11px] font-bold text-rose-300 hover:text-rose-200 flex items-center gap-1 cursor-pointer transition"
-        >
-          <LogOut className="h-3 w-3" />
-          <span>Terminar Sessão / Trocar Conta</span>
         </button>
       </div>
     </div>

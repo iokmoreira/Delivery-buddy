@@ -1,8 +1,8 @@
 import { PlatformName } from '../types/models';
 
-export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate';
-export const DEFAULT_BUDDY_VOICE_RATE = 1.1;
-export const DEFAULT_BUDDY_VOICE_PITCH = 1.05;
+export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate_v2_130';
+export const DEFAULT_BUDDY_VOICE_RATE = 1.3;
+export const DEFAULT_BUDDY_VOICE_PITCH = 0.95;
 
 let activeHtml5TtsAudio: HTMLAudioElement | null = null;
 let activeNativeSpeechEndTimer: number | null = null;
@@ -34,6 +34,12 @@ export function saveBuddyVoiceRate(rate: number): number {
   if (typeof window !== 'undefined') {
     try {
       localStorage.setItem(BUDDY_VOICE_RATE_STORAGE_KEY, String(clamped));
+      const winAny = window as unknown as {
+        BuddyNativeOverlay?: {
+          setSpeechRate?: (r: number) => void;
+        };
+      };
+      winAny.BuddyNativeOverlay?.setSpeechRate?.(clamped);
     } catch {
       // ignore storage errors
     }
@@ -46,19 +52,25 @@ export function selectBestGeminiLikePtVoice(
 ): SpeechSynthesisVoice | undefined {
   if (!voices || voices.length === 0) return undefined;
 
-  const ptVoices = voices.filter((v) => {
+  // Strictly prioritize Brazilian Portuguese (pt-BR) voices so it never sounds like pt-PT female
+  const ptBrVoices = voices.filter((v) => {
     const l = v.lang.toLowerCase();
-    return l.includes('pt-br') || l.includes('pt_br') || l.includes('pt');
+    const n = v.name.toLowerCase();
+    return (
+      l.includes('pt-br') ||
+      l.includes('pt_br') ||
+      n.includes('brasil') ||
+      n.includes('brazil')
+    );
   });
 
-  if (ptVoices.length === 0) return undefined;
-
-  const ptBrVoices = ptVoices.filter((v) => {
+  const ptVoices = voices.filter((v) => {
     const l = v.lang.toLowerCase();
-    return l.includes('pt-br') || l.includes('pt_br');
+    return l.includes('pt');
   });
 
   const candidatePool = ptBrVoices.length > 0 ? ptBrVoices : ptVoices;
+  if (candidatePool.length === 0) return undefined;
 
   const knownFemaleTokens = [
     'francisca',
@@ -71,6 +83,9 @@ export function selectBestGeminiLikePtVoice(
     'joana',
     'catarina',
     'raquel',
+    'ines',
+    'inês',
+    'cristiano_female',
     'female',
     'ptc',
     'bmg',
@@ -83,13 +98,18 @@ export function selectBestGeminiLikePtVoice(
 
   const searchPool = nonFemalePool.length > 0 ? nonFemalePool : candidatePool;
 
-  // Tier 1: Friendly Male Brazilian Portuguese (pt-BR) voices
+  // Tier 1: Explicit Male Brazilian Portuguese (pt-BR) voices
   const maleKeywords = [
     'antonio',
+    'antônio',
     'daniel',
     'fabio',
+    'fábio',
     'ricardo',
     'nicolau',
+    'pt-br-x-pte',
+    'pt-br-x-afs',
+    'pt-br-x-ptd',
     'pte',
     'afs',
     'ptd',
@@ -193,8 +213,54 @@ export function playBuddyConfirmationChime(): void {
   }
 }
 
+/**
+ * Crisp, pleasant futuristic ascending chime played when opening/maximizing
+ * the app from the floating bubble (without speaking "Tela aberta").
+ */
+export function playBuddyOpenChime(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!sharedChimeCtx) {
+      sharedChimeCtx = new AudioCtx();
+    }
+    if (sharedChimeCtx.state === 'suspended') {
+      void sharedChimeCtx.resume();
+    }
+    const now = sharedChimeCtx.currentTime;
+    const notes = [523.25, 659.25, 1046.5]; // C5 -> E5 -> C6
+    notes.forEach((freq, idx) => {
+      if (!sharedChimeCtx) return;
+      const osc = sharedChimeCtx.createOscillator();
+      const gain = sharedChimeCtx.createGain();
+      const startAt = now + idx * 0.065;
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, startAt);
+      gain.gain.setValueAtTime(0.11, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.18);
+      osc.connect(gain);
+      gain.connect(sharedChimeCtx.destination);
+      osc.start(startAt);
+      osc.stop(startAt + 0.19);
+    });
+  } catch {
+    // ignore audio chime errors
+  }
+}
+
+if (typeof window !== 'undefined') {
+  (
+    window as unknown as { playBuddyOpenChime?: () => void }
+  ).playBuddyOpenChime = playBuddyOpenChime;
+}
+
 function playHtml5StreamTtsFallback(
   text: string,
+  rate: number,
   onStart?: () => void,
   onEnd?: () => void
 ): boolean {
@@ -211,7 +277,7 @@ function playHtml5StreamTtsFallback(
     const audio = new Audio(ttsUrl);
     audio.setAttribute('referrerpolicy', 'no-referrer');
     audio.volume = 1.0;
-    audio.playbackRate = 1.1;
+    audio.playbackRate = Math.max(1.0, Math.min(1.5, rate || 1.3));
     activeHtml5TtsAudio = audio;
     audio.onplay = () => onStart?.();
     audio.onended = () => {
@@ -250,10 +316,8 @@ export interface SpeakBuddyVoiceOptions {
 }
 
 /**
- * Centralized Friendly Male Brazilian Portuguese (pt-BR) Companion Voice Engine.
- * 1. Uses Native Android TextToSpeech (`window.BuddyNativeOverlay.speakText`) when available.
- * 2. Guarantees spoken audio via HTML5 Audio TTS stream (`translate_tts` pt-BR) on older OTA APK shells.
- * 3. Falls back to Web SpeechSynthesis (pt-BR Male) in desktop browsers.
+ * Centralized Friendly Male Brazilian Portuguese (pt-BR) Companion Voice Engine (1.30x Default).
+ * Runs strictly ONE engine at a time (canceling any previous audio first) so there is NEVER any echo.
  */
 export function speakWithBuddyVoiceEngine(
   options: SpeakBuddyVoiceOptions
@@ -273,11 +337,14 @@ export function speakWithBuddyVoiceEngine(
     return;
   }
 
-  if (activeNativeSpeechEndTimer !== null) {
-    window.clearTimeout(activeNativeSpeechEndTimer);
-    activeNativeSpeechEndTimer = null;
-  }
+  // Always cancel any ongoing speech across all engines first to prevent double audio / echo
+  cancelBuddySpeechNow();
   activeOnEndCallback = onEnd || null;
+
+  const activeRate =
+    rate !== undefined && Number.isFinite(rate)
+      ? Math.max(1.0, Math.min(1.5, rate))
+      : getSavedBuddyVoiceRate();
 
   playBuddyConfirmationChime();
 
@@ -285,18 +352,24 @@ export function speakWithBuddyVoiceEngine(
     BuddyNativeOverlay?: {
       speakText?: (spokenText: string) => void;
       speakNativeTts?: (spokenText: string) => void;
+      setSpeechRate?: (rateVal: number) => void;
     };
   };
 
-  // 1. Native Android APK TextToSpeech Bridge (speakText / speakNativeTts)
+  // Engine 1 (Priority): Native Android APK TextToSpeech Bridge (pt-BR Male @ 1.30x)
   try {
     const nativeSpeakFn =
       winAny.BuddyNativeOverlay?.speakText ||
       winAny.BuddyNativeOverlay?.speakNativeTts;
     if (typeof nativeSpeakFn === 'function') {
+      try {
+        winAny.BuddyNativeOverlay?.setSpeechRate?.(activeRate);
+      } catch {
+        // ignore
+      }
       onStart?.();
       nativeSpeakFn.call(winAny.BuddyNativeOverlay, text.trim());
-      onVoiceResolved?.('Voz Masculina PT-BR (Android)');
+      onVoiceResolved?.('Voz Masculina PT-BR (Android 1.30x)');
       activeNativeSpeechEndTimer = window.setTimeout(() => {
         activeNativeSpeechEndTimer = null;
         if (activeOnEndCallback) {
@@ -304,75 +377,66 @@ export function speakWithBuddyVoiceEngine(
           activeOnEndCallback = null;
           cb();
         }
-      }, Math.min(7000, Math.max(1600, text.length * 58)));
+      }, Math.min(6000, Math.max(1300, Math.round(text.length * 46))));
       return;
     }
   } catch {
-    // continue to HTML5 Audio / speechSynthesis fallback
+    // continue to Web SpeechSynthesis fallback
   }
 
-  // 2. Immediate OTA Guarantee for Android APK shells without native speakText:
-  // Play HTML5 Audio TTS stream in Brazilian Portuguese (pt-BR)
-  const hasNativeOverlayShell = Boolean(winAny.BuddyNativeOverlay);
-  if (hasNativeOverlayShell) {
-    const startedStream = playHtml5StreamTtsFallback(text, onStart, onEnd);
-    if (startedStream) {
-      onVoiceResolved?.('Voz Audio Stream PT-BR (OTA)');
-    }
-  }
+  // Engine 2: Web SpeechSynthesis (strictly pt-BR Male at 1.30x rate, 0.95 pitch)
+  if ('speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume?.();
 
-  // 3. Also trigger Web SpeechSynthesis (works on desktop browsers & fallback)
-  if (!('speechSynthesis' in window)) {
-    if (!hasNativeOverlayShell) {
-      playHtml5StreamTtsFallback(text, onStart, onEnd);
-    }
-    return;
-  }
+      const utterance = new SpeechSynthesisUtterance(text.trim());
+      utterance.lang = 'pt-BR';
+      utterance.rate = activeRate;
+      utterance.pitch = pitch;
+      utterance.volume = 1.0;
 
-  try {
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.resume?.();
+      const voices = window.speechSynthesis.getVoices();
+      const chosenVoice = selectBestGeminiLikePtVoice(voices);
+      if (chosenVoice) {
+        utterance.voice = chosenVoice;
+        onVoiceResolved?.(`${chosenVoice.name} (${chosenVoice.lang})`);
+      } else {
+        onVoiceResolved?.('Português do Brasil Masculino (pt-BR)');
+      }
 
-    const activeRate =
-      rate !== undefined && Number.isFinite(rate)
-        ? Math.max(1.0, Math.min(1.5, rate))
-        : getSavedBuddyVoiceRate();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'pt-BR';
-    utterance.rate = activeRate;
-    utterance.pitch = pitch;
-    utterance.volume = 1.0;
-
-    const voices = window.speechSynthesis.getVoices();
-    const chosenVoice = selectBestGeminiLikePtVoice(voices);
-    if (chosenVoice) {
-      utterance.voice = chosenVoice;
-      onVoiceResolved?.(`${chosenVoice.name} (${chosenVoice.lang})`);
-    }
-
-    if (onStart) utterance.onstart = onStart;
-    if (onEnd) {
-      utterance.onend = () => {
+      if (onStart) utterance.onstart = onStart;
+      if (onEnd) {
+        utterance.onend = () => {
+          activeOnEndCallback = null;
+          onEnd();
+        };
+      }
+      utterance.onerror = (ev) => {
         activeOnEndCallback = null;
-        onEnd();
-      };
-    }
-    if (onError) {
-      utterance.onerror = () => {
-        activeOnEndCallback = null;
-        if (!hasNativeOverlayShell) {
-          playHtml5StreamTtsFallback(text, onStart, onEnd);
+        if (ev?.error !== 'canceled' && ev?.error !== 'interrupted') {
+          playHtml5StreamTtsFallback(text, activeRate, onStart, onEnd);
         }
-        onError();
+        onError?.();
       };
-    }
 
-    window.speechSynthesis.speak(utterance);
-  } catch {
-    if (!hasNativeOverlayShell) {
-      playHtml5StreamTtsFallback(text, onStart, onEnd);
+      window.speechSynthesis.speak(utterance);
+      return;
+    } catch {
+      // fall through to Engine 3 only if speechSynthesis threw
     }
+  }
+
+  // Engine 3 (Last-resort fallback only when neither Native TTS nor speechSynthesis is available)
+  const startedStream = playHtml5StreamTtsFallback(
+    text,
+    activeRate,
+    onStart,
+    onEnd
+  );
+  if (startedStream) {
+    onVoiceResolved?.('Voz PT-BR (1.30x)');
+  } else {
     onError?.();
   }
 }

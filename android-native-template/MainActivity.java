@@ -338,70 +338,84 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private float activeNativeSpeechRate = 1.30f;
+
+    private void applyMalePtBrVoiceAndRate() {
+        if (nativeTts == null) return;
+        try {
+            Locale ptBrLocale = new Locale("pt", "BR");
+            nativeTts.setLanguage(ptBrLocale);
+
+            boolean matchedExplicitMale = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                Set<Voice> voices = nativeTts.getVoices();
+                if (voices != null) {
+                    Voice bestMalePtBr = null;
+                    Voice fallbackPtBrNonFemale = null;
+                    Voice fallbackPtBr = null;
+                    for (Voice v : voices) {
+                        if (v == null || v.getLocale() == null) continue;
+                        String lang = v.getLocale().getLanguage().toLowerCase(Locale.US);
+                        String country = v.getLocale().getCountry().toLowerCase(Locale.US);
+                        String vName = v.getName() != null ? v.getName().toLowerCase(Locale.US) : "";
+                        if ("pt".equals(lang) && ("br".equals(country) || vName.contains("pt-br") || vName.contains("pt_br"))) {
+                            if (fallbackPtBr == null) fallbackPtBr = v;
+                            boolean isKnownMale = vName.contains("pt-br-x-pte")
+                                || vName.contains("pt-br-x-afs")
+                                || vName.contains("pt-br-x-ptd")
+                                || vName.contains("pte")
+                                || vName.contains("afs")
+                                || vName.contains("ptd")
+                                || vName.contains("male")
+                                || vName.contains("antonio")
+                                || vName.contains("daniel")
+                                || vName.contains("fabio")
+                                || vName.contains("ricardo")
+                                || vName.contains("nicolau");
+                            boolean isKnownFemale = vName.contains("female")
+                                || vName.contains("ptc")
+                                || vName.contains("bmg")
+                                || vName.contains("francisca")
+                                || vName.contains("luciana")
+                                || vName.contains("thalita")
+                                || vName.contains("vitoria")
+                                || vName.contains("camila");
+                            if (!isKnownFemale && fallbackPtBrNonFemale == null) {
+                                fallbackPtBrNonFemale = v;
+                            }
+                            if (isKnownMale && !isKnownFemale) {
+                                bestMalePtBr = v;
+                                if (vName.contains("local") || !v.isNetworkConnectionRequired()) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (bestMalePtBr != null) {
+                        nativeTts.setVoice(bestMalePtBr);
+                        matchedExplicitMale = true;
+                    } else if (fallbackPtBrNonFemale != null) {
+                        nativeTts.setVoice(fallbackPtBrNonFemale);
+                    } else if (fallbackPtBr != null) {
+                        nativeTts.setVoice(fallbackPtBr);
+                    }
+                }
+            }
+
+            // Force Male Brazilian Portuguese (pt-BR) timbre (0.92f pitch) and snappy 1.30x speed
+            nativeTts.setPitch(matchedExplicitMale ? 0.95f : 0.90f);
+            nativeTts.setSpeechRate(activeNativeSpeechRate);
+        } catch (Exception ignored) {
+        }
+    }
+
     private void initNativeTts() {
         try {
             nativeTts = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
                 @Override
                 public void onInit(int status) {
                     if (status == TextToSpeech.SUCCESS && nativeTts != null) {
-                        Locale ptBrLocale = new Locale("pt", "BR");
-                        int res = nativeTts.setLanguage(ptBrLocale);
-                        if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-                            nativeTts.setLanguage(new Locale("pt", "PT"));
-                        }
-
-                        // Select Friendly Male Brazilian Portuguese (pt-BR) Voice
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            try {
-                                Set<Voice> voices = nativeTts.getVoices();
-                                if (voices != null) {
-                                    Voice bestMalePtBr = null;
-                                    Voice fallbackPtBr = null;
-                                    for (Voice v : voices) {
-                                        if (v == null || v.getLocale() == null) continue;
-                                        String lang = v.getLocale().getLanguage().toLowerCase(Locale.US);
-                                        String country = v.getLocale().getCountry().toLowerCase(Locale.US);
-                                        String vName = v.getName() != null ? v.getName().toLowerCase(Locale.US) : "";
-                                        if ("pt".equals(lang) && ("br".equals(country) || vName.contains("pt-br") || vName.contains("pt_br"))) {
-                                            if (fallbackPtBr == null) fallbackPtBr = v;
-                                            boolean isKnownMale = vName.contains("pte")
-                                                || vName.contains("afs")
-                                                || vName.contains("ptd")
-                                                || vName.contains("male")
-                                                || vName.contains("antonio")
-                                                || vName.contains("daniel")
-                                                || vName.contains("fabio")
-                                                || vName.contains("ricardo")
-                                                || vName.contains("nicolau");
-                                            boolean isKnownFemale = vName.contains("female")
-                                                || vName.contains("ptc")
-                                                || vName.contains("bmg")
-                                                || vName.contains("francisca")
-                                                || vName.contains("luciana")
-                                                || vName.contains("thalita")
-                                                || vName.contains("vitoria")
-                                                || vName.contains("camila");
-                                            if (isKnownMale && !isKnownFemale) {
-                                                bestMalePtBr = v;
-                                                if (vName.contains("local") || !v.isNetworkConnectionRequired()) {
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (bestMalePtBr != null) {
-                                        nativeTts.setVoice(bestMalePtBr);
-                                    } else if (fallbackPtBr != null) {
-                                        nativeTts.setVoice(fallbackPtBr);
-                                    }
-                                }
-                            } catch (Exception ignored) {
-                            }
-                        }
-
-                        // Friendly, warm, natural companion tuning: pitch = 1.05f, speechRate = 1.1f
-                        nativeTts.setPitch(1.05f);
-                        nativeTts.setSpeechRate(1.1f);
+                        applyMalePtBrVoiceAndRate();
 
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                             AudioAttributes attrs = new AudioAttributes.Builder()
@@ -459,6 +473,11 @@ public class MainActivity extends BridgeActivity {
             public void run() {
                 try {
                     if (nativeTts != null && nativeTtsReady) {
+                        try {
+                            nativeTts.stop();
+                        } catch (Exception ignored) {
+                        }
+                        applyMalePtBrVoiceAndRate();
                         notifyWebViewSpeakingState(true);
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                             Bundle params = new Bundle();
@@ -1045,7 +1064,8 @@ public class MainActivity extends BridgeActivity {
                 @Override
                 public void run() {
                     webView.evaluateJavascript(
-                        "window.__onNativeBubbleRestore && window.__onNativeBubbleRestore();",
+                        "window.playBuddyOpenChime && window.playBuddyOpenChime();"
+                            + "window.__onNativeBubbleRestore && window.__onNativeBubbleRestore();",
                         null
                     );
                 }
@@ -1317,7 +1337,24 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public int getNativeBridgeVersion() {
-            return 9;
+            return 10;
+        }
+
+        @JavascriptInterface
+        public void setSpeechRate(final float rate) {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    float clamped = Math.max(1.0f, Math.min(1.5f, rate));
+                    activeNativeSpeechRate = clamped;
+                    if (nativeTts != null && nativeTtsReady) {
+                        try {
+                            nativeTts.setSpeechRate(clamped);
+                        } catch (Exception ignored) {
+                        }
+                    }
+                }
+            });
         }
 
         @JavascriptInterface
