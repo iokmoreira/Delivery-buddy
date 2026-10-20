@@ -89,7 +89,7 @@ export const OperationalStatusBar: React.FC = () => {
         {!isAvailable ? (
           <button
             type="button"
-            onClick={completeActiveDeliveryStage}
+            onClick={() => completeActiveDeliveryStage()}
             className="rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 text-[10px] font-semibold text-zinc-100 flex items-center gap-1 shrink-0 cursor-pointer transition"
           >
             <CheckCircle2 className="h-3 w-3 text-emerald-500" />

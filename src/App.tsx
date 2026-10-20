@@ -22,6 +22,7 @@ import {
   MenuMaisHubView,
 } from './components/InteractiveManualAndHelpDrawer';
 import { TranslatorAndSignLanguageModal } from './components/TranslatorAndSignLanguageModal';
+import { DeliverySpeedRealitySummary } from './utils/amaranteCopilotTelemetry';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -100,7 +101,29 @@ const AppCockpitShell: React.FC = () => {
     batteryLevelPct,
     isBatteryCharging,
     toggleBatterySurvivalMode,
+    speakTextPt,
   } = useEstafetas();
+
+  const [deliveryRealitySummary, setDeliveryRealitySummary] =
+    React.useState<DeliverySpeedRealitySummary | null>(null);
+
+  React.useEffect(() => {
+    const handleRealitySummary = (ev: Event) => {
+      const customEv = ev as CustomEvent<DeliverySpeedRealitySummary>;
+      if (customEv.detail) {
+        setDeliveryRealitySummary(customEv.detail);
+      }
+    };
+    window.addEventListener(
+      'buddy-delivery-reality-summary',
+      handleRealitySummary
+    );
+    return () =>
+      window.removeEventListener(
+        'buddy-delivery-reality-summary',
+        handleRealitySummary
+      );
+  }, []);
 
   // Bind Android Hardware / Gesture Back button (popstate) to minimize into floating bubble
   React.useEffect(() => {
@@ -399,6 +422,200 @@ const AppCockpitShell: React.FC = () => {
 
         {/* Simultaneous Voice Translator & Libras ("Mãos do Buddy") Modal */}
         <TranslatorAndSignLanguageModal />
+
+        {/* End-of-Delivery Summary with "Time-Saved vs. Risk" Reality Check Modal */}
+        {deliveryRealitySummary && (
+          <div
+            style={{ backgroundColor: 'rgba(5, 7, 11, 0.86)' }}
+            className="fixed inset-0 z-[140] backdrop-blur-xs flex items-center justify-center p-4"
+          >
+            <div
+              style={{
+                backgroundColor:
+                  themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#05070B',
+                borderColor: '#00E5FF',
+                color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                boxShadow: '0 16px 42px rgba(0, 229, 255, 0.25)',
+              }}
+              className="max-w-sm w-full rounded-3xl border-2 p-4 space-y-3.5"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span
+                    style={{
+                      backgroundColor: '#05070B',
+                      borderColor: '#00E5FF',
+                      color: '#00E5FF',
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider"
+                  >
+                    🏁 Resumo de Fim de Entrega • {deliveryRealitySummary.platform}
+                  </span>
+                  <h3 className="text-base font-black mt-1.5 leading-snug">
+                    {deliveryRealitySummary.routeLabel}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeliveryRealitySummary(null)}
+                  style={{
+                    backgroundColor:
+                      themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#0B0F17',
+                    borderColor:
+                      themeMode === 'DAYLIGHT'
+                        ? '#CBD5E1'
+                        : 'rgba(0, 229, 255, 0.35)',
+                    color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="rounded-xl border px-2.5 py-1 text-xs font-black cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div
+                  style={{
+                    backgroundColor:
+                      themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#0B0F17',
+                    borderColor: '#00E5FF',
+                  }}
+                  className="rounded-2xl border p-2.5"
+                >
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider opacity-75">
+                    Lucro Líquido
+                  </p>
+                  <p
+                    style={{
+                      color: themeMode === 'DAYLIGHT' ? '#0284C7' : '#00E5FF',
+                    }}
+                    className="text-lg font-black tabular-nums mt-0.5"
+                  >
+                    +{deliveryRealitySummary.netProfitEur.toFixed(2)} €
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor:
+                      themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#0B0F17',
+                    borderColor:
+                      themeMode === 'DAYLIGHT'
+                        ? '#CBD5E1'
+                        : 'rgba(0, 229, 255, 0.35)',
+                  }}
+                  className="rounded-2xl border p-2.5"
+                >
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider opacity-75">
+                    Distância Real
+                  </p>
+                  <p className="text-lg font-black tabular-nums mt-0.5">
+                    {deliveryRealitySummary.distanceKm.toFixed(1)} km
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor:
+                      themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#0B0F17',
+                    borderColor:
+                      themeMode === 'DAYLIGHT'
+                        ? '#CBD5E1'
+                        : 'rgba(0, 229, 255, 0.35)',
+                  }}
+                  className="rounded-2xl border p-2.5"
+                >
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider opacity-75">
+                    Velocidade Média
+                  </p>
+                  <p className="text-base font-black tabular-nums mt-0.5">
+                    {deliveryRealitySummary.avgSpeedKmh} km/h
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor:
+                      themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#0B0F17',
+                    borderColor:
+                      themeMode === 'DAYLIGHT'
+                        ? '#CBD5E1'
+                        : 'rgba(0, 229, 255, 0.35)',
+                  }}
+                  className="rounded-2xl border p-2.5"
+                >
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider opacity-75">
+                    Velocidade Máxima
+                  </p>
+                  <p className="text-base font-black tabular-nums mt-0.5">
+                    {deliveryRealitySummary.maxSpeedKmh} km/h{' '}
+                    <span className="text-[10px] font-bold opacity-70">
+                      (Lim. {deliveryRealitySummary.predominantLimitKmh})
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Comparativo Real de Tempo Ganho (Δt = d * (1/v_segura - 1/v_real)) */}
+              <div
+                style={{
+                  backgroundColor:
+                    themeMode === 'DAYLIGHT' ? '#F0F9FF' : '#0B0F17',
+                  borderColor: '#00E5FF',
+                }}
+                className="rounded-2xl border-2 p-3 space-y-1.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    style={{
+                      color: themeMode === 'DAYLIGHT' ? '#0284C7' : '#00E5FF',
+                    }}
+                    className="text-[11px] font-black uppercase tracking-wider"
+                  >
+                    {deliveryRealitySummary.didExceedSpeedLimit
+                      ? `⚡ Tempo Ganho Acima do Limite: +${deliveryRealitySummary.secondsSavedBySpeeding}s`
+                      : '🛡️ Condução 100% Segura Dentro do Limite'}
+                  </span>
+                  <span className="text-[10px] font-extrabold opacity-75">
+                    Δt Real
+                  </span>
+                </div>
+                <p className="text-xs font-bold leading-relaxed">
+                  &ldquo;{deliveryRealitySummary.spokenMessagePt}&rdquo;
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    speakTextPt(deliveryRealitySummary.spokenMessagePt)
+                  }
+                  style={{
+                    backgroundColor:
+                      themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#0B0F17',
+                    borderColor: '#00E5FF',
+                    color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="rounded-2xl border py-2.5 px-3 text-xs font-black cursor-pointer transition hover:opacity-95"
+                >
+                  🔊 Ouvir Resumo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeliveryRealitySummary(null)}
+                  style={{
+                    backgroundColor: '#00E5FF',
+                    color: '#05070B',
+                  }}
+                  className="rounded-2xl py-2.5 px-3 text-xs font-black cursor-pointer shadow-md transition hover:opacity-95"
+                >
+                  ✓ Continuar Turno
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Main Application UI (Hidden when minimized into Micro-Logo Mode) */}
         {!isBubbleMinimized && (

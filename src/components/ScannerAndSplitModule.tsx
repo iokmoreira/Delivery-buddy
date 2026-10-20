@@ -543,12 +543,6 @@ export const ScannerAndSplitModule: React.FC = () => {
   };
 
   const handleCompleteActiveRide = () => {
-    addManualDeliveryRecord({
-      platform: activeScannedOffer.platform,
-      grossEur: auditMetrics.grossEur,
-      realKm: auditMetrics.activeTotalKm,
-      restaurantName: `${activeScannedOffer.originName} → ${activeScannedOffer.destinationName}`,
-    });
     recordOfferDecision(
       activeScannedOffer,
       auditMetrics.activeTotalKm,
@@ -556,7 +550,14 @@ export const ScannerAndSplitModule: React.FC = () => {
       auditMetrics.effectiveAuditedEurPerKm,
       'ACEITE'
     );
-    completeActiveDeliveryStage();
+    completeActiveDeliveryStage({
+      netProfitEur: auditMetrics.realNetProfitEur,
+      grossEur: auditMetrics.grossEur,
+      realKm: auditMetrics.activeTotalKm,
+      platform: activeScannedOffer.platform,
+      originName: activeScannedOffer.originName,
+      destinationName: activeScannedOffer.destinationName,
+    });
     setIsOfferAccepted(false);
     selectOfferPreset(SCANNER_OFFER_PRESETS[0]);
   };

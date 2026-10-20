@@ -17,6 +17,18 @@ import {
   RoadHazardType,
 } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
+import {
+  AmaranteCrosswalkPoint,
+  computeBearingDegrees,
+  computeHaversineMeters,
+  fetchAmaranteCrosswalksFromOverpass,
+  getAllAmaranteCrosswalks,
+  getAngleDifferenceDeg,
+  recordLiveSpeedSampleForDelivery,
+  resolveRoadSpeedLimitAtCoords,
+  saveCustomTaughtCrosswalk,
+} from '../utils/amaranteCopilotTelemetry';
+import { playBuddyOpenChime } from '../services/voiceEngine';
 
 const AMARANTE_HUB_CENTER = {
   lat: 41.2704,
@@ -647,11 +659,16 @@ export const ShiftRadarModule: React.FC = () => {
     hasRealActiveDelivery,
     currentMascotState,
     currentMascotImageUrl,
+    addRoadHazardPin,
+    awardBuddyRewardTask,
+    speakTextPt,
   } = useEstafetas();
 
   const isDaylight = themeMode === 'DAYLIGHT';
 
-  const [mapStyleMode, setMapStyleMode] = useState<'RUAS' | 'SATELITE'>('RUAS');
+  const [mapStyleMode, setMapStyleMode] = useState<
+    'MAPA_NEON' | 'TRANSITO_GOOGLE' | 'SATELITE'
+  >('MAPA_NEON');
   const [isHubSelectorModalOpen, setIsHubSelectorModalOpen] =
     useState<boolean>(false);
   const [isAutoFollowActive, setIsAutoFollowActive] = useState<boolean>(true);
@@ -673,12 +690,35 @@ export const ShiftRadarModule: React.FC = () => {
     return null;
   });
 
+  // Live Speedometer, Dynamic Road Limit (30/50/70/90), 20s Over-Speed Monitor & Crosswalk Proximity State
+  const [currentSpeedKmh, setCurrentSpeedKmh] = useState<number>(0);
+  const [roadLimitKmh, setRoadLimitKmh] = useState<30 | 50 | 70 | 90>(50);
+  const [roadNameLabel, setRoadNameLabel] = useState<string>(
+    'Amarante Centro Urbano'
+  );
+  const [consecutiveOverSpeedSec, setConsecutiveOverSpeedSec] =
+    useState<number>(0);
+  const [isSpeedAlertPulsing, setIsSpeedAlertPulsing] =
+    useState<boolean>(false);
+  const [headingDeg, setHeadingDeg] = useState<number | null>(null);
+  const [amaranteCrosswalks, setAmaranteCrosswalks] = useState<
+    AmaranteCrosswalkPoint[]
+  >(() => getAllAmaranteCrosswalks());
+  const [approachingCrosswalkAlert, setApproachingCrosswalkAlert] = useState<{
+    streetLabel: string;
+    distanceMeters: number;
+  } | null>(null);
+  const [crosswalkFeedbackBanner, setCrosswalkFeedbackBanner] = useState<
+    string | null
+  >(null);
+
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const selfMarkerRef = useRef<L.Marker | null>(null);
   const selfAccuracyCircleRef = useRef<L.Circle | null>(null);
   const peerMarkersLayerRef = useRef<L.LayerGroup | null>(null);
+  const crosswalksLayerRef = useRef<L.LayerGroup | null>(null);
   const isAutoFollowRef = useRef<boolean>(true);
   const hasCenteredOnFirstFixRef = useRef<boolean>(false);
   const hasHighAccuracyFixRef = useRef<boolean>(false);
@@ -686,18 +726,140 @@ export const ShiftRadarModule: React.FC = () => {
   const lastAcceptedCoordsRef = useRef<{ lat: number; lng: number } | null>(
     localLiveCoords
   );
+  const lastFixTimestampMsRef = useRef<number>(Date.now());
+  const glidingAnimFrameRef = useRef<number | null>(null);
+  const displayedGlidingCoordsRef = useRef<{ lat: number; lng: number } | null>(
+    localLiveCoords
+  );
+  const currentSpeedRef = useRef<number>(0);
+  const roadLimitRef = useRef<30 | 50 | 70 | 90>(50);
+  const consecutiveOverSecRef = useRef<number>(0);
+  const lastSpeedVoiceAlertMsRef = useRef<number>(0);
+  const crosswalkCooldownMapRef = useRef<Record<string, number>>({});
+  const prevCrosswalkDistancesRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     isAutoFollowRef.current = isAutoFollowActive;
   }, [isAutoFollowActive]);
 
-  // Unified GPS Filter: Filters out coarse cell-tower jumps once high-accuracy GPS (<=40m) is locked + 10m deadband
+  // Smooth Waze-style marker gliding interpolation helper (requestAnimationFrame)
+  const animateMarkerGlideTo = useCallback(
+    (targetLat: number, targetLng: number) => {
+      const startPos = displayedGlidingCoordsRef.current;
+      if (!startPos) {
+        displayedGlidingCoordsRef.current = { lat: targetLat, lng: targetLng };
+        if (selfMarkerRef.current) {
+          selfMarkerRef.current.setLatLng([targetLat, targetLng]);
+        }
+        if (selfAccuracyCircleRef.current) {
+          selfAccuracyCircleRef.current.setLatLng([targetLat, targetLng]);
+        }
+        return;
+      }
+
+      if (glidingAnimFrameRef.current !== null) {
+        cancelAnimationFrame(glidingAnimFrameRef.current);
+      }
+
+      const startLat = startPos.lat;
+      const startLng = startPos.lng;
+      const durationMs = 420;
+      const startTime = performance.now();
+
+      const step = (now: number) => {
+        const progress = Math.min(1, (now - startTime) / durationMs);
+        // Ease-out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const curLat = startLat + (targetLat - startLat) * eased;
+        const curLng = startLng + (targetLng - startLng) * eased;
+        displayedGlidingCoordsRef.current = { lat: curLat, lng: curLng };
+
+        if (selfMarkerRef.current) {
+          selfMarkerRef.current.setLatLng([curLat, curLng]);
+        }
+        if (selfAccuracyCircleRef.current) {
+          selfAccuracyCircleRef.current.setLatLng([curLat, curLng]);
+        }
+
+        if (progress < 1) {
+          glidingAnimFrameRef.current = requestAnimationFrame(step);
+        } else {
+          glidingAnimFrameRef.current = null;
+        }
+      };
+
+      glidingAnimFrameRef.current = requestAnimationFrame(step);
+    },
+    []
+  );
+
+  // Check proximity to mapped or courier-taught Amarante crosswalks (<= 45m & > 28 km/h along heading)
+  const evaluateCrosswalkProximity = useCallback(
+    (
+      lat: number,
+      lng: number,
+      speedKmh: number,
+      riderHeading: number | null
+    ) => {
+      if (speedKmh <= 28) {
+        setApproachingCrosswalkAlert(null);
+        return;
+      }
+
+      const nowMs = Date.now();
+      let closestMatch: {
+        cw: AmaranteCrosswalkPoint;
+        distMeters: number;
+      } | null = null;
+
+      for (const cw of amaranteCrosswalks) {
+        const distMeters = computeHaversineMeters(lat, lng, cw.lat, cw.lng);
+        const prevDist = prevCrosswalkDistancesRef.current[cw.id];
+        prevCrosswalkDistancesRef.current[cw.id] = distMeters;
+
+        if (distMeters <= 45) {
+          const bearingToCw = computeBearingDegrees(lat, lng, cw.lat, cw.lng);
+          const isAlongHeading =
+            riderHeading !== null
+              ? getAngleDifferenceDeg(riderHeading, bearingToCw) <= 68
+              : prevDist === undefined || distMeters <= prevDist + 1.5;
+
+          if (isAlongHeading) {
+            if (!closestMatch || distMeters < closestMatch.distMeters) {
+              closestMatch = { cw, distMeters: Math.round(distMeters) };
+            }
+          }
+        }
+      }
+
+      if (closestMatch) {
+        setApproachingCrosswalkAlert({
+          streetLabel: closestMatch.cw.streetLabel,
+          distanceMeters: Math.max(8, closestMatch.distMeters),
+        });
+        const lastAlerted =
+          crosswalkCooldownMapRef.current[closestMatch.cw.id] || 0;
+        if (nowMs - lastAlerted > 90000) {
+          crosswalkCooldownMapRef.current[closestMatch.cw.id] = nowMs;
+          playBuddyOpenChime();
+          speakTextPt('Atenção: passadeira à frente.');
+        }
+      } else {
+        setApproachingCrosswalkAlert(null);
+      }
+    },
+    [amaranteCrosswalks, speakTextPt]
+  );
+
+  // Unified GPS Filter: Filters out coarse cell-tower jumps + computes live GPS speed (km/h), heading & road limit
   const applyFilteredGpsFix = useCallback(
     (
       lat: number,
       lng: number,
       accuracy?: number,
-      forceAccept = false
+      forceAccept = false,
+      rawSpeedMetersPerSec?: number | null,
+      rawHeadingDeg?: number | null
     ): { lat: number; lng: number } | null => {
       if (
         !Number.isFinite(lat) ||
@@ -729,22 +891,64 @@ export const ShiftRadarModule: React.FC = () => {
       }
 
       const prev = lastAcceptedCoordsRef.current;
-      if (prev && !forceAccept) {
-        const dLatRad = ((lat - prev.lat) * Math.PI) / 180;
-        const dLngRad = ((lng - prev.lng) * Math.PI) / 180;
-        const a =
-          Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
-          Math.cos((prev.lat * Math.PI) / 180) *
-            Math.cos((lat * Math.PI) / 180) *
-            Math.sin(dLngRad / 2) *
-            Math.sin(dLngRad / 2);
-        const distMeters =
-          6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      let computedDeltaKmh: number | null = null;
+      let computedBearing: number | null =
+        typeof rawHeadingDeg === 'number' &&
+        Number.isFinite(rawHeadingDeg) &&
+        rawHeadingDeg >= 0
+          ? Math.round(rawHeadingDeg)
+          : null;
 
-        // 10-meter minimum movement filter (deadband) to prevent pin jumping
-        if (distMeters < 10) {
+      if (prev) {
+        const distMeters = computeHaversineMeters(
+          prev.lat,
+          prev.lng,
+          lat,
+          lng
+        );
+        const dtSec = Math.max(0.5, (nowMs - lastFixTimestampMsRef.current) / 1000);
+
+        if (distMeters >= 3 && dtSec <= 25) {
+          computedDeltaKmh = Math.min(135, Math.round((distMeters / dtSec) * 3.6));
+          if (computedBearing === null) {
+            computedBearing = Math.round(
+              computeBearingDegrees(prev.lat, prev.lng, lat, lng)
+            );
+          }
+        }
+
+        // 6-meter minimum movement filter (deadband) to prevent stationary pin jitter
+        if (!forceAccept && distMeters < 6) {
+          if (
+            typeof rawSpeedMetersPerSec === 'number' &&
+            Number.isFinite(rawSpeedMetersPerSec) &&
+            rawSpeedMetersPerSec >= 0
+          ) {
+            const gpsKmh = Math.round(rawSpeedMetersPerSec * 3.6);
+            currentSpeedRef.current = gpsKmh < 3 ? 0 : gpsKmh;
+            setCurrentSpeedKmh(currentSpeedRef.current);
+          }
           return null;
         }
+      }
+
+      lastFixTimestampMsRef.current = nowMs;
+
+      const resolvedSpeedKmh =
+        typeof rawSpeedMetersPerSec === 'number' &&
+        Number.isFinite(rawSpeedMetersPerSec) &&
+        rawSpeedMetersPerSec >= 0
+          ? Math.round(rawSpeedMetersPerSec * 3.6)
+          : computedDeltaKmh !== null
+            ? computedDeltaKmh
+            : currentSpeedRef.current;
+
+      const cleanSpeedKmh = resolvedSpeedKmh < 3 ? 0 : resolvedSpeedKmh;
+      currentSpeedRef.current = cleanSpeedKmh;
+      setCurrentSpeedKmh(cleanSpeedKmh);
+
+      if (computedBearing !== null) {
+        setHeadingDeg(computedBearing);
       }
 
       const nextCoords = {
@@ -753,6 +957,8 @@ export const ShiftRadarModule: React.FC = () => {
       };
       lastAcceptedCoordsRef.current = nextCoords;
       setLocalLiveCoords(nextCoords);
+      animateMarkerGlideTo(nextCoords.lat, nextCoords.lng);
+
       if (
         typeof accuracy === 'number' &&
         Number.isFinite(accuracy) &&
@@ -760,10 +966,149 @@ export const ShiftRadarModule: React.FC = () => {
       ) {
         setLiveAccuracyMeters(Math.min(80, Math.max(6, accuracy)));
       }
+
+      // Query dynamic road speed limit (Overpass maxspeed + Amarante urban/EN15 heuristic)
+      void resolveRoadSpeedLimitAtCoords(nextCoords.lat, nextCoords.lng).then(
+        (res) => {
+          roadLimitRef.current = res.limit;
+          setRoadLimitKmh(res.limit);
+          setRoadNameLabel(res.roadName);
+        }
+      );
+
+      // Evaluate crosswalk proximity (<= 45m & > 28 km/h)
+      evaluateCrosswalkProximity(
+        nextCoords.lat,
+        nextCoords.lng,
+        cleanSpeedKmh,
+        computedBearing
+      );
+
       return nextCoords;
     },
-    []
+    [animateMarkerGlideTo, evaluateCrosswalkProximity]
   );
+
+  // Load Amarante crosswalks (Seed + Overpass API + Custom Taught)
+  useEffect(() => {
+    const syncCrosswalks = () => {
+      setAmaranteCrosswalks(getAllAmaranteCrosswalks());
+    };
+    window.addEventListener('buddy-crosswalks-updated', syncCrosswalks);
+    void fetchAmaranteCrosswalksFromOverpass().then((list) => {
+      setAmaranteCrosswalks(list);
+    });
+    return () => {
+      window.removeEventListener('buddy-crosswalks-updated', syncCrosswalks);
+    };
+  }, []);
+
+  // 1-Tap & Voice Command Handler: Teach / Mark New Pedestrian Crosswalk at Current Location
+  const handleTeachCrosswalkHere = useCallback(() => {
+    const targetCoords =
+      lastAcceptedCoordsRef.current ||
+      localLiveCoords || {
+        lat: AMARANTE_INITIAL_VIEW_CENTER.lat,
+        lng: AMARANTE_INITIAL_VIEW_CENTER.lng,
+      };
+    const courierName = (realCourierProfile?.name || 'Buddy Amarante').trim();
+    const label = `${roadNameLabel} (Ensinada por ${courierName})`;
+
+    const newCw: AmaranteCrosswalkPoint = {
+      id: `cw-taught-${Date.now()}`,
+      lat: Number(targetCoords.lat.toFixed(6)),
+      lng: Number(targetCoords.lng.toFixed(6)),
+      streetLabel: label,
+      source: 'COURIER_TAUGHT',
+      taughtByCallsign: courierName,
+      createdAtIso: new Date().toISOString(),
+    };
+
+    saveCustomTaughtCrosswalk(newCw);
+    setAmaranteCrosswalks(getAllAmaranteCrosswalks());
+    addRoadHazardPin(
+      'Obras na Via / Desvio',
+      `🚸 Passadeira Ensinada: ${label}`,
+      'Amarante — Centro / São Gonçalo'
+    );
+    awardBuddyRewardTask('ALERTAR_ANOMALIA_MAPA_15');
+
+    setCrosswalkFeedbackBanner(
+      `🚸 Passadeira marcada em ${roadNameLabel} (+15 Coins • Sincronizada com Buddys)`
+    );
+    window.setTimeout(() => {
+      setCrosswalkFeedbackBanner(null);
+    }, 4500);
+
+    speakTextPt(
+      'Passadeira registada com sucesso em Amarante e sincronizada para todos os Buddys!'
+    );
+  }, [
+    addRoadHazardPin,
+    awardBuddyRewardTask,
+    localLiveCoords,
+    realCourierProfile?.name,
+    roadNameLabel,
+    speakTextPt,
+  ]);
+
+  useEffect(() => {
+    const onVoiceMarkCrosswalk = () => {
+      handleTeachCrosswalkHere();
+    };
+    window.addEventListener(
+      'buddy-voice-mark-crosswalk',
+      onVoiceMarkCrosswalk
+    );
+    return () => {
+      window.removeEventListener(
+        'buddy-voice-mark-crosswalk',
+        onVoiceMarkCrosswalk
+      );
+    };
+  }, [handleTeachCrosswalkHere]);
+
+  // Strict 20-Second Continuous Over-Speed Monitor (> roadLimit + 10 km/h)
+  // Resets immediately to 0s if speed drops below roadLimit + 10 km/h (freedom for overtakes)
+  useEffect(() => {
+    const ticker = window.setInterval(() => {
+      const spd = currentSpeedRef.current;
+      const lim = roadLimitRef.current;
+
+      if (spd > lim + 10) {
+        consecutiveOverSecRef.current += 1;
+        setConsecutiveOverSpeedSec(consecutiveOverSecRef.current);
+
+        // Trigger calm reminder ONLY after 20 consecutive seconds at > roadLimit + 10 km/h (with 3-min cooldown)
+        if (consecutiveOverSecRef.current >= 20) {
+          setIsSpeedAlertPulsing(true);
+          const nowMs = Date.now();
+          if (nowMs - lastSpeedVoiceAlertMsRef.current >= 180000) {
+            lastSpeedVoiceAlertMsRef.current = nowMs;
+            speakTextPt(
+              'Buddy: estás há vinte segundos acima do limite da via. Conduz com segurança.'
+            );
+          }
+        }
+      } else {
+        if (consecutiveOverSecRef.current !== 0) {
+          consecutiveOverSecRef.current = 0;
+          setConsecutiveOverSpeedSec(0);
+          setIsSpeedAlertPulsing(false);
+        }
+      }
+
+      recordLiveSpeedSampleForDelivery(
+        spd,
+        lim,
+        consecutiveOverSecRef.current
+      );
+    }, 1000);
+
+    return () => {
+      window.clearInterval(ticker);
+    };
+  }, [speakTextPt]);
 
   // Purge ghost/duplicate rows in Supabase on map mount (silently, no TTS)
   useEffect(() => {
@@ -798,10 +1143,19 @@ export const ShiftRadarModule: React.FC = () => {
           lat: number;
           lng: number;
           accuracy?: number;
+          speed?: number;
+          heading?: number;
         }>
       ).detail;
       if (detail) {
-        applyFilteredGpsFix(detail.lat, detail.lng, detail.accuracy);
+        applyFilteredGpsFix(
+          detail.lat,
+          detail.lng,
+          detail.accuracy,
+          false,
+          detail.speed,
+          detail.heading
+        );
       }
     };
 
@@ -840,7 +1194,10 @@ export const ShiftRadarModule: React.FC = () => {
               applyFilteredGpsFix(
                 pos.coords.latitude,
                 pos.coords.longitude,
-                pos.coords.accuracy
+                pos.coords.accuracy,
+                false,
+                pos.coords.speed,
+                pos.coords.heading
               );
             }
           },
@@ -861,7 +1218,10 @@ export const ShiftRadarModule: React.FC = () => {
           applyFilteredGpsFix(
             pos.coords.latitude,
             pos.coords.longitude,
-            pos.coords.accuracy
+            pos.coords.accuracy,
+            false,
+            pos.coords.speed,
+            pos.coords.heading
           );
         },
         () => {
@@ -873,7 +1233,10 @@ export const ShiftRadarModule: React.FC = () => {
                     applyFilteredGpsFix(
                       netPos.coords.latitude,
                       netPos.coords.longitude,
-                      netPos.coords.accuracy
+                      netPos.coords.accuracy,
+                      false,
+                      netPos.coords.speed,
+                      netPos.coords.heading
                     );
                   }
                 },
@@ -893,7 +1256,7 @@ export const ShiftRadarModule: React.FC = () => {
         },
         {
           enableHighAccuracy: true,
-          maximumAge: 2000,
+          maximumAge: 1500,
           timeout: 10000,
         }
       );
@@ -961,7 +1324,7 @@ export const ShiftRadarModule: React.FC = () => {
     [setActiveBuddyPopupCourierId]
   );
 
-  // Initialize Leaflet Map once with Free Key-Free OpenStreetMap Tiles & 35 km Regional Hub Lock
+  // Initialize Leaflet Map once with High-Contrast Neon Tiles, Google Traffic & 35 km Regional Hub Lock
   useEffect(() => {
     if (!mapContainerRef.current || leafletMapRef.current) return;
 
@@ -1001,17 +1364,7 @@ export const ShiftRadarModule: React.FC = () => {
       interactive: false,
     }).addTo(map);
 
-    // Fallback to direct tile.openstreetmap.org if a subdomain ever errors
-    let switchedToDirectOsm = false;
-    tileLayer.on('tileerror', () => {
-      if (!switchedToDirectOsm && tileLayerRef.current) {
-        switchedToDirectOsm = true;
-        tileLayerRef.current.setUrl(
-          'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-        );
-      }
-    });
-
+    const crosswalksLayer = L.layerGroup().addTo(map);
     const peerLayer = L.layerGroup().addTo(map);
 
     // Immediately pause auto-follow on any user touch/drag/zoom so the map NEVER snaps back while panning
@@ -1040,6 +1393,7 @@ export const ShiftRadarModule: React.FC = () => {
 
     leafletMapRef.current = map;
     tileLayerRef.current = tileLayer;
+    crosswalksLayerRef.current = crosswalksLayer;
     peerMarkersLayerRef.current = peerLayer;
 
     const timer = window.setTimeout(() => {
@@ -1048,6 +1402,9 @@ export const ShiftRadarModule: React.FC = () => {
 
     return () => {
       window.clearTimeout(timer);
+      if (glidingAnimFrameRef.current !== null) {
+        cancelAnimationFrame(glidingAnimFrameRef.current);
+      }
       if (containerEl) {
         containerEl.removeEventListener(
           'touchstart',
@@ -1063,25 +1420,80 @@ export const ShiftRadarModule: React.FC = () => {
       tileLayerRef.current = null;
       selfMarkerRef.current = null;
       selfAccuracyCircleRef.current = null;
+      crosswalksLayerRef.current = null;
       peerMarkersLayerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switch between Free OpenStreetMap ("Ruas") and Esri World Imagery ("Satélite")
+  // Switch between High-Contrast Neon Map ("MAPA_NEON"), Google Live Traffic ("TRANSITO_GOOGLE"), and Satellite ("SATELITE")
   useEffect(() => {
     const tileLayer = tileLayerRef.current;
-    if (!tileLayer) return;
-    if (mapStyleMode === 'SATELITE') {
+    const containerEl = mapContainerRef.current;
+    if (!tileLayer || !containerEl) return;
+
+    containerEl.classList.remove(
+      'buddy-map-neon-light',
+      'buddy-map-neon-dark',
+      'buddy-map-google-traffic',
+      'buddy-map-satellite'
+    );
+
+    if (mapStyleMode === 'TRANSITO_GOOGLE') {
+      containerEl.classList.add('buddy-map-google-traffic');
       tileLayer.setUrl(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+        'https://mt1.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}'
+      );
+    } else if (mapStyleMode === 'SATELITE') {
+      containerEl.classList.add('buddy-map-satellite');
+      tileLayer.setUrl(
+        'https://mt1.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}'
       );
     } else {
+      containerEl.classList.add(
+        isDaylight ? 'buddy-map-neon-light' : 'buddy-map-neon-dark'
+      );
       tileLayer.setUrl('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
     }
-  }, [mapStyleMode]);
+  }, [mapStyleMode, isDaylight]);
 
-  // Update logged-in user's real GPS marker with the Dynamic 3-State Robot Mascot & auto-follow
+  // Render Amarante Pedestrian Crosswalks (Seed + Overpass + Courier-Taught) on Map
+  useEffect(() => {
+    const cwLayer = crosswalksLayerRef.current;
+    if (!cwLayer) return;
+    cwLayer.clearLayers();
+
+    amaranteCrosswalks.forEach((cw) => {
+      const isTaught = cw.source === 'COURIER_TAUGHT';
+      const borderCol = isTaught ? '#00E5FF' : '#00B8D4';
+      const cwIcon = L.divIcon({
+        className: 'buddy-crosswalk-pin',
+        html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);cursor:pointer;">
+          <div style="width:24px;height:24px;border-radius:8px;background:#0B0F17;border:2px solid ${borderCol};display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 8px rgba(0,229,255,0.35);">
+            🚸
+          </div>
+        </div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      const marker = L.marker([cw.lat, cw.lng], { icon: cwIcon });
+      marker.bindPopup(
+        `<div style="font-family:Nunito,sans-serif;padding:2px;">
+          <strong style="color:#00838F;font-size:13px;">🚸 Passadeira de Peões</strong><br/>
+          <span style="font-size:12px;font-weight:700;">${cw.streetLabel}</span><br/>
+          <span style="font-size:11px;color:#64748B;">${
+            isTaught
+              ? `Ensinada por ${cw.taughtByCallsign || 'Buddy'}`
+              : 'Mapeada em Amarante (Alerta <45m)'
+          }</span>
+        </div>`
+      );
+      marker.addTo(cwLayer);
+    });
+  }, [amaranteCrosswalks]);
+
+  // Update logged-in user's real GPS marker with the Dynamic 3-State Robot Mascot, Heading Cone & Gliding
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map) return;
@@ -1099,7 +1511,8 @@ export const ShiftRadarModule: React.FC = () => {
       return;
     }
 
-    const latLng: [number, number] = [localLiveCoords.lat, localLiveCoords.lng];
+    const posForInit = displayedGlidingCoordsRef.current || localLiveCoords;
+    const latLng: [number, number] = [posForInit.lat, posForInit.lng];
     const selfCallsign = (realCourierProfile?.name || 'Tu').trim();
     const dotColor =
       currentMascotState === 'DELIVERY'
@@ -1110,7 +1523,6 @@ export const ShiftRadarModule: React.FC = () => {
 
     // Update or create accuracy circle
     if (selfAccuracyCircleRef.current) {
-      selfAccuracyCircleRef.current.setLatLng(latLng);
       selfAccuracyCircleRef.current.setRadius(liveAccuracyMeters);
       selfAccuracyCircleRef.current.setStyle({
         color: dotColor,
@@ -1127,11 +1539,19 @@ export const ShiftRadarModule: React.FC = () => {
       }).addTo(map);
     }
 
+    const headingArrowHtml =
+      headingDeg !== null
+        ? `<div style="position:absolute;inset:-8px;transform:rotate(${headingDeg}deg);pointer-events:none;display:flex;justify-content:center;align-items:flex-start;">
+             <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid #00E5FF;filter:drop-shadow(0 0 6px #00E5FF);"></div>
+           </div>`
+        : '';
+
     // Dynamic 3-State Transparent Neon-Blue Robot Mascot GPS Pin for logged-in user
     const selfIcon = L.divIcon({
       className: 'buddy-clean-self-pin',
       html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);">
         <div style="position:relative;width:54px;height:54px;display:flex;align-items:center;justify-content:center;">
+          ${headingArrowHtml}
           <span style="position:absolute;inset:-3px;border-radius:9999px;background:${dotColor};opacity:0.28;animation:ping 1.8s cubic-bezier(0,0,0.2,1) infinite;"></span>
           <div style="width:52px;height:52px;border-radius:9999px;background:transparent;border:2.5px solid ${dotColor};display:flex;align-items:center;justify-content:center;padding:1px;">
             <img src="${currentMascotImageUrl}" alt="Buddy" style="width:100%;height:100%;object-fit:contain;" />
@@ -1146,7 +1566,6 @@ export const ShiftRadarModule: React.FC = () => {
     });
 
     if (selfMarkerRef.current) {
-      selfMarkerRef.current.setLatLng(latLng);
       selfMarkerRef.current.setIcon(selfIcon);
     } else {
       selfMarkerRef.current = L.marker(latLng, {
@@ -1158,9 +1577,14 @@ export const ShiftRadarModule: React.FC = () => {
     // Smooth Auto-Follow Mode
     if (!hasCenteredOnFirstFixRef.current) {
       hasCenteredOnFirstFixRef.current = true;
-      map.setView(latLng, 17, { animate: true });
+      map.setView([localLiveCoords.lat, localLiveCoords.lng], 17, {
+        animate: true,
+      });
     } else if (isAutoFollowRef.current) {
-      map.panTo(latLng, { animate: true, duration: 0.5 });
+      map.panTo([localLiveCoords.lat, localLiveCoords.lng], {
+        animate: true,
+        duration: 0.45,
+      });
     }
   }, [
     localLiveCoords,
@@ -1169,6 +1593,7 @@ export const ShiftRadarModule: React.FC = () => {
     isAppPaused,
     currentMascotState,
     currentMascotImageUrl,
+    headingDeg,
   ]);
 
   // Render active peer couriers (within last 5 minutes only)
@@ -1225,7 +1650,9 @@ export const ShiftRadarModule: React.FC = () => {
               pos.coords.latitude,
               pos.coords.longitude,
               pos.coords.accuracy,
-              true
+              true,
+              pos.coords.speed,
+              pos.coords.heading
             );
             const target = accepted || lastAcceptedCoordsRef.current;
             if (target && leafletMapRef.current && isAutoFollowRef.current) {
@@ -1264,7 +1691,9 @@ export const ShiftRadarModule: React.FC = () => {
 
   return (
     <div className="space-y-2">
-      {/* UNIFIED COMPACT MAP CONTROL TOOLBAR: [📍 Amarante (Raio 35 km) | Mudar Centro] + [🗺️ Ruas | 🛰️ Satélite | 🎯 Centrar] */}
+      {/* UNIFIED COMPACT MAP CONTROL TOOLBAR:
+          Row 1: [📍 Amarante (Raio 35 km) | 🚸 Marcar Passadeira Aqui | Mudar Centro]
+          Row 2: [Mapa Neon | Trânsito Google | Satélite] + [🎯 Centrar] */}
       <div
         style={{
           backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
@@ -1273,57 +1702,92 @@ export const ShiftRadarModule: React.FC = () => {
         }}
         className="w-full rounded-2xl border p-2.5 space-y-2 shadow-sm"
       >
-        {/* Row 1: Hub Badge & Mudar Centro (Zero Truncation) */}
-        <div className="flex items-center justify-between gap-2">
+        {/* Row 1: Hub Badge + 1-Tap Teach Crosswalk + Mudar Centro */}
+        <div className="flex items-center justify-between gap-1.5 flex-wrap">
           <button
             type="button"
             onClick={() => setIsHubSelectorModalOpen(true)}
-            className="flex items-center gap-2 min-w-0 text-left cursor-pointer"
+            className="flex items-center gap-1.5 min-w-0 text-left cursor-pointer"
           >
             <span className="h-2.5 w-2.5 rounded-full bg-[#00E5FF] shadow-[0_0_8px_rgba(0,229,255,0.85)] shrink-0" />
             <span
               style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-              className="text-sm font-extrabold whitespace-nowrap"
+              className="text-xs sm:text-sm font-extrabold whitespace-nowrap"
             >
               📍 Amarante (Raio 35 km)
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setIsHubSelectorModalOpen(true)}
-            style={{
-              backgroundColor: '#0B0F17',
-              borderColor: '#00E5FF',
-              color: '#00E5FF',
-            }}
-            className="rounded-xl border px-2.5 py-1 text-xs font-extrabold shrink-0 whitespace-nowrap cursor-pointer transition hover:opacity-90"
-          >
-            Mudar Centro
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleTeachCrosswalkHere}
+              style={{
+                backgroundColor: '#0B0F17',
+                borderColor: '#00E5FF',
+                color: '#00E5FF',
+              }}
+              title="Ensinar / Marcar uma Passadeira de Peões na tua posição GPS atual em Amarante"
+              className="rounded-xl border px-2.5 py-1 text-xs font-extrabold shrink-0 whitespace-nowrap cursor-pointer transition hover:opacity-90 flex items-center gap-1 shadow-[0_0_10px_rgba(0,229,255,0.2)]"
+            >
+              <span>🚸 Marcar Passadeira Aqui</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsHubSelectorModalOpen(true)}
+              style={{
+                backgroundColor: isDaylight ? '#F1F5F9' : '#111827',
+                borderColor: isDaylight ? '#CBD5E1' : 'rgba(0, 229, 255, 0.35)',
+                color: isDaylight ? '#090D16' : '#FFFFFF',
+              }}
+              className="rounded-xl border px-2.5 py-1 text-xs font-extrabold shrink-0 whitespace-nowrap cursor-pointer transition hover:opacity-90"
+            >
+              Mudar Centro
+            </button>
+          </div>
         </div>
 
-        {/* Row 2: Merged [🗺️ Ruas | 🛰️ Satélite] + [🎯 Centrar] Compact Toolbar */}
-        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-zinc-800/40">
+        {/* Row 2: Layer Switcher [Mapa Neon | Trânsito Google | Satélite] + [🎯 Centrar] */}
+        <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-zinc-800/40 flex-wrap">
           <div className="inline-flex items-center rounded-xl bg-zinc-950 border border-zinc-800 p-0.5">
             <button
               type="button"
-              onClick={() => setMapStyleMode('RUAS')}
+              onClick={() => setMapStyleMode('MAPA_NEON')}
               style={
-                mapStyleMode === 'RUAS'
+                mapStyleMode === 'MAPA_NEON'
                   ? {
                       backgroundColor: '#00E5FF',
                       color: '#090D16',
                     }
                   : undefined
               }
-              className={`rounded-lg px-3 py-1 text-xs font-extrabold transition cursor-pointer ${
-                mapStyleMode === 'RUAS'
+              className={`rounded-lg px-2.5 py-1 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
+                mapStyleMode === 'MAPA_NEON'
                   ? 'shadow-xs'
                   : 'text-zinc-300 hover:text-white'
               }`}
             >
-              🗺️ Ruas
+              ✨ Mapa Neon
+            </button>
+            <button
+              type="button"
+              onClick={() => setMapStyleMode('TRANSITO_GOOGLE')}
+              style={
+                mapStyleMode === 'TRANSITO_GOOGLE'
+                  ? {
+                      backgroundColor: '#00E5FF',
+                      color: '#090D16',
+                    }
+                  : undefined
+              }
+              className={`rounded-lg px-2.5 py-1 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
+                mapStyleMode === 'TRANSITO_GOOGLE'
+                  ? 'shadow-xs'
+                  : 'text-zinc-300 hover:text-white'
+              }`}
+            >
+              🚦 Trânsito Google
             </button>
             <button
               type="button"
@@ -1336,7 +1800,7 @@ export const ShiftRadarModule: React.FC = () => {
                     }
                   : undefined
               }
-              className={`rounded-lg px-3 py-1 text-xs font-extrabold transition cursor-pointer ${
+              className={`rounded-lg px-2.5 py-1 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
                 mapStyleMode === 'SATELITE'
                   ? 'shadow-xs'
                   : 'text-zinc-300 hover:text-white'
@@ -1358,7 +1822,7 @@ export const ShiftRadarModule: React.FC = () => {
                   }
                 : undefined
             }
-            className={`rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition ${
+            className={`rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition shrink-0 ${
               isAutoFollowActive && localLiveCoords
                 ? 'shadow-[0_0_10px_rgba(0,229,255,0.2)]'
                 : 'bg-zinc-950 border-zinc-700 text-zinc-100 hover:bg-zinc-900'
@@ -1372,7 +1836,7 @@ export const ShiftRadarModule: React.FC = () => {
 
       {/* FULL INTERACTIVE LEAFLET MAP CONTAINER */}
       <div
-        className={`relative rounded-2xl overflow-hidden border shadow-xl h-[calc(100vh-225px)] min-h-[430px] max-h-[720px] ${
+        className={`relative rounded-2xl overflow-hidden border shadow-xl h-[calc(100vh-232px)] min-h-[430px] max-h-[720px] ${
           isDaylight
             ? 'border-slate-300 bg-slate-100'
             : 'border-zinc-800 bg-zinc-950'
@@ -1383,6 +1847,131 @@ export const ShiftRadarModule: React.FC = () => {
           ref={mapContainerRef}
           className="absolute inset-0 z-0 h-full w-full"
         />
+
+        {/* TOP HUD ALERTS: Crosswalk Proximity Heads-Up (<= 45m & > 28 km/h) or Taught Confirmation */}
+        {(approachingCrosswalkAlert || crosswalkFeedbackBanner) && (
+          <div className="absolute top-3 left-3 right-3 z-[450] flex flex-col items-center gap-1.5 pointer-events-none">
+            {approachingCrosswalkAlert && (
+              <div
+                style={{
+                  backgroundColor: '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: '#FFFFFF',
+                }}
+                className="pointer-events-auto rounded-2xl border-2 px-4 py-2 shadow-[0_0_20px_rgba(0,229,255,0.55)] flex items-center gap-2.5 animate-pulse"
+              >
+                <span className="text-lg">🚸</span>
+                <div>
+                  <span className="text-xs font-black text-[#00E5FF] block leading-tight">
+                    Passadeira à frente ({approachingCrosswalkAlert.distanceMeters}m)
+                  </span>
+                  <span className="text-[11px] font-bold text-zinc-200 block leading-tight">
+                    {approachingCrosswalkAlert.streetLabel}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {crosswalkFeedbackBanner && (
+              <div
+                style={{
+                  backgroundColor: '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: '#00E5FF',
+                }}
+                className="pointer-events-auto rounded-2xl border px-3.5 py-2 text-xs font-extrabold shadow-lg"
+              >
+                {crosswalkFeedbackBanner}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* WAZE-STYLE SPEEDOMETER & ROAD LIMIT HUD (Bottom-Left Corner Above Status Pill) */}
+        <div className="absolute bottom-16 left-3 z-[420] flex items-center gap-2 pointer-events-none">
+          <div
+            style={{
+              backgroundColor: isDaylight
+                ? 'rgba(255, 255, 255, 0.96)'
+                : 'rgba(11, 15, 23, 0.95)',
+              borderColor: isSpeedAlertPulsing
+                ? '#00E5FF'
+                : isDaylight
+                  ? '#00B8D4'
+                  : 'rgba(0, 229, 255, 0.45)',
+              boxShadow: isSpeedAlertPulsing
+                ? '0 0 22px rgba(0, 229, 255, 0.85)'
+                : '0 4px 16px rgba(0, 0, 0, 0.45)',
+            }}
+            className={`pointer-events-auto rounded-2xl border-2 px-3 py-2 flex items-center gap-3 transition-all ${
+              isSpeedAlertPulsing ? 'animate-pulse' : ''
+            }`}
+          >
+            {/* Current GPS Speed (km/h) */}
+            <div className="text-center min-w-[48px]">
+              <span
+                style={{
+                  color: isSpeedAlertPulsing
+                    ? '#00E5FF'
+                    : isDaylight
+                      ? '#090D16'
+                      : '#FFFFFF',
+                }}
+                className="text-2xl font-black leading-none block"
+              >
+                {currentSpeedKmh}
+              </span>
+              <span
+                style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
+                className="text-[10px] font-extrabold uppercase tracking-wider block mt-0.5"
+              >
+                km/h
+              </span>
+            </div>
+
+            {/* Circular European Road Speed Limit Sign (30 / 50 / 70 / 90) */}
+            <div
+              title={`Limite da via (${roadNameLabel}): ${roadLimitKmh} km/h`}
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderColor: '#EF4444',
+                color: '#090D16',
+              }}
+              className="h-11 w-11 rounded-full border-[3.5px] flex flex-col items-center justify-center shrink-0 shadow-sm"
+            >
+              <span
+                style={{ color: '#090D16' }}
+                className="text-sm font-black leading-none"
+              >
+                {roadLimitKmh}
+              </span>
+            </div>
+
+            {/* Subtle 20s Over-Speed Progress / Road Label */}
+            <div className="min-w-0 max-w-[135px]">
+              <span
+                style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                className="text-[11px] font-extrabold block truncate leading-tight"
+              >
+                {roadNameLabel}
+              </span>
+              {consecutiveOverSpeedSec > 0 ? (
+                <span className="text-[10px] font-extrabold text-[#00E5FF] block leading-tight mt-0.5">
+                  {consecutiveOverSpeedSec >= 20
+                    ? '🔔 20s > Limite (Reduzir)'
+                    : `Acima +10: ${consecutiveOverSpeedSec}s / 20s`}
+                </span>
+              ) : (
+                <span
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  className="text-[10px] font-bold block leading-tight mt-0.5"
+                >
+                  🚸 {amaranteCrosswalks.length} passadeiras
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* CLEAN COMPACT BOTTOM STATUS PILL (No black drawer, no duplicate Disponível button) */}
         <div className="absolute bottom-3 left-3 right-3 z-[400] flex items-center justify-between gap-2 pointer-events-none">
@@ -1399,7 +1988,7 @@ export const ShiftRadarModule: React.FC = () => {
             <span className="text-[11px] font-extrabold text-zinc-100 truncate">
               {localLiveCoords
                 ? isAutoFollowActive
-                  ? 'GPS em Tempo Real (A seguir)'
+                  ? 'GPS HD Gliding (A seguir)'
                   : 'GPS Ativo (Toque 🎯 Centrar p/ seguir)'
                 : 'A obter sinal GPS do telemóvel...'}
             </span>

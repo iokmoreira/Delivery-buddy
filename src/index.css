@@ -351,3 +351,31 @@
   color: #ffffff !important;
   border-color: rgba(0, 229, 255, 0.28) !important;
 }
+
+/* ============================================================================
+   HD COPILOT NEON MAP LAYERS (LIGHT MODE WHITE+NEON BLUE / DARK MODE BLACK+NEON BLUE)
+   & SMOOTH WAZE-STYLE GPS MARKER GLIDING
+   ============================================================================ */
+.leaflet-container.buddy-map-neon-light .leaflet-tile-pane {
+  filter: hue-rotate(165deg) saturate(1.85) brightness(1.03) contrast(1.08);
+}
+
+.leaflet-container.buddy-map-neon-dark {
+  background-color: #05070b !important;
+}
+
+.leaflet-container.buddy-map-neon-dark .leaflet-tile-pane {
+  filter: invert(100%) hue-rotate(175deg) saturate(2.4) brightness(0.88) contrast(1.28);
+}
+
+.leaflet-container.buddy-map-google-traffic .leaflet-tile-pane,
+.leaflet-container.buddy-map-satellite .leaflet-tile-pane {
+  filter: contrast(1.05) saturate(1.08);
+}
+
+/* Smooth Waze-style gliding transition for Leaflet markers */
+.leaflet-marker-icon.buddy-clean-self-pin {
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+

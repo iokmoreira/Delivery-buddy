@@ -187,6 +187,7 @@ export type RoadHazardType =
   | 'Obras na Via / Desvio'
   | 'Animais na Pista'
   | 'Piso Escorregadio / Óleo'
+  | 'Passadeira Pedonal'
   | 'Anomalia Geral';
 
 export interface RoadHazardPin {

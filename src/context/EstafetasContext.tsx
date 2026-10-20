@@ -203,6 +203,10 @@ import {
   SEED_WALKIE_MESSAGES,
   SEED_ZONE_PACTS,
 } from '../data/seedData';
+import {
+  buildEndOfDeliveryRealitySummary,
+  saveCustomTaughtCrosswalk,
+} from '../utils/amaranteCopilotTelemetry';
 
 const STORAGE_KEY = 'delivery_buddy_v19_gemini_pro_supabase';
 
@@ -643,7 +647,14 @@ interface EstafetasContextValue {
     netProfitEur: number
   ) => void;
   startDeliveryTransitStage: () => void;
-  completeActiveDeliveryStage: () => void;
+  completeActiveDeliveryStage: (override?: {
+    netProfitEur?: number;
+    grossEur?: number;
+    realKm?: number;
+    platform?: PlatformName;
+    originName?: string;
+    destinationName?: string;
+  }) => void;
   isListeningSpeechRecognition: boolean;
   startSpeechRecognitionPt: (fallbackPhrase?: string) => void;
 
@@ -4811,28 +4822,49 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     speakTextPt(ttsMsg);
   }, [speakTextPt]);
 
-  const completeActiveDeliveryStage = useCallback(() => {
-    const netEur = state.activeDeliveryLifecycle.netProfitEur || 4.95;
-    const grossEur = state.activeDeliveryLifecycle.grossEur || 5.4;
-    const realKm = state.activeDeliveryLifecycle.realKm || 3.0;
-    const estMins = state.activeDeliveryLifecycle.estimatedMinutes || 14;
-    const platform = state.activeDeliveryLifecycle.platform || 'Glovo';
-    const originName =
-      state.activeDeliveryLifecycle.originName ||
-      'Pizzaria Tâmega — Centro';
-    const destinationName =
-      state.activeDeliveryLifecycle.destinationName ||
-      'Freixo de Cima (Amarante)';
+  const completeActiveDeliveryStage = useCallback(
+    (override?: {
+      netProfitEur?: number;
+      grossEur?: number;
+      realKm?: number;
+      platform?: PlatformName;
+      originName?: string;
+      destinationName?: string;
+    }) => {
+      const netEur =
+        override?.netProfitEur ??
+        (state.activeDeliveryLifecycle.netProfitEur || 4.95);
+      const grossEur =
+        override?.grossEur ?? (state.activeDeliveryLifecycle.grossEur || 5.4);
+      const realKm =
+        override?.realKm ?? (state.activeDeliveryLifecycle.realKm || 3.0);
+      const estMins = state.activeDeliveryLifecycle.estimatedMinutes || 14;
+      const platform =
+        override?.platform ?? (state.activeDeliveryLifecycle.platform || 'Glovo');
+      const originName =
+        override?.originName ??
+        (state.activeDeliveryLifecycle.originName ||
+          'Pizzaria Tâmega — Centro');
+      const destinationName =
+        override?.destinationName ??
+        (state.activeDeliveryLifecycle.destinationName ||
+          'Freixo de Cima (Amarante)');
 
-    setHasRealActiveDelivery(false);
+      setHasRealActiveDelivery(false);
 
-    const ttsMsg =
-      'Entrega finalizada! Lucro somado na sua meta do dia. Você está disponível.';
-    const macroText = "[Macro: Deslizar 'Entrega Concluída' na App]";
-    const nowStr = new Date().toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+      const realitySummary = buildEndOfDeliveryRealitySummary({
+        netProfitEur: netEur,
+        distanceKm: realKm,
+        platform,
+        routeLabel: `${originName} → ${destinationName}`,
+      });
+
+      const ttsMsg = realitySummary.spokenMessagePt;
+      const macroText = "[Macro: Deslizar 'Entrega Concluída' na App]";
+      const nowStr = new Date().toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 
     const completedTripLog: ShiftTripLog = {
       id: `REAL-SHF-${Date.now()}`,
@@ -6925,12 +6957,16 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         verdict: 'ACEITE',
       };
       setRealCompletedDeliveries((prev) => [newTrip, ...prev]);
+      const realitySummary = buildEndOfDeliveryRealitySummary({
+        netProfitEur: netProfit,
+        distanceKm: safeKm,
+        platform: input.platform,
+        routeLabel: newTrip.segment,
+      });
       speakTextPt(
         `${input.platform}: mais ${netProfit
           .toFixed(2)
-          .replace('.', ',')} limpos registados. ${netPerKm
-          .toFixed(2)
-          .replace('.', ',')} por km.`
+          .replace('.', ',')} limpos registados. ${realitySummary.spokenMessagePt}`
       );
     },
     [state.platformLedgers, totalCostPerKm, speakTextPt]
@@ -8218,7 +8254,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         lower.includes('tradutor') ||
         lower.includes('libras') ||
         lower.includes('gestual') ||
-        lower.includes('maos do buddy');
+        lower.includes('maos do buddy') ||
+        lower.includes('passadeira') ||
+        lower.includes('travessia');
 
       if (
         (lower.includes('maximizar') ||
@@ -9069,6 +9107,37 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         actionSummary =
           "Stage 2 Ativo: [Macro: Deslizar 'Pedido Recolhido' + Abrir Navegação GPS p/ Cliente] • Estado: Ocupado (Em Entrega).";
       } else if (
+        lower.includes('passadeira') ||
+        lower.includes('travessia pedonal')
+      ) {
+        commandMatched = '"Buddy, marcar passadeira aqui"';
+        const curLat =
+          realCourierProfile.lat || AMARANTE_DEFAULT_COORDS.lat;
+        const curLng =
+          realCourierProfile.lng || AMARANTE_DEFAULT_COORDS.lng;
+        saveCustomTaughtCrosswalk({
+          id: `cw-voice-${Date.now()}`,
+          lat: curLat,
+          lng: curLng,
+          streetLabel: 'Passadeira ensinada por voz (Amarante)',
+          source: 'COURIER_TAUGHT',
+          taughtByCallsign:
+            state.verifiedAccount.courierName || 'Estafeta Buddy',
+          createdAtIso: new Date().toISOString(),
+        });
+        addRoadHazardPin(
+          'Passadeira Pedonal',
+          'Passadeira Pedonal (Voz — Amarante)',
+          'Amarante'
+        );
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('buddy-voice-mark-crosswalk'));
+        }
+        const cwTts =
+          'Passadeira marcada com sucesso aqui em Amarante e sincronizada para alertar todos os colegas.';
+        speakTextPt(cwTts);
+        actionSummary = cwTts;
+      } else if (
         lower.includes('finalizar entrega') ||
         lower.includes('entrega concluída') ||
         lower.includes('entrega concluida') ||
@@ -9079,23 +9148,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         const netEur = state.activeDeliveryLifecycle.netProfitEur || 4.95;
         const realKm = state.activeDeliveryLifecycle.realKm || 3.0;
         completeActiveDeliveryStage();
-        triggerEphemeralOverlayCard({
-          cardCategory: 'ENTREGA_ATUAL_ULTIMA',
-          commandSpoken: '"Finalizar entrega"',
-          title: 'Etapa 3: Entrega Concluída (+15 BuddyCoins)',
-          subtitle: 'Sincronizado com Metas Privadas e Carteira',
-          primaryMetricLabel: 'Crédito Líquido Adicionado',
-          primaryMetricValue: `+${netEur.toFixed(2)} € • +${realKm.toFixed(1)} km`,
-          secondaryDetails: [
-            'Estado público atualizado para: ● Disponível (Livre)',
-            "[Macro: Deslizar 'Entrega Concluída' na App]",
-          ],
-          spokenTextPtBr:
-            'Entrega finalizada! Lucro somado na sua meta do dia. Você está disponível.',
-        });
         actionSummary = `Stage 3 Concluído: +${netEur.toFixed(
           2
-        )} € líq. e +${realKm.toFixed(1)} km sincronizados nas Metas.`;
+        )} € líq. e +${realKm.toFixed(1)} km sincronizados nas Metas + Comparativo Real de Tempo Ganho.`;
       } else if (lower.includes('minimizar') || lower.includes('bolha')) {
         commandMatched = '"Minimizar"';
         actionSummary = 'A minimizar.';
