@@ -56,6 +56,7 @@ import {
   ZoneAgreementsSettingsSection,
 } from './ShiftRadarModule';
 import { BUBBLE_RESTING_PRESET_OPTIONS } from '../utils/buddyMascotEngine';
+import { RealTimeSupportPanel } from './AuthAndVerificationGate';
 
 const VEHICLE_OPTIONS: CourierRegistrationVehicle[] = [
   'Mota 125cc',
@@ -1383,6 +1384,8 @@ export const MenuMaisHubView: React.FC = () => {
   const [mascotUploadStatus, setMascotUploadStatus] = useState<string>('');
 
   const [subPage, setSubPage] = useState<AjustesSubPageId>('LISTA_PRINCIPAL');
+  const [isLiveSupportModalOpen, setIsLiveSupportModalOpen] =
+    useState<boolean>(false);
   const [isShiftDrawerOpen, setIsShiftDrawerOpen] = useState<boolean>(false);
   const [isSimulatorOpen, setIsSimulatorOpen] = useState<boolean>(false);
   const [isDeviceProfileOpen, setIsDeviceProfileOpen] =
@@ -1875,16 +1878,38 @@ export const MenuMaisHubView: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Logout / Switch Account Button */}
-        <button
-          type="button"
-          onClick={logoutSession}
-          style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
-          className="w-full rounded-xl bg-rose-600 hover:bg-rose-500 border border-rose-400 text-white py-2 px-3 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
-        >
-          <LogOut className="h-3.5 w-3.5" />
-          <span>Terminar Sessão / Trocar Conta</span>
-        </button>
+        {/* Quick Logout / Switch Account + Live Support Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setIsLiveSupportModalOpen(true)}
+            className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 border border-sky-400 text-white py-2 px-3 text-[11px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
+          >
+            <span>💬 Acessar Suporte em Tempo Real</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={logoutSession}
+            style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+            className="w-full rounded-xl bg-rose-600 hover:bg-rose-500 border border-rose-400 text-white py-2 px-3 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span>Terminar Sessão / Trocar Conta</span>
+          </button>
+        </div>
+
+        {/* Live Support Modal inside Ajustes */}
+        {isLiveSupportModalOpen && (
+          <div className="fixed inset-0 z-[1300] bg-black/80 backdrop-blur-xs flex items-center justify-center p-3">
+            <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-sky-500/40 p-4 shadow-2xl">
+              <RealTimeSupportPanel
+                onBack={() => setIsLiveSupportModalOpen(false)}
+                isDaylight={themeMode === 'DAYLIGHT'}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Direct Zero-AI Photo Uploader & Active Platforms Selector in Ajustes */}
         <ZeroAiProfilePhotoUploader

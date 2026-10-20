@@ -1236,7 +1236,7 @@ function getDefaultState(): PersistedEstafetasState {
     userPrefs: DEFAULT_MASTER_PREFERENCES,
     roadHazards: SEED_ROAD_HAZARD_PINS,
     savedSosProofs: [],
-    isAuthenticated: true,
+    isAuthenticated: false,
     verifiedAccount: DEFAULT_DEMO_VERIFIED_ACCOUNT,
     isAppPaused: false,
     personalBlacklist: SEED_PERSONAL_BLACKLIST,
@@ -1304,8 +1304,25 @@ function getDefaultState(): PersistedEstafetasState {
   };
 }
 
+const STRICT_AUTH_SESSION_KEY = 'buddy_auth_v2_session';
+
 function hasPersistedRegisteredAccount(): boolean {
   try {
+    const authTokenRaw = localStorage.getItem(STRICT_AUTH_SESSION_KEY);
+    if (!authTokenRaw) return false;
+    const authToken = JSON.parse(authTokenRaw) as {
+      active?: boolean;
+      username?: string;
+    };
+    if (
+      !authToken ||
+      authToken.active !== true ||
+      typeof authToken.username !== 'string' ||
+      authToken.username.trim().length === 0
+    ) {
+      return false;
+    }
+
     const raw = localStorage.getItem(REAL_COURIER_MAP_PROFILE_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<RealCourierMapProfile>;
@@ -1318,21 +1335,7 @@ function hasPersistedRegisteredAccount(): boolean {
         return true;
       }
     }
-    const legacyRaw = localStorage.getItem(LEGACY_COURIER_PROFILE_STORAGE_KEY);
-    if (legacyRaw) {
-      const legacyParsed = JSON.parse(
-        legacyRaw
-      ) as Partial<RealCourierMapProfile>;
-      if (
-        legacyParsed &&
-        legacyParsed.isRegistered === true &&
-        typeof legacyParsed.name === 'string' &&
-        legacyParsed.name.trim().length > 0 &&
-        legacyParsed.name.trim() !== 'Caio M.'
-      ) {
-        return true;
-      }
-    }
+    return true;
   } catch {
     // ignore
   }
@@ -1765,6 +1768,9 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
           'Registe o seu perfil neste telemóvel para entrar online no Mapa',
       };
       try {
+        if (!hasPersistedRegisteredAccount()) {
+          return blankUnregisteredProfile;
+        }
         const raw = localStorage.getItem(REAL_COURIER_MAP_PROFILE_STORAGE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw) as Partial<RealCourierMapProfile>;
@@ -2424,6 +2430,18 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Step 5 Auth & Pause Actions
   const loginWithDemoAccount = useCallback((keepLoggedInShift = true) => {
+    try {
+      localStorage.setItem(
+        STRICT_AUTH_SESSION_KEY,
+        JSON.stringify({
+          active: true,
+          username: DEFAULT_DEMO_VERIFIED_ACCOUNT.courierName,
+          loggedInAt: new Date().toISOString(),
+        })
+      );
+    } catch {
+      // ignore
+    }
     setState((prev) => ({
       ...prev,
       isAuthenticated: true,
@@ -2440,6 +2458,19 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
       const displayName = cleanInput.includes('@')
         ? cleanInput.split('@')[0].replace('.', ' ')
         : `Estafeta ${cleanInput}`;
+
+      try {
+        localStorage.setItem(
+          STRICT_AUTH_SESSION_KEY,
+          JSON.stringify({
+            active: true,
+            username: displayName,
+            loggedInAt: new Date().toISOString(),
+          })
+        );
+      } catch {
+        // ignore
+      }
 
       setState((prev) => ({
         ...prev,
@@ -2459,6 +2490,18 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
     (
       account: Omit<CourierVerifiedAccount, 'verifiedAt' | 'unifiedMapPinId'>
     ) => {
+      try {
+        localStorage.setItem(
+          STRICT_AUTH_SESSION_KEY,
+          JSON.stringify({
+            active: true,
+            username: account.courierName,
+            loggedInAt: new Date().toISOString(),
+          })
+        );
+      } catch {
+        // ignore
+      }
       setState((prev) => ({
         ...prev,
         isAuthenticated: true,
@@ -2477,6 +2520,13 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
   const logoutSession = useCallback(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
+    }
+    try {
+      localStorage.removeItem(STRICT_AUTH_SESSION_KEY);
+      localStorage.removeItem(REAL_COURIER_MAP_PROFILE_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_COURIER_PROFILE_STORAGE_KEY);
+    } catch {
+      // ignore
     }
     const oldId = realCourierProfileRef.current.id;
     if (oldId) {
@@ -7024,6 +7074,13 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   }, []);
 
   const switchOrCreateNewCourierProfileOnDevice = useCallback(() => {
+    try {
+      localStorage.removeItem(STRICT_AUTH_SESSION_KEY);
+      localStorage.removeItem(REAL_COURIER_MAP_PROFILE_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_COURIER_PROFILE_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
     const oldId = realCourierProfileRef.current.id;
     if (oldId) {
       void deleteCourierFromSupabaseRest({
@@ -7204,6 +7261,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       setIsCourierRegistrationModalOpen(false);
 
       try {
+        localStorage.setItem(
+          STRICT_AUTH_SESSION_KEY,
+          JSON.stringify({
+            active: true,
+            username: cleanName,
+            loggedInAt: new Date().toISOString(),
+          })
+        );
         localStorage.setItem('buddy_my_courier_id', persistentId);
         localStorage.setItem(
           REAL_COURIER_MAP_PROFILE_STORAGE_KEY,

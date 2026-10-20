@@ -656,29 +656,31 @@ export const ScannerAndSplitModule: React.FC = () => {
               type="button"
               onClick={() => void openAndFetchAmaranteWeather(true)}
               title="Toque para abrir Clima Atual em Amarante e ouvir previsão"
-              className={`rounded-2xl border px-3.5 py-3 flex items-center justify-between cursor-pointer transition shadow-xs ${
+              className={`rounded-2xl border px-3.5 py-2.5 flex items-center justify-between gap-2 cursor-pointer transition shadow-xs ${
                 isDaylight
                   ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900'
                   : 'bg-slate-800/95 hover:bg-slate-800 border-slate-700 text-slate-100'
               }`}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xl leading-none select-none shrink-0">
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl leading-none select-none shrink-0">
                   {amaranteLiveWeather.conditionEmoji}
                 </span>
-                <span
-                  style={{ color: isDaylight ? '#0f172a' : '#f8fafc' }}
-                  className="text-base font-black tracking-tight font-mono leading-none whitespace-nowrap"
-                >
-                  {amaranteLiveWeather.temperatureC.toFixed(1)} °C
-                </span>
+                <div className="flex flex-col items-start text-left leading-tight">
+                  <span
+                    style={{ color: isDaylight ? '#0f172a' : '#f8fafc' }}
+                    className="text-base font-black tracking-tight font-mono leading-none whitespace-nowrap"
+                  >
+                    {amaranteLiveWeather.temperatureC.toFixed(1)} °C
+                  </span>
+                  <span
+                    style={{ color: isDaylight ? '#334155' : '#cbd5e1' }}
+                    className="text-[11px] font-extrabold whitespace-nowrap mt-0.5"
+                  >
+                    Amarante
+                  </span>
+                </div>
               </div>
-              <span
-                style={{ color: isDaylight ? '#334155' : '#cbd5e1' }}
-                className="text-[11px] font-extrabold truncate ml-1"
-              >
-                Amarante
-              </span>
             </button>
           </div>
 
