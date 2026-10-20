@@ -32,7 +32,10 @@ import {
   AiDailyQuotaTier,
   AiNetworkSyncSpeedMode,
   AiSkillLogCategory,
+  AmaranteBaseZoneOption,
+  CourierRegistrationVehicle,
   GeminiStudioModelSelection,
+  PlatformName,
 } from '../types/models';
 import {
   GEMINI_STUDIO_MODEL_OPTIONS,
@@ -53,7 +56,9 @@ import {
 import {
   CloudApprovalRequest,
   loadCloudSharedState,
+  publishAccountRegistrationToCloud,
   publishAdminApprovalDecisionToCloud,
+  publishCourierPresenceToCloud,
   subscribeToCloudSharedState,
   syncCloudStateNow,
 } from '../services/cloudSync';
@@ -116,6 +121,25 @@ export const AdminBackofficeModule: React.FC = () => {
   );
   const [isSyncingCloudAccounts, setIsSyncingCloudAccounts] =
     useState<boolean>(false);
+  const [syncDoneBadge, setSyncDoneBadge] = useState<boolean>(false);
+
+  // Manual 1-Tap Colleague Add form state (Admin)
+  const [isManualAddOpen, setIsManualAddOpen] = useState<boolean>(false);
+  const [manualName, setManualName] = useState<string>('');
+  const [manualContact, setManualContact] = useState<string>('');
+  const [manualVehicle, setManualVehicle] =
+    useState<CourierRegistrationVehicle>('Mota 125cc');
+  const [manualZone, setManualZone] = useState<AmaranteBaseZoneOption>(
+    'Amarante Centro / São Gonçalo'
+  );
+  const [manualPlatforms, setManualPlatforms] = useState<PlatformName[]>([
+    'Uber Eats',
+    'Glovo',
+  ]);
+  const [manualAddFeedback, setManualAddFeedback] = useState<string | null>(
+    null
+  );
+
   const [supportMessages, setSupportMessages] = useState<SupportChatMessage[]>(
     () => loadSupportChatMessages()
   );
@@ -139,13 +163,103 @@ export const AdminBackofficeModule: React.FC = () => {
 
   const handleForceSyncCloudAccounts = async () => {
     setIsSyncingCloudAccounts(true);
+    setSyncDoneBadge(false);
+    const hardTimeoutId = window.setTimeout(() => {
+      setIsSyncingCloudAccounts(false);
+      setSyncDoneBadge(true);
+    }, 2000);
     try {
-      const snap = await syncCloudStateNow();
+      const snap = await Promise.race([
+        syncCloudStateNow(),
+        new Promise<ReturnType<typeof loadCloudSharedState>>((resolve) =>
+          setTimeout(() => resolve(loadCloudSharedState()), 2000)
+        ),
+      ]);
       setCloudRequests(snap.approvalRequests || []);
       setLocalAccounts(loadSavedAccounts());
     } finally {
+      window.clearTimeout(hardTimeoutId);
       setIsSyncingCloudAccounts(false);
+      setSyncDoneBadge(true);
+      window.setTimeout(() => {
+        setSyncDoneBadge(false);
+      }, 3500);
     }
+  };
+
+  const handleManualAddColleague = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanName = manualName.trim();
+    if (!cleanName) return;
+    const newId = `acc-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || Date.now()}`;
+    const selectedPlatforms: PlatformName[] =
+      manualPlatforms.length > 0 ? manualPlatforms : ['Uber Eats', 'Glovo'];
+
+    const newRecord: SavedLocalAccountRecord = {
+      username: cleanName,
+      emailOrPhone: manualContact.trim() || cleanName,
+      pinOrPassword: '1234',
+      vehicle: manualVehicle,
+      platforms: selectedPlatforms,
+      zone: manualZone,
+      status: 'APROVADO',
+    };
+
+    const existing = loadSavedAccounts().filter(
+      (a) => a.username.trim().toLowerCase() !== cleanName.toLowerCase()
+    );
+    const updatedAccounts = [newRecord, ...existing];
+    setLocalAccounts(updatedAccounts);
+    try {
+      localStorage.setItem(
+        SAVED_ACCOUNTS_STORAGE_KEY,
+        JSON.stringify(updatedAccounts)
+      );
+    } catch {
+      // ignore
+    }
+
+    const baseLat = realCourierProfile?.lat || 41.2704;
+    const baseLng = realCourierProfile?.lng || -8.0818;
+
+    void publishAccountRegistrationToCloud({
+      id: newId,
+      username: cleanName,
+      emailOrPhone: manualContact.trim() || cleanName,
+      vehicle: manualVehicle,
+      platforms: selectedPlatforms,
+      zone: manualZone,
+      approvalStatus: 'approved',
+      lat: baseLat,
+      lng: baseLng,
+    });
+    void publishAdminApprovalDecisionToCloud({
+      courierId: newId,
+      username: cleanName,
+      approvalStatus: 'approved',
+    });
+    void publishCourierPresenceToCloud({
+      id: newId,
+      name: cleanName,
+      role: 'courier',
+      vehicle: manualVehicle,
+      platforms: selectedPlatforms,
+      zone: manualZone,
+      status: 'online',
+      approvalStatus: 'approved',
+      lat: baseLat,
+      lng: baseLng,
+      lastSeen: new Date().toISOString(),
+    });
+
+    setCloudRequests(loadCloudSharedState().approvalRequests || []);
+    setManualName('');
+    setManualContact('');
+    setManualAddFeedback(`✓ ${cleanName} aprovado e publicado na frota!`);
+    window.setTimeout(() => {
+      setManualAddFeedback(null);
+      setIsManualAddOpen(false);
+    }, 2000);
   };
 
   const handleToggleLocalAccountStatus = (
@@ -1498,7 +1612,7 @@ export const AdminBackofficeModule: React.FC = () => {
           ===================================================================== */}
       {subTab === 'KYC' && (
         <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800/80 p-3.5 space-y-3 shadow-lg">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="space-y-2.5">
             <div>
               <span className="text-base font-extrabold text-zinc-100 flex items-center gap-1.5 flex-wrap">
                 <Users className="h-4 w-4 text-[#00E5FF]" />
@@ -1510,13 +1624,20 @@ export const AdminBackofficeModule: React.FC = () => {
                     ⏳ {pendingApprovalsCount} Pendente{pendingApprovalsCount > 1 ? 's' : ''}
                   </span>
                 )}
+                {syncDoneBadge && (
+                  <span className="rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300 px-2 py-0.5 text-[10px] font-extrabold">
+                    ✓ Sincronizado agora
+                  </span>
+                )}
               </span>
               <span className="text-xs text-zinc-400 block mt-0.5">
                 Sincronização Automática em Tempo Real com todos os telemóveis (Cloud Relay +{' '}
                 <code className="text-[#00E5FF]">public.couriers</code>). Aprove ou bloqueie com 1 toque.
               </span>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+
+            {/* Clean Full-Width 2-Column Grid for Sync & Edit Profile */}
+            <div className="grid grid-cols-2 gap-2 w-full">
               <button
                 type="button"
                 onClick={handleForceSyncCloudAccounts}
@@ -1526,9 +1647,15 @@ export const AdminBackofficeModule: React.FC = () => {
                   borderColor: '#00E5FF',
                   color: '#00E5FF',
                 }}
-                className="rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition shrink-0"
+                className="w-full rounded-xl border px-2.5 py-2 text-xs font-extrabold cursor-pointer transition flex items-center justify-center gap-1 truncate"
               >
-                {isSyncingCloudAccounts ? '⏳ A Sincronizar...' : '🔄 Sincronizar Contas da Nuvem'}
+                <span className="truncate">
+                  {isSyncingCloudAccounts
+                    ? '⏳ A Sincronizar...'
+                    : syncDoneBadge
+                      ? '✓ Sincronizado agora'
+                      : '🔄 Sincronizar Nuvem'}
+                </span>
               </button>
               <button
                 type="button"
@@ -1538,13 +1665,143 @@ export const AdminBackofficeModule: React.FC = () => {
                   borderColor: '#00E5FF',
                   color: '#00E5FF',
                 }}
-                className="rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition shrink-0"
+                className="w-full rounded-xl border px-2.5 py-2 text-xs font-extrabold cursor-pointer transition flex items-center justify-center gap-1 truncate"
               >
-                {realCourierProfile
-                  ? `Editar Meu Registo (${realCourierProfile.name})`
-                  : '+ Registar Meu Perfil no Mapa'}
+                <span className="truncate">✏️ Editar Meu Registo</span>
               </button>
             </div>
+
+            {/* 1-Tap Manual Colleague Add Button */}
+            <button
+              type="button"
+              onClick={() => setIsManualAddOpen((prev) => !prev)}
+              style={{
+                backgroundColor: isManualAddOpen ? '#00E5FF' : '#0B0F17',
+                borderColor: '#00E5FF',
+                color: isManualAddOpen ? '#05070B' : '#00E5FF',
+              }}
+              className="w-full rounded-xl border px-3 py-2 text-xs font-extrabold cursor-pointer transition flex items-center justify-center gap-1.5"
+            >
+              <span>➕ Adicionar Estafeta à Frota</span>
+            </button>
+
+            {isManualAddOpen && (
+              <form
+                onSubmit={handleManualAddColleague}
+                className="rounded-xl bg-zinc-950 border border-[#00E5FF]/50 p-3 space-y-2.5 shadow-md"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-[#00E5FF]">
+                    ➕ Registar / Aprovar Colega Manualmente (1 Toque)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsManualAddOpen(false)}
+                    className="text-xs font-bold text-zinc-400 hover:text-white cursor-pointer"
+                  >
+                    ✕ Fechar
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={manualName}
+                    onChange={(e) => setManualName(e.target.value)}
+                    placeholder="Nome / Callsign (ex.: Pai, João, Carlos)"
+                    className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs font-semibold text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#00E5FF]"
+                  />
+                  <input
+                    type="text"
+                    value={manualContact}
+                    onChange={(e) => setManualContact(e.target.value)}
+                    placeholder="Telemóvel ou Email (opcional)"
+                    className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs font-semibold text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#00E5FF]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select
+                    value={manualVehicle}
+                    onChange={(e) =>
+                      setManualVehicle(e.target.value as CourierRegistrationVehicle)
+                    }
+                    className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs font-semibold text-white focus:outline-none"
+                  >
+                    <option value="Mota 125cc">🛵 Mota 125cc</option>
+                    <option value="Scooter Elétrica">⚡ Scooter Elétrica</option>
+                    <option value="Bicicleta Elétrica">🚲 Bicicleta Elétrica</option>
+                    <option value="Carro Ligeiro">🚗 Carro Ligeiro</option>
+                  </select>
+                  <select
+                    value={manualZone}
+                    onChange={(e) =>
+                      setManualZone(e.target.value as AmaranteBaseZoneOption)
+                    }
+                    className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs font-semibold text-white focus:outline-none"
+                  >
+                    <option value="Amarante Centro / São Gonçalo">
+                      Amarante Centro / São Gonçalo
+                    </option>
+                    <option value="Vila Meã / Real">Vila Meã / Real</option>
+                    <option value="Lixa / Felgueiras">Lixa / Felgueiras</option>
+                    <option value="Marco de Canaveses">Marco de Canaveses</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {(
+                    [
+                      'Uber Eats',
+                      'Glovo',
+                      'Bolt Food',
+                      'Comércio Local',
+                    ] as PlatformName[]
+                  ).map((plat) => {
+                    const active = manualPlatforms.includes(plat);
+                    return (
+                      <button
+                        key={plat}
+                        type="button"
+                        onClick={() =>
+                          setManualPlatforms((prev) =>
+                            prev.includes(plat)
+                              ? prev.filter((p) => p !== plat)
+                              : [...prev, plat]
+                          )
+                        }
+                        style={{
+                          backgroundColor: active ? '#00E5FF' : '#111827',
+                          borderColor: active ? '#00E5FF' : '#334155',
+                          color: active ? '#05070B' : '#CBD5E1',
+                        }}
+                        className="rounded-lg border px-2 py-1 text-[10px] font-extrabold cursor-pointer transition"
+                      >
+                        {active ? `✓ ${plat}` : plat}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="submit"
+                  style={{
+                    backgroundColor: '#00E5FF',
+                    color: '#05070B',
+                  }}
+                  className="w-full rounded-xl py-2 px-3 text-xs font-black cursor-pointer transition"
+                >
+                  ✓ Aprovar &amp; Publicar Estafeta na Frota Agora
+                </button>
+
+                {manualAddFeedback && (
+                  <p className="text-xs font-extrabold text-emerald-400 text-center">
+                    {manualAddFeedback}
+                  </p>
+                )}
+              </form>
+            )}
           </div>
 
           {/* Local & Cloud Synced Registered Accounts */}

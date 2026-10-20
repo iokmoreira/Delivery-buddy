@@ -19,7 +19,10 @@ import {
   findExistingCourierByNameInSupabaseRest,
   getOrCreatePersistentCourierUuid,
 } from '../services/geminiAgent';
-import { publishAccountRegistrationToCloud } from '../services/cloudSync';
+import {
+  publishAccountRegistrationToCloud,
+  publishCourierPresenceToCloud,
+} from '../services/cloudSync';
 import {
   cancelBuddySpeechNow,
   DEFAULT_BUDDY_VOICE_PITCH,
@@ -83,8 +86,14 @@ function saveAccountLocally(record: SavedLocalAccountRecord) {
       SAVED_ACCOUNTS_STORAGE_KEY,
       JSON.stringify([record, ...existing])
     );
-    // Broadcast new or logged-in account immediately to the Zero-Config Cloud Sync Relay
+    // Broadcast new or logged-in account & live presence immediately to the Zero-Config Cloud Sync Relay
     const persistentId = getOrCreatePersistentCourierUuid();
+    const resolvedApproval =
+      record.status === 'APROVADO'
+        ? 'approved'
+        : record.status === 'BLOQUEADO'
+        ? 'blocked'
+        : undefined;
     void publishAccountRegistrationToCloud({
       id: persistentId,
       username: record.username,
@@ -92,12 +101,22 @@ function saveAccountLocally(record: SavedLocalAccountRecord) {
       vehicle: record.vehicle,
       platforms: record.platforms,
       zone: record.zone,
-      approvalStatus:
-        record.status === 'APROVADO'
-          ? 'approved'
-          : record.status === 'BLOQUEADO'
-          ? 'blocked'
-          : undefined,
+      approvalStatus: resolvedApproval,
+    });
+    void publishCourierPresenceToCloud({
+      id: persistentId,
+      name: record.username,
+      role: record.username.trim().toLowerCase().includes('presidente')
+        ? 'admin'
+        : 'courier',
+      vehicle: record.vehicle,
+      platforms: record.platforms,
+      zone: record.zone,
+      status: 'online',
+      approvalStatus: resolvedApproval || 'pending',
+      lat: 41.2704,
+      lng: -8.0818,
+      lastSeen: new Date().toISOString(),
     });
   } catch {
     // ignore

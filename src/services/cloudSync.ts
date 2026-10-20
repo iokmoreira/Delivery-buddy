@@ -286,6 +286,8 @@ async function postPacketToNtfyTopic(
   topic: string,
   envelope: CloudSyncEnvelope
 ): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2500);
   try {
     const bodyStr = JSON.stringify(envelope);
     if (bodyStr.length > 3900) {
@@ -297,10 +299,13 @@ async function postPacketToNtfyTopic(
         'Content-Type': 'text/plain;charset=UTF-8',
       },
       body: bodyStr,
+      signal: controller.signal,
     });
     return res.ok;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -970,28 +975,128 @@ function ingestEnvelope(
   return stateChanged;
 }
 
+export function broadcastLocalStorageAccountsAndProfileNow(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const rawProfile = window.localStorage.getItem('real_courier_profile_v1');
+    if (rawProfile) {
+      const parsedProfile = JSON.parse(rawProfile) as RealCourierMapProfile;
+      if (parsedProfile && parsedProfile.id && parsedProfile.name) {
+        void publishCourierPresenceToCloud({
+          profile: parsedProfile,
+          status: parsedProfile.has_order ? 'busy' : 'online',
+        });
+        void publishAccountRegistrationToCloud({
+          id: parsedProfile.id,
+          username: parsedProfile.name,
+          emailOrPhone: parsedProfile.name,
+          vehicle: parsedProfile.vehicle || 'Mota 125cc',
+          platforms:
+            Array.isArray(parsedProfile.active_platforms) &&
+            parsedProfile.active_platforms.length > 0
+              ? parsedProfile.active_platforms
+              : ['Uber Eats', 'Glovo'],
+          zone: parsedProfile.zone || 'Amarante Centro / São Gonçalo',
+          lat: Number(parsedProfile.lat || DEFAULT_AMARANTE_LAT),
+          lng: Number(parsedProfile.lng || DEFAULT_AMARANTE_LNG),
+          deviceModel: parsedProfile.device_model,
+        });
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+
+  try {
+    const rawAccounts = window.localStorage.getItem('buddy_saved_accounts_v1');
+    if (rawAccounts) {
+      const parsedAccounts = JSON.parse(rawAccounts) as Array<{
+        username?: string;
+        emailOrPhone?: string;
+        vehicle?: CourierRegistrationVehicle;
+        platforms?: PlatformName[];
+        zone?: AmaranteBaseZoneOption;
+        status?: 'APROVADO' | 'PENDENTE' | 'BLOQUEADO';
+      }>;
+      if (Array.isArray(parsedAccounts)) {
+        parsedAccounts.forEach((acc) => {
+          if (!acc || !acc.username || !acc.username.trim()) return;
+          const cleanName = acc.username.trim();
+          const accId = `acc-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'user'}`;
+          void publishAccountRegistrationToCloud({
+            id: accId,
+            username: cleanName,
+            emailOrPhone: acc.emailOrPhone || cleanName,
+            vehicle: acc.vehicle || 'Mota 125cc',
+            platforms:
+              Array.isArray(acc.platforms) && acc.platforms.length > 0
+                ? acc.platforms
+                : ['Uber Eats', 'Glovo'],
+            zone: acc.zone || 'Amarante Centro / São Gonçalo',
+            approvalStatus:
+              acc.status === 'BLOQUEADO'
+                ? 'blocked'
+                : acc.status === 'APROVADO'
+                  ? 'approved'
+                  : undefined,
+            lat: DEFAULT_AMARANTE_LAT,
+            lng: DEFAULT_AMARANTE_LNG,
+          });
+        });
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+async function fetchNtfyPollJsonWithTimeout(
+  url: string,
+  timeoutMs = 2500
+): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const fetchPromise = (async () => {
+      const res = await fetch(url, {
+        method: 'GET',
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (!res.ok) return '';
+      return await res.text();
+    })();
+    const timeoutPromise = new Promise<string>((resolve) =>
+      setTimeout(() => resolve(''), timeoutMs)
+    );
+    return await Promise.race([fetchPromise, timeoutPromise]);
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function pollCloudSyncTopicsOnce(
   myDeviceId = 'local_device',
-  includeAccountsHistory = false
+  includeAccountsHistory = true
 ): Promise<CloudSharedState> {
   const urls = [
-    `https://ntfy.sh/${LIVE_SYNC_TOPIC}/json?poll=1&since=2h`,
+    `https://ntfy.sh/${LIVE_SYNC_TOPIC}/json?poll=1&since=48h`,
     ...(includeAccountsHistory
-      ? [`https://ntfy.sh/${ACCOUNTS_SYNC_TOPIC}/json?poll=1&since=12h`]
+      ? [`https://ntfy.sh/${ACCOUNTS_SYNC_TOPIC}/json?poll=1&since=48h`]
       : []),
   ];
 
   let anyChanged = false;
 
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, {
-        method: 'GET',
-        cache: 'no-store',
-      });
-      if (!res.ok) continue;
-      const text = await res.text();
-      if (!text.trim()) continue;
+  try {
+    const texts = await Promise.all(
+      urls.map((url) => fetchNtfyPollJsonWithTimeout(url, 2500))
+    );
+
+    for (const text of texts) {
+      if (!text || !text.trim()) continue;
       const lines = text.trim().split('\n');
       for (const line of lines) {
         try {
@@ -1010,9 +1115,9 @@ export async function pollCloudSyncTopicsOnce(
           // ignore malformed line
         }
       }
-    } catch {
-      // ignore network error
     }
+  } catch {
+    // ignore network error
   }
 
   if (anyChanged) {
@@ -1022,8 +1127,9 @@ export async function pollCloudSyncTopicsOnce(
 }
 
 export async function syncCloudStateNow(): Promise<CloudSharedState> {
-  if (localIdentityProvider) {
-    try {
+  try {
+    broadcastLocalStorageAccountsAndProfileNow();
+    if (localIdentityProvider) {
       const res = localIdentityProvider();
       if (res && typeof res === 'object') {
         if (res.presence) void publishCourierPresenceToCloud(res.presence);
@@ -1031,12 +1137,19 @@ export async function syncCloudStateNow(): Promise<CloudSharedState> {
           res.accounts.forEach((acc) => void publishAccountRegistrationToCloud(acc));
         }
       }
-    } catch {
-      // ignore
     }
+    void publishPeerDiscoveryPing('admin_sync_now');
+  } catch {
+    // ignore
   }
-  void publishPeerDiscoveryPing('admin_sync_now');
-  return pollCloudSyncTopicsOnce('admin_sync_now', true);
+
+  const timeoutFallback = new Promise<CloudSharedState>((resolve) =>
+    setTimeout(() => resolve(getCloudSharedStateSnapshot()), 2500)
+  );
+  return Promise.race([
+    pollCloudSyncTopicsOnce('admin_sync_now', true),
+    timeoutFallback,
+  ]);
 }
 
 export function startRealtimeCloudSyncStream(
@@ -1092,6 +1205,7 @@ export function startRealtimeCloudSyncStream(
   };
 
   connectStreams();
+  broadcastLocalStorageAccountsAndProfileNow();
   void pollCloudSyncTopicsOnce(myDeviceId, true);
   void publishPeerDiscoveryPing(myDeviceId);
 
