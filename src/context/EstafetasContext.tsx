@@ -145,6 +145,19 @@ import {
   speakWithBuddyVoiceEngine,
 } from '../services/voiceEngine';
 import {
+  BubbleRestingPreset,
+  BuddyMascotImagesSet,
+  BuddyMascotState,
+  clearCustomMascotImagesFromStorage,
+  loadSavedBubbleRestingPreset,
+  loadSavedMascotImages,
+  saveBubbleRestingPreset,
+  sliceThreePoseMascotSheetFile,
+  syncBubbleRestingPresetToNativeBridge,
+  syncMascotImagesToNativeBridge,
+  syncMascotStateToNativeBridge,
+} from '../utils/buddyMascotEngine';
+import {
   DEFAULT_AI_AGENT_MASTER_CONFIG,
   DEFAULT_ALERT_POPUP_PREFERENCES,
   DEFAULT_AUDITED_ITEMS,
@@ -900,6 +913,14 @@ interface EstafetasContextValue {
   rainBonusFinanceActive: boolean;
   toggleRainBonusFinanceActive: () => void;
   openAndFetchAmaranteWeather: (speakNow?: boolean) => Promise<void>;
+  // Dynamic 3-State Robot Mascot & Floating Bubble Resting Preset
+  buddyMascotImages: BuddyMascotImagesSet;
+  currentMascotState: BuddyMascotState;
+  currentMascotImageUrl: string;
+  uploadThreePoseMascotSheet: (file: File) => Promise<void>;
+  resetMascotImagesToBuiltin: () => void;
+  bubbleRestingPreset: BubbleRestingPreset;
+  setBubbleRestingPreset: (preset: BubbleRestingPreset) => void;
 }
 
 export interface AutoDetectedOfferBannerState {
@@ -6070,8 +6091,27 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         requestImmediateNativeGpsFix?: () => void;
       };
     };
-    winAny.onNativeLocationUpdate = (lat: number, lng: number) => {
+    winAny.onNativeLocationUpdate = (
+      lat: number,
+      lng: number,
+      accuracy?: number,
+      speed?: number
+    ) => {
       applyLiveDeviceGpsFix(Number(lat), Number(lng));
+      try {
+        window.dispatchEvent(
+          new CustomEvent('buddy-native-location', {
+            detail: {
+              lat: Number(lat),
+              lng: Number(lng),
+              accuracy: Number(accuracy ?? 10),
+              speed: Number(speed ?? 0),
+            },
+          })
+        );
+      } catch {
+        // ignore
+      }
     };
     try {
       winAny.BuddyNativeOverlay?.requestImmediateNativeGpsFix?.();
@@ -6085,7 +6125,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     };
   }, [applyLiveDeviceGpsFix]);
 
-  // Request live device coordinates via Native Android bridge + navigator.geolocation.watchPosition
+  // Request live device coordinates via Native Android bridge + Dual Network (<1s) + High-Accuracy GPS
   const startOrRefreshGeolocationWatch = useCallback(
     (targetZone?: AmaranteBaseZoneOption) => {
       const zoneKey =
@@ -6113,6 +6153,22 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       }
 
       try {
+        // 1. Instant Network/Wi-Fi Location Fix in under 1 second (works indoors & outdoors)
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            applyLiveDeviceGpsFix(pos.coords.latitude, pos.coords.longitude);
+          },
+          () => {
+            // ignore and wait for GPS
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 3000,
+            maximumAge: 60000,
+          }
+        );
+
+        // 2. High-Accuracy Satellite GPS One-Shot
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             applyLiveDeviceGpsFix(pos.coords.latitude, pos.coords.longitude);
@@ -6122,7 +6178,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           },
           {
             enableHighAccuracy: true,
-            timeout: 12000,
+            timeout: 10000,
             maximumAge: 2000,
           }
         );
@@ -6132,26 +6188,45 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           gpsWatchIdRef.current = null;
         }
 
+        // 3. Continuous High-Accuracy GPS Watch + Network Fallback on Timeout
         gpsWatchIdRef.current = navigator.geolocation.watchPosition(
           (pos) => {
             applyLiveDeviceGpsFix(pos.coords.latitude, pos.coords.longitude);
           },
           () => {
-            // Never overwrite an already-acquired LIVE_GPS fix on a transient timeout
-            setRealCourierProfile((prev) => {
-              if (prev.gpsSource === 'LIVE_GPS') return prev;
-              return {
-                ...prev,
-                lat: fallbackCoords.lat,
-                lng: fallbackCoords.lng,
-                gpsSource: 'AMARANTE_FALLBACK',
-                updated_at: new Date().toISOString(),
-              };
-            });
+            try {
+              navigator.geolocation.getCurrentPosition(
+                (netPos) => {
+                  applyLiveDeviceGpsFix(
+                    netPos.coords.latitude,
+                    netPos.coords.longitude
+                  );
+                },
+                () => {
+                  setRealCourierProfile((prev) => {
+                    if (prev.gpsSource === 'LIVE_GPS') return prev;
+                    return {
+                      ...prev,
+                      lat: fallbackCoords.lat,
+                      lng: fallbackCoords.lng,
+                      gpsSource: 'AMARANTE_FALLBACK',
+                      updated_at: new Date().toISOString(),
+                    };
+                  });
+                },
+                {
+                  enableHighAccuracy: false,
+                  timeout: 4000,
+                  maximumAge: 60000,
+                }
+              );
+            } catch {
+              // ignore
+            }
           },
           {
             enableHighAccuracy: true,
-            timeout: 15000,
+            timeout: 10000,
             maximumAge: 2000,
           }
         );
@@ -6188,6 +6263,72 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     setRealCourierProfile(updated);
     await syncProfileToSupabaseAndLocalCache(updated);
   }, [startOrRefreshGeolocationWatch, syncProfileToSupabaseAndLocalCache]);
+
+  // Dynamic 3-State Robot Mascot & Floating Bubble Resting Preset
+  const [buddyMascotImages, setBuddyMascotImages] =
+    useState<BuddyMascotImagesSet>(() => loadSavedMascotImages());
+
+  const [bubbleRestingPreset, setBubbleRestingPresetState] =
+    useState<BubbleRestingPreset>(() => loadSavedBubbleRestingPreset());
+
+  const currentMascotState = useMemo<BuddyMascotState>(() => {
+    if (state.isAppPaused) {
+      return 'INACTIVE';
+    }
+    if (
+      hasRealActiveDelivery ||
+      isOfferAccepted ||
+      state.userOrderAvailabilityStatus === 'OCUPADO_COM_PEDIDO'
+    ) {
+      return 'DELIVERY';
+    }
+    return 'ACTIVE';
+  }, [
+    state.isAppPaused,
+    hasRealActiveDelivery,
+    isOfferAccepted,
+    state.userOrderAvailabilityStatus,
+  ]);
+
+  const currentMascotImageUrl = useMemo<string>(() => {
+    if (currentMascotState === 'INACTIVE') {
+      return buddyMascotImages.mascotInactive;
+    }
+    if (currentMascotState === 'DELIVERY') {
+      return buddyMascotImages.mascotDelivery;
+    }
+    return buddyMascotImages.mascotActive;
+  }, [buddyMascotImages, currentMascotState]);
+
+  useEffect(() => {
+    syncMascotImagesToNativeBridge(buddyMascotImages);
+  }, [buddyMascotImages]);
+
+  useEffect(() => {
+    syncMascotStateToNativeBridge(currentMascotState);
+  }, [currentMascotState]);
+
+  useEffect(() => {
+    syncBubbleRestingPresetToNativeBridge(bubbleRestingPreset);
+  }, [bubbleRestingPreset]);
+
+  const uploadThreePoseMascotSheet = useCallback(async (file: File) => {
+    const sliced = await sliceThreePoseMascotSheetFile(file);
+    setBuddyMascotImages(sliced);
+    syncMascotImagesToNativeBridge(sliced);
+  }, []);
+
+  const resetMascotImagesToBuiltin = useCallback(() => {
+    const builtin = clearCustomMascotImagesFromStorage();
+    setBuddyMascotImages(builtin);
+    syncMascotImagesToNativeBridge(builtin);
+  }, []);
+
+  const setBubbleRestingPreset = useCallback((preset: BubbleRestingPreset) => {
+    setBubbleRestingPresetState(preset);
+    saveBubbleRestingPreset(preset);
+    syncBubbleRestingPresetToNativeBridge(preset);
+  }, []);
 
   const setActivePlatforms = useCallback(
     (platforms: PlatformName[]) => {
@@ -12195,6 +12336,13 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         rainBonusFinanceActive,
         toggleRainBonusFinanceActive,
         openAndFetchAmaranteWeather,
+        buddyMascotImages,
+        currentMascotState,
+        currentMascotImageUrl,
+        uploadThreePoseMascotSheet,
+        resetMascotImagesToBuiltin,
+        bubbleRestingPreset,
+        setBubbleRestingPreset,
       }}
     >
       {children}

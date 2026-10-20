@@ -9,9 +9,18 @@ export const CockpitHeader: React.FC = () => {
     toggleVoiceMicListening,
     isListeningSpeechRecognition,
     setIsBubbleMinimized,
+    currentMascotState,
+    currentMascotImageUrl,
   } = useEstafetas();
 
   const isDaylight = themeMode === 'DAYLIGHT';
+
+  const mascotRingClass =
+    currentMascotState === 'DELIVERY'
+      ? 'border-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.75)]'
+      : currentMascotState === 'INACTIVE'
+        ? 'border-slate-500 opacity-90'
+        : 'border-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.55)]';
 
   return (
     <header
@@ -22,8 +31,25 @@ export const CockpitHeader: React.FC = () => {
       }`}
     >
       <div className="flex items-center justify-between gap-2">
-        {/* 1. Left: Brand + Status Indicator (🟢 Online / ⚪ Pausa) */}
+        {/* 1. Left: Dynamic 3-State Robot Mascot Badge + Brand + Status Indicator (🟢 Online / ⚪ Pausa) */}
         <div className="flex items-center gap-2 min-w-0">
+          <div
+            className={`relative h-8 w-8 rounded-full overflow-hidden bg-slate-950 border-2 shrink-0 transition-all ${mascotRingClass}`}
+            title={
+              currentMascotState === 'DELIVERY'
+                ? 'Buddy Mascote: Em Entrega 🚀'
+                : currentMascotState === 'INACTIVE'
+                  ? 'Buddy Mascote: Em Pausa (Mochila DB)'
+                  : 'Buddy Mascote: Online Ativo 👍'
+            }
+          >
+            <img
+              src={currentMascotImageUrl}
+              alt="Buddy Mascote"
+              className="h-full w-full object-cover rounded-full"
+            />
+          </div>
+
           <span className="text-sm font-black tracking-tight whitespace-nowrap">
             Delivery Buddy
           </span>
@@ -38,7 +64,13 @@ export const CockpitHeader: React.FC = () => {
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700'
             }`}
           >
-            <span>{isAppPaused ? '⚪ Pausa' : '🟢 Online'}</span>
+            <span>
+              {currentMascotState === 'DELIVERY'
+                ? '🚀 Entrega'
+                : isAppPaused
+                  ? '⚪ Pausa'
+                  : '🟢 Online'}
+            </span>
           </button>
         </div>
 

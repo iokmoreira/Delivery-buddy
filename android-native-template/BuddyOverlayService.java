@@ -8,8 +8,18 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.BitmapShader;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PixelFormat;
+import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -18,12 +28,16 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.Settings;
+import android.util.Base64;
+import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 public class BuddyOverlayService extends Service {
@@ -32,14 +46,27 @@ public class BuddyOverlayService extends Service {
     public static final String ACTION_HIDE_BUBBLE = "com.pbg.deliverybuddy.ACTION_HIDE_BUBBLE";
     public static final String ACTION_UPDATE_LISTENING = "com.pbg.deliverybuddy.ACTION_UPDATE_LISTENING";
     public static final String ACTION_WAKE_AND_MAXIMIZE = "com.pbg.deliverybuddy.ACTION_WAKE_AND_MAXIMIZE";
+    public static final String ACTION_REFRESH_MASCOT_OR_PRESET = "com.pbg.deliverybuddy.ACTION_REFRESH_MASCOT_OR_PRESET";
     public static final String EXTRA_IS_LISTENING = "extra_is_listening";
     public static final String EXTRA_LIVE_CAPTION = "extra_live_caption";
+
+    private static final String PREFS_NAME = "buddy_overlay_prefs";
+    private static final String KEY_MASCOT_INACTIVE = "mascot_inactive_b64";
+    private static final String KEY_MASCOT_ACTIVE = "mascot_active_b64";
+    private static final String KEY_MASCOT_DELIVERY = "mascot_delivery_b64";
+    private static final String KEY_MASCOT_STATE = "mascot_current_state";
+    private static final String KEY_RESTING_PRESET = "bubble_resting_preset";
+    private static final String KEY_CUSTOM_X = "bubble_custom_x";
+    private static final String KEY_CUSTOM_Y = "bubble_custom_y";
+
     private static final String CHANNEL_ID = "delivery_buddy_overlay_channel";
     private static final int NOTIFICATION_ID = 4401;
 
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private WindowManager windowManager;
-    private TextView bubbleView;
+    private FrameLayout bubbleContainer;
+    private ImageView mascotImageView;
+    private TextView badgeCaptionView;
     private WindowManager.LayoutParams layoutParams;
     private boolean isListeningState = false;
     private String liveCaptionText = "";
@@ -88,6 +115,45 @@ public class BuddyOverlayService extends Service {
         }
     }
 
+    public static void setBubbleMascotImages(
+        Context context,
+        String inactiveB64,
+        String activeB64,
+        String deliveryB64
+    ) {
+        if (context == null) return;
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit()
+            .putString(KEY_MASCOT_INACTIVE, inactiveB64 != null ? inactiveB64 : "")
+            .putString(KEY_MASCOT_ACTIVE, activeB64 != null ? activeB64 : "")
+            .putString(KEY_MASCOT_DELIVERY, deliveryB64 != null ? deliveryB64 : "")
+            .apply();
+        triggerRefreshIfRunning(context);
+    }
+
+    public static void setBubbleMascotState(Context context, String state) {
+        if (context == null || state == null) return;
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_MASCOT_STATE, state.trim().toUpperCase()).apply();
+        triggerRefreshIfRunning(context);
+    }
+
+    public static void setBubbleRestingPreset(Context context, String preset) {
+        if (context == null || preset == null) return;
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_RESTING_PRESET, preset.trim().toUpperCase()).apply();
+        triggerRefreshIfRunning(context);
+    }
+
+    private static void triggerRefreshIfRunning(Context context) {
+        try {
+            Intent svcIntent = new Intent(context, BuddyOverlayService.class);
+            svcIntent.setAction(ACTION_REFRESH_MASCOT_OR_PRESET);
+            context.startService(svcIntent);
+        } catch (Exception ignored) {
+        }
+    }
+
     public static void wakeAndMaximizeActivity(Context context) {
         if (context == null) return;
         Intent svcIntent = new Intent(context, BuddyOverlayService.class);
@@ -120,6 +186,11 @@ public class BuddyOverlayService extends Service {
                 liveCaptionText = intent.getStringExtra(EXTRA_LIVE_CAPTION);
                 if (liveCaptionText == null) liveCaptionText = "";
                 updateBubbleVisualStyle();
+            } else if (ACTION_REFRESH_MASCOT_OR_PRESET.equals(action)) {
+                if (bubbleContainer != null) {
+                    snapBubbleToConfiguredRestingPosition();
+                    updateBubbleVisualStyle();
+                }
             } else if (ACTION_WAKE_AND_MAXIMIZE.equals(action)) {
                 restoreMainActivityToForeground();
             }
@@ -135,12 +206,58 @@ public class BuddyOverlayService extends Service {
         );
     }
 
+    private int[] computeRestingXY(int sizePx) {
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        int screenW = dm.widthPixels;
+        int screenH = dm.heightPixels;
+
+        // Default ergonomic Bottom-Right position: right edge x = screenWidth - dp(68), bottom y = screenHeight - dp(190)
+        int defaultRightX = Math.max(dpToPx(8f), screenW - sizePx - dpToPx(10f));
+        int defaultLeftX = dpToPx(10f);
+        int defaultBottomY = Math.max(dpToPx(40f), screenH - dpToPx(190f));
+        int defaultMiddleY = (int) (screenH * 0.48f);
+
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String preset = prefs.getString(KEY_RESTING_PRESET, "BOTTOM_RIGHT");
+        if (preset == null) preset = "BOTTOM_RIGHT";
+
+        if ("BOTTOM_LEFT".equals(preset)) {
+            return new int[] { defaultLeftX, defaultBottomY };
+        } else if ("MIDDLE_RIGHT".equals(preset)) {
+            return new int[] { defaultRightX, defaultMiddleY };
+        } else if ("MIDDLE_LEFT".equals(preset)) {
+            return new int[] { defaultLeftX, defaultMiddleY };
+        } else if ("CUSTOM_DRAG".equals(preset)) {
+            int cx = prefs.getInt(KEY_CUSTOM_X, defaultRightX);
+            int cy = prefs.getInt(KEY_CUSTOM_Y, defaultBottomY);
+            cx = Math.max(0, Math.min(screenW - sizePx, cx));
+            cy = Math.max(0, Math.min(screenH - sizePx, cy));
+            return new int[] { cx, cy };
+        }
+        return new int[] { defaultRightX, defaultBottomY };
+    }
+
+    private void snapBubbleToConfiguredRestingPosition() {
+        if (layoutParams == null) return;
+        int sizePx = dpToPx(64f);
+        int[] xy = computeRestingXY(sizePx);
+        layoutParams.x = xy[0];
+        layoutParams.y = xy[1];
+        if (windowManager != null && bubbleContainer != null) {
+            try {
+                windowManager.updateViewLayout(bubbleContainer, layoutParams);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     @SuppressWarnings("deprecation")
     private void showFloatingBubble() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             return;
         }
-        if (bubbleView != null) {
+        if (bubbleContainer != null) {
+            snapBubbleToConfiguredRestingPosition();
             updateBubbleVisualStyle();
             return;
         }
@@ -159,20 +276,38 @@ public class BuddyOverlayService extends Service {
             PixelFormat.TRANSLUCENT
         );
         layoutParams.gravity = Gravity.TOP | Gravity.START;
-        layoutParams.x = getResources().getDisplayMetrics().widthPixels - sizePx - dpToPx(12f);
-        layoutParams.y = (int) (getResources().getDisplayMetrics().heightPixels * 0.56f);
+        int[] restingXY = computeRestingXY(sizePx);
+        layoutParams.x = restingXY[0];
+        layoutParams.y = restingXY[1];
 
-        final TextView tv = new TextView(this);
-        tv.setGravity(Gravity.CENTER);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
-        tv.setTypeface(Typeface.DEFAULT_BOLD);
-        tv.setIncludeFontPadding(false);
-        tv.setLineSpacing(0f, 0.95f);
+        final FrameLayout container = new FrameLayout(this);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            tv.setElevation(dpToPx(10f));
+            container.setElevation(dpToPx(12f));
         }
 
-        tv.setOnTouchListener(new View.OnTouchListener() {
+        mascotImageView = new ImageView(this);
+        mascotImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        FrameLayout.LayoutParams imgLp = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        );
+        container.addView(mascotImageView, imgLp);
+
+        badgeCaptionView = new TextView(this);
+        badgeCaptionView.setGravity(Gravity.CENTER);
+        badgeCaptionView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f);
+        badgeCaptionView.setTypeface(Typeface.DEFAULT_BOLD);
+        badgeCaptionView.setTextColor(Color.WHITE);
+        badgeCaptionView.setIncludeFontPadding(false);
+        FrameLayout.LayoutParams badgeLp = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL
+        );
+        badgeLp.bottomMargin = dpToPx(2f);
+        container.addView(badgeCaptionView, badgeLp);
+
+        container.setOnTouchListener(new View.OnTouchListener() {
             private int initialX;
             private int initialY;
             private float initialTouchX;
@@ -185,7 +320,7 @@ public class BuddyOverlayService extends Service {
                 public void run() {
                     longPressTriggered = true;
                     try {
-                        tv.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                        container.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                     } catch (Exception ignored) {
                     }
                     isListeningState = true;
@@ -222,8 +357,8 @@ public class BuddyOverlayService extends Service {
                             layoutParams.x = initialX + (int) (event.getRawX() - initialTouchX);
                             layoutParams.y = initialY + (int) (event.getRawY() - initialTouchY);
                             try {
-                                if (windowManager != null && bubbleView != null) {
-                                    windowManager.updateViewLayout(bubbleView, layoutParams);
+                                if (windowManager != null && bubbleContainer != null) {
+                                    windowManager.updateViewLayout(bubbleContainer, layoutParams);
                                 }
                             } catch (Exception ignored) {
                             }
@@ -238,8 +373,15 @@ public class BuddyOverlayService extends Service {
                             event.getRawY() - initialTouchY
                         );
                         long elapsed = SystemClock.uptimeMillis() - touchStartTime;
-                        // Short tap (< 380ms, movement < 18px) -> 1-Tap Maximize!
-                        if (!longPressTriggered && upDist < 18.0 && elapsed < 380L) {
+                        if (upDist >= 18.0) {
+                            // Save dragged position for CUSTOM_DRAG preset
+                            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                            prefs.edit()
+                                .putInt(KEY_CUSTOM_X, layoutParams.x)
+                                .putInt(KEY_CUSTOM_Y, layoutParams.y)
+                                .apply();
+                        } else if (!longPressTriggered && elapsed < 380L) {
+                            // Short tap (< 380ms, movement < 18px) -> 1-Tap Maximize!
                             restoreMainActivityToForeground();
                         }
                         return true;
@@ -248,22 +390,17 @@ public class BuddyOverlayService extends Service {
             }
         });
 
-        bubbleView = tv;
+        bubbleContainer = container;
         updateBubbleVisualStyle();
 
         try {
-            windowManager.addView(tv, layoutParams);
+            windowManager.addView(container, layoutParams);
         } catch (Exception e) {
-            bubbleView = null;
+            bubbleContainer = null;
         }
     }
 
     private void restoreMainActivityToForeground() {
-        // CRITICAL ANDROID 10-16 RULE: Launch MainActivity BEFORE removing bubbleView!
-        // While bubbleView (TYPE_APPLICATION_OVERLAY) is attached to WindowManager,
-        // BuddyOverlayService has OS exemption to bring MainActivity to the foreground from background.
-
-        // 1. ActivityManager.moveTaskToFront
         try {
             MainActivity activeInstance = MainActivity.getInstance();
             if (activeInstance != null) {
@@ -276,7 +413,6 @@ public class BuddyOverlayService extends Service {
         } catch (Exception ignored) {
         }
 
-        // 2. Intent + PendingIntent.send()
         Intent restoreIntent = new Intent(this, MainActivity.class);
         restoreIntent.setAction(Intent.ACTION_MAIN);
         restoreIntent.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -297,13 +433,11 @@ public class BuddyOverlayService extends Service {
         } catch (Exception ignored) {
         }
 
-        // 3. Direct startActivity while overlay window is still visible
         try {
             startActivity(restoreIntent);
         } catch (Exception ignored) {
         }
 
-        // 4. Remove the floating bubble after activity transition starts (220ms)
         uiHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -313,42 +447,215 @@ public class BuddyOverlayService extends Service {
     }
 
     private void updateBubbleVisualStyle() {
-        if (bubbleView == null) return;
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.OVAL);
-        if (isListeningState) {
-            bg.setColor(Color.parseColor("#10B981"));
-            bg.setStroke(dpToPx(3f), Color.WHITE);
-            bubbleView.setTextColor(Color.WHITE);
-            if (liveCaptionText != null && !liveCaptionText.trim().isEmpty()) {
-                String shortCap = liveCaptionText.trim();
-                if (shortCap.length() > 10) {
-                    shortCap = shortCap.substring(Math.max(0, shortCap.length() - 10));
-                }
-                bubbleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f);
-                bubbleView.setText("🎙️\n" + shortCap);
-            } else {
-                bubbleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
-                bubbleView.setText("DB\n🎙️");
-            }
+        if (bubbleContainer == null || mascotImageView == null || badgeCaptionView == null) return;
+
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String state = prefs.getString(KEY_MASCOT_STATE, "ACTIVE");
+        if (state == null) state = "ACTIVE";
+
+        String b64 = "";
+        int ringColor = Color.parseColor("#10B981"); // Default Emerald for ACTIVE
+        if ("INACTIVE".equals(state)) {
+            b64 = prefs.getString(KEY_MASCOT_INACTIVE, "");
+            ringColor = Color.parseColor("#94A3B8");
+        } else if ("DELIVERY".equals(state)) {
+            b64 = prefs.getString(KEY_MASCOT_DELIVERY, "");
+            ringColor = Color.parseColor("#F59E0B");
         } else {
-            bg.setColor(Color.parseColor("#0F172A"));
-            bg.setStroke(dpToPx(2f), Color.parseColor("#10B981"));
-            bubbleView.setTextColor(Color.WHITE);
-            bubbleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
-            bubbleView.setText("DB\n↗️");
+            b64 = prefs.getString(KEY_MASCOT_ACTIVE, "");
+            ringColor = Color.parseColor("#10B981");
         }
-        bubbleView.setBackground(bg);
+
+        if (isListeningState) {
+            ringColor = Color.WHITE;
+        }
+
+        int sizePx = dpToPx(64f);
+        Bitmap avatarBmp = decodeCustomOrDrawBuiltinMascot(b64, state, sizePx, ringColor);
+        mascotImageView.setImageBitmap(avatarBmp);
+
+        GradientDrawable pillBg = new GradientDrawable();
+        pillBg.setCornerRadius(dpToPx(8f));
+
+        if (isListeningState) {
+            pillBg.setColor(Color.parseColor("#059669"));
+            pillBg.setStroke(dpToPx(1f), Color.WHITE);
+            String shortCap = liveCaptionText != null ? liveCaptionText.trim() : "";
+            if (shortCap.length() > 9) {
+                shortCap = shortCap.substring(Math.max(0, shortCap.length() - 9));
+            }
+            badgeCaptionView.setText(shortCap.isEmpty() ? "🎙️ VOZ" : "🎙️ " + shortCap);
+            badgeCaptionView.setPadding(dpToPx(5f), dpToPx(1.5f), dpToPx(5f), dpToPx(1.5f));
+            badgeCaptionView.setBackground(pillBg);
+            badgeCaptionView.setVisibility(View.VISIBLE);
+        } else {
+            pillBg.setColor(Color.parseColor("#0F172A"));
+            pillBg.setStroke(dpToPx(1f), ringColor);
+            String badgeTxt = "DELIVERY".equals(state)
+                ? "🚀 ROTA"
+                : "INACTIVE".equals(state)
+                    ? "⚪ PAUSA"
+                    : "DB 👍";
+            badgeCaptionView.setText(badgeTxt);
+            badgeCaptionView.setPadding(dpToPx(5f), dpToPx(1f), dpToPx(5f), dpToPx(1f));
+            badgeCaptionView.setBackground(pillBg);
+            badgeCaptionView.setVisibility(View.VISIBLE);
+        }
     }
 
-    private void removeFloatingBubble() {
-        if (bubbleView != null && windowManager != null) {
+    private Bitmap decodeCustomOrDrawBuiltinMascot(
+        String dataUrlOrB64,
+        String state,
+        int sizePx,
+        int borderColor
+    ) {
+        Bitmap out = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        float half = sizePx / 2f;
+        float strokeW = dpToPx(3f);
+        float radius = half - strokeW;
+
+        Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        bgPaint.setStyle(Paint.Style.FILL);
+        bgPaint.setColor(isListeningState ? Color.parseColor("#065F46") : Color.parseColor("#0F172A"));
+        canvas.drawCircle(half, half, radius, bgPaint);
+
+        boolean drewCustom = false;
+        if (dataUrlOrB64 != null && !dataUrlOrB64.trim().isEmpty()) {
             try {
-                windowManager.removeView(bubbleView);
+                String cleanB64 = dataUrlOrB64.trim();
+                int commaIdx = cleanB64.indexOf(',');
+                if (commaIdx >= 0) {
+                    cleanB64 = cleanB64.substring(commaIdx + 1);
+                }
+                byte[] bytes = Base64.decode(cleanB64, Base64.DEFAULT);
+                Bitmap rawBmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                if (rawBmp != null) {
+                    BitmapShader shader = new BitmapShader(rawBmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+                    Matrix m = new Matrix();
+                    float scale = (float) sizePx / (float) Math.min(rawBmp.getWidth(), rawBmp.getHeight());
+                    m.setScale(scale, scale);
+                    m.postTranslate(
+                        (sizePx - rawBmp.getWidth() * scale) / 2f,
+                        (sizePx - rawBmp.getHeight() * scale) / 2f
+                    );
+                    shader.setLocalMatrix(m);
+                    Paint imgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    imgPaint.setShader(shader);
+                    canvas.drawCircle(half, half, radius - 1f, imgPaint);
+                    drewCustom = true;
+                }
             } catch (Exception ignored) {
             }
         }
-        bubbleView = null;
+
+        if (!drewCustom) {
+            drawBuiltinRobotMascotOnCanvas(canvas, sizePx, state);
+        }
+
+        Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        borderPaint.setStyle(Paint.Style.STROKE);
+        borderPaint.setStrokeWidth(strokeW);
+        borderPaint.setColor(borderColor);
+        canvas.drawCircle(half, half, radius, borderPaint);
+
+        return out;
+    }
+
+    private void drawBuiltinRobotMascotOnCanvas(Canvas canvas, int sizePx, String state) {
+        float s = sizePx / 100f;
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        if ("INACTIVE".equals(state)) {
+            // Pose 2: Robot turned from behind showing green DB BUDDY backpack
+            p.setStyle(Paint.Style.FILL);
+            // Back of robot helmet
+            p.setColor(Color.parseColor("#CBD5E1"));
+            canvas.drawRoundRect(new RectF(30 * s, 16 * s, 70 * s, 46 * s), 14 * s, 14 * s, p);
+            // Prominent Green DB Backpack
+            p.setColor(Color.parseColor("#10B981"));
+            canvas.drawRoundRect(new RectF(26 * s, 40 * s, 74 * s, 82 * s), 10 * s, 10 * s, p);
+            // Dark emblem on backpack
+            p.setColor(Color.parseColor("#064E3B"));
+            canvas.drawRoundRect(new RectF(34 * s, 48 * s, 66 * s, 70 * s), 6 * s, 6 * s, p);
+            // DB text
+            p.setColor(Color.parseColor("#34D399"));
+            p.setTextAlign(Paint.Align.CENTER);
+            p.setTypeface(Typeface.DEFAULT_BOLD);
+            p.setTextSize(14 * s);
+            canvas.drawText("DB", 50 * s, 64 * s, p);
+        } else if ("DELIVERY".equals(state)) {
+            // Pose 3: Robot flying with jet flames firing from DB backpack
+            p.setStyle(Paint.Style.FILL);
+            // Jet flames at bottom
+            p.setColor(Color.parseColor("#F59E0B"));
+            Path flameL = new Path();
+            flameL.moveTo(32 * s, 70 * s);
+            flameL.lineTo(39 * s, 94 * s);
+            flameL.lineTo(46 * s, 70 * s);
+            flameL.close();
+            canvas.drawPath(flameL, p);
+
+            Path flameR = new Path();
+            flameR.moveTo(54 * s, 70 * s);
+            flameR.lineTo(61 * s, 94 * s);
+            flameR.lineTo(68 * s, 70 * s);
+            flameR.close();
+            canvas.drawPath(flameR, p);
+
+            // Green DB Jetpack behind
+            p.setColor(Color.parseColor("#10B981"));
+            canvas.drawRoundRect(new RectF(22 * s, 44 * s, 78 * s, 72 * s), 8 * s, 8 * s, p);
+
+            // Robot torso & head
+            p.setColor(Color.parseColor("#F8FAFC"));
+            canvas.drawRoundRect(new RectF(34 * s, 48 * s, 66 * s, 74 * s), 10 * s, 10 * s, p);
+            canvas.drawRoundRect(new RectF(30 * s, 16 * s, 70 * s, 48 * s), 14 * s, 14 * s, p);
+
+            // Visor & glowing eyes
+            p.setColor(Color.parseColor("#090D16"));
+            canvas.drawRoundRect(new RectF(35 * s, 23 * s, 65 * s, 41 * s), 8 * s, 8 * s, p);
+            p.setColor(Color.parseColor("#34D399"));
+            canvas.drawCircle(43 * s, 32 * s, 3.8f * s, p);
+            canvas.drawCircle(57 * s, 32 * s, 3.8f * s, p);
+        } else {
+            // Pose 1: ACTIVE / ONLINE (Robot 3/4 front with green DB backpack & Thumbs-Up)
+            p.setStyle(Paint.Style.FILL);
+            // Green DB backpack peeking on left
+            p.setColor(Color.parseColor("#10B981"));
+            canvas.drawRoundRect(new RectF(16 * s, 42 * s, 38 * s, 76 * s), 7 * s, 7 * s, p);
+
+            // Robot torso & head
+            p.setColor(Color.parseColor("#F8FAFC"));
+            canvas.drawRoundRect(new RectF(32 * s, 54 * s, 68 * s, 82 * s), 12 * s, 12 * s, p);
+            canvas.drawRoundRect(new RectF(28 * s, 18 * s, 72 * s, 54 * s), 16 * s, 16 * s, p);
+
+            // Dark visor
+            p.setColor(Color.parseColor("#090D16"));
+            canvas.drawRoundRect(new RectF(34 * s, 25 * s, 66 * s, 46 * s), 9 * s, 9 * s, p);
+
+            // Glowing green eyes
+            p.setColor(Color.parseColor("#10B981"));
+            canvas.drawCircle(44 * s, 35 * s, 4.2f * s, p);
+            canvas.drawCircle(57 * s, 35 * s, 4.2f * s, p);
+
+            // Thumbs-up hand on right
+            p.setColor(Color.parseColor("#34D399"));
+            canvas.drawCircle(79 * s, 52 * s, 7 * s, p);
+            canvas.drawRoundRect(new RectF(76 * s, 40 * s, 82 * s, 50 * s), 3 * s, 3 * s, p);
+        }
+    }
+
+    private void removeFloatingBubble() {
+        if (bubbleContainer != null && windowManager != null) {
+            try {
+                windowManager.removeView(bubbleContainer);
+            } catch (Exception ignored) {
+            }
+        }
+        bubbleContainer = null;
+        mascotImageView = null;
+        badgeCaptionView = null;
     }
 
     @SuppressWarnings("deprecation")

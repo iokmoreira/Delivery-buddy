@@ -69,6 +69,19 @@ jobs:
           cp -f android-native-template/MainActivity.java android/app/src/main/java/com/pbg/deliverybuddy/MainActivity.java
           cp -f android-native-template/accessibility_service_config.xml android/app/src/main/res/xml/accessibility_service_config.xml
 
+          # Inject Delivery Buddy Robot Mascot Adaptive Icon (#0F172A carbon background + DB Robot foreground)
+          mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/drawable-v24
+          mkdir -p android/app/src/main/res/values
+          cp -f android-native-template/ic_launcher_foreground.xml android/app/src/main/res/drawable/ic_launcher_foreground.xml
+          cp -f android-native-template/ic_launcher_foreground.xml android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
+          cat << 'EOF' > android/app/src/main/res/values/ic_launcher_background.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#0F172A</color>
+          </resources>
+          EOF
+
           # Copy persistent deterministic keystore to both android/app/ and ~/.android/debug.keystore
           mkdir -p ~/.android
           cp -f android-native-template/buddy-debug.keystore ~/.android/debug.keystore

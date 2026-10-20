@@ -199,10 +199,27 @@ public class MainActivity extends BridgeActivity {
             }
 
             try {
+                if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                        LocationManager.NETWORK_PROVIDER,
+                        1500L,
+                        1.0f,
+                        nativeLocationListener,
+                        Looper.getMainLooper()
+                    );
+                    Location lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                    if (lastNet != null) {
+                        dispatchNativeLocationToWebView(lastNet);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+
+            try {
                 if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                     locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER,
-                        2000L,
+                        1500L,
                         1.0f,
                         nativeLocationListener,
                         Looper.getMainLooper()
@@ -216,18 +233,18 @@ public class MainActivity extends BridgeActivity {
             }
 
             try {
-                if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                if (locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER)) {
                     locationManager.requestLocationUpdates(
-                        LocationManager.NETWORK_PROVIDER,
-                        2500L,
-                        2.0f,
+                        LocationManager.PASSIVE_PROVIDER,
+                        2000L,
+                        1.0f,
                         nativeLocationListener,
                         Looper.getMainLooper()
                     );
                     if (!hasNativeGpsFix) {
-                        Location lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                        if (lastNet != null) {
-                            dispatchNativeLocationToWebView(lastNet);
+                        Location lastPassive = locationManager.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER);
+                        if (lastPassive != null) {
+                            dispatchNativeLocationToWebView(lastPassive);
                         }
                     }
                 }
@@ -1181,6 +1198,45 @@ public class MainActivity extends BridgeActivity {
                         );
                         webView.evaluateJavascript(js, null);
                     }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void setBubbleMascotImages(
+            final String inactiveB64,
+            final String activeB64,
+            final String deliveryB64
+        ) {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    BuddyOverlayService.setBubbleMascotImages(
+                        MainActivity.this,
+                        inactiveB64,
+                        activeB64,
+                        deliveryB64
+                    );
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void setBubbleMascotState(final String state) {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    BuddyOverlayService.setBubbleMascotState(MainActivity.this, state);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void setBubbleRestingPreset(final String preset) {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    BuddyOverlayService.setBubbleRestingPreset(MainActivity.this, preset);
                 }
             });
         }

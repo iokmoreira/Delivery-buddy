@@ -55,6 +55,7 @@ import {
   RoadHazardsSettingsSection,
   ZoneAgreementsSettingsSection,
 } from './ShiftRadarModule';
+import { BUBBLE_RESTING_PRESET_OPTIONS } from '../utils/buddyMascotEngine';
 
 const VEHICLE_OPTIONS: CourierRegistrationVehicle[] = [
   'Mota 125cc',
@@ -1370,7 +1371,16 @@ export const MenuMaisHubView: React.FC = () => {
     setIsBubbleMinimized,
     isListeningSpeechRecognition,
     requestOrConfirmSosActivation,
+    buddyMascotImages,
+    currentMascotState,
+    uploadThreePoseMascotSheet,
+    resetMascotImagesToBuiltin,
+    bubbleRestingPreset,
+    setBubbleRestingPreset,
   } = useEstafetas();
+
+  const mascotFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [mascotUploadStatus, setMascotUploadStatus] = useState<string>('');
 
   const [subPage, setSubPage] = useState<AjustesSubPageId>('LISTA_PRINCIPAL');
   const [isShiftDrawerOpen, setIsShiftDrawerOpen] = useState<boolean>(false);
@@ -1474,6 +1484,180 @@ export const MenuMaisHubView: React.FC = () => {
 
   return (
     <div className="space-y-3">
+      {/* Dynamic 3-State Robot Mascot (Ativo / Inativo / Em Entrega) & Floating Bubble Resting Position */}
+      <div className="rounded-xl bg-zinc-900/95 border border-emerald-500/45 p-3 space-y-3 shadow-md">
+        <input
+          ref={mascotFileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+              setMascotUploadStatus('A recortar as 3 poses da imagem...');
+              await uploadThreePoseMascotSheet(file);
+              setMascotUploadStatus(
+                '✓ 3 Poses do Robô Buddy recortadas e aplicadas na App, Mapa e Bolinha!'
+              );
+            } catch {
+              setMascotUploadStatus('Erro ao processar a imagem.');
+            }
+            e.target.value = '';
+          }}
+        />
+
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <span className="text-xs font-extrabold text-zinc-100 block">
+              🤖 Mascote Dinâmico Delivery Buddy (3 Estados)
+            </span>
+            <span className="text-[10px] text-zinc-400 block">
+              Muda automaticamente no Topo, Pino GPS e Bolinha Flutuante
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => mascotFileInputRef.current?.click()}
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow"
+            >
+              <span>🤖 Carregar Imagem das 3 Poses do Buddy</span>
+            </button>
+            {buddyMascotImages.isCustomUploaded && (
+              <button
+                type="button"
+                onClick={() => {
+                  resetMascotImagesToBuiltin();
+                  setMascotUploadStatus('Robô vetorial padrão restaurado.');
+                }}
+                title="Repor robô padrão"
+                className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2.5 py-1.5 text-[10px] font-bold cursor-pointer"
+              >
+                Repor
+              </button>
+            )}
+          </div>
+        </div>
+
+        {mascotUploadStatus && (
+          <div className="rounded-lg bg-emerald-950/70 border border-emerald-500/40 px-2.5 py-1.5 text-[10px] font-bold text-emerald-300">
+            {mascotUploadStatus}
+          </div>
+        )}
+
+        {/* 3 Poses Preview Row */}
+        <div className="grid grid-cols-3 gap-2">
+          <div
+            className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
+              currentMascotState === 'ACTIVE'
+                ? 'bg-emerald-950/60 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                : 'bg-zinc-950 border-zinc-800'
+            }`}
+          >
+            <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-emerald-400 bg-slate-950 mb-1">
+              <img
+                src={buddyMascotImages.mascotActive}
+                alt="Pose 1 Ativo"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <span className="text-[10px] font-extrabold text-emerald-300">
+              1. Ativo 👍
+            </span>
+            <span className="text-[9px] text-zinc-400">🟢 Online</span>
+          </div>
+
+          <div
+            className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
+              currentMascotState === 'INACTIVE'
+                ? 'bg-slate-900 border-slate-400 shadow-sm'
+                : 'bg-zinc-950 border-zinc-800'
+            }`}
+          >
+            <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-slate-400 bg-slate-950 mb-1">
+              <img
+                src={buddyMascotImages.mascotInactive}
+                alt="Pose 2 Inativo"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <span className="text-[10px] font-extrabold text-slate-200">
+              2. Inativo
+            </span>
+            <span className="text-[9px] text-zinc-400">⚪ Pausa (Costas)</span>
+          </div>
+
+          <div
+            className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
+              currentMascotState === 'DELIVERY'
+                ? 'bg-amber-950/60 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                : 'bg-zinc-950 border-zinc-800'
+            }`}
+          >
+            <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-amber-400 bg-slate-950 mb-1">
+              <img
+                src={buddyMascotImages.mascotDelivery}
+                alt="Pose 3 Em Entrega"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <span className="text-[10px] font-extrabold text-amber-300">
+              3. Em Entrega 🚀
+            </span>
+            <span className="text-[9px] text-zinc-400">Jato DB Ativo</span>
+          </div>
+        </div>
+
+        {/* Configurable Floating Bubble Resting Position Selector */}
+        <div className="pt-2 border-t border-zinc-800 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-extrabold text-zinc-100">
+              📍 Posição de Repouso da Bolinha Flutuante
+            </span>
+            <span className="text-[10px] font-semibold text-emerald-400">
+              Ao minimizar a App
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {BUBBLE_RESTING_PRESET_OPTIONS.map((opt) => {
+              const isSelected = bubbleRestingPreset === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setBubbleRestingPreset(opt.id)}
+                  className={`rounded-xl px-3 py-2 text-left border transition cursor-pointer flex items-center justify-between gap-2 ${
+                    isSelected
+                      ? 'bg-emerald-600/20 border-emerald-400 text-white'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-900'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <span className="block text-[11px] font-extrabold truncate">
+                      {opt.label}
+                    </span>
+                    <span className="block text-[9px] text-zinc-400 truncate">
+                      {opt.shortDesc}
+                    </span>
+                  </div>
+                  <span
+                    className={`h-4 w-4 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                      isSelected
+                        ? 'bg-emerald-500 text-zinc-950'
+                        : 'bg-zinc-800 text-zinc-500'
+                    }`}
+                  >
+                    {isSelected ? '✓' : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Gemini-Style Natural Voice Engine Tuning Card (1.15x Default +15% Faster) */}
       <div className="rounded-xl bg-zinc-900/95 border border-indigo-500/35 p-3 space-y-2.5">
         <div className="flex items-center justify-between gap-2 flex-wrap">

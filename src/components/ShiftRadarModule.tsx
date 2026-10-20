@@ -422,6 +422,8 @@ export const ShiftRadarModule: React.FC = () => {
     isAppPaused,
     activeDeliveryLifecycle,
     hasRealActiveDelivery,
+    currentMascotState,
+    currentMascotImageUrl,
   } = useEstafetas();
 
   const isDaylight = themeMode === 'DAYLIGHT';
@@ -484,9 +486,47 @@ export const ShiftRadarModule: React.FC = () => {
     realCourierProfile?.lng,
   ]);
 
-  // Direct high-frequency GPS watcher inside Map tab (Native Android + Web Geolocation)
+  // Direct high-frequency GPS watcher inside Map tab (Native Android + Instant Network <1s + High-Accuracy GPS)
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    const applyIncomingFix = (
+      lat: number,
+      lng: number,
+      accuracy?: number
+    ) => {
+      if (
+        Number.isFinite(lat) &&
+        Number.isFinite(lng) &&
+        (lat !== 0 || lng !== 0)
+      ) {
+        setLocalLiveCoords({
+          lat: Number(lat.toFixed(6)),
+          lng: Number(lng.toFixed(6)),
+        });
+        if (typeof accuracy === 'number' && Number.isFinite(accuracy) && accuracy > 0) {
+          setLiveAccuracyMeters(Math.min(80, Math.max(6, accuracy)));
+        }
+      }
+    };
+
+    const handleNativeLocationEvent = (e: Event) => {
+      const detail = (
+        e as CustomEvent<{
+          lat: number;
+          lng: number;
+          accuracy?: number;
+        }>
+      ).detail;
+      if (detail) {
+        applyIncomingFix(detail.lat, detail.lng, detail.accuracy);
+      }
+    };
+
+    window.addEventListener(
+      'buddy-native-location',
+      handleNativeLocationEvent as EventListener
+    );
 
     const winAny = window as unknown as {
       BuddyNativeOverlay?: {
@@ -500,27 +540,66 @@ export const ShiftRadarModule: React.FC = () => {
     }
 
     if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-      return;
+      return () => {
+        window.removeEventListener(
+          'buddy-native-location',
+          handleNativeLocationEvent as EventListener
+        );
+      };
     }
 
     let watchId: number | null = null;
     try {
-      watchId = navigator.geolocation.watchPosition(
+      // 1. Instant Network/Wi-Fi Location Fix (<1s even indoors)
+      navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
-            setLocalLiveCoords({
-              lat: Number(lat.toFixed(6)),
-              lng: Number(lng.toFixed(6)),
-            });
-            if (Number.isFinite(pos.coords.accuracy) && pos.coords.accuracy > 0) {
-              setLiveAccuracyMeters(Math.min(80, Math.max(6, pos.coords.accuracy)));
-            }
-          }
+          applyIncomingFix(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            pos.coords.accuracy
+          );
         },
         () => {
-          // Wait for GPS signal without placing fake pins
+          // ignore and wait for watchPosition
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 3000,
+          maximumAge: 60000,
+        }
+      );
+
+      // 2. Continuous High-Accuracy GPS Watch + Network Fallback on Timeout
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          applyIncomingFix(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            pos.coords.accuracy
+          );
+        },
+        () => {
+          try {
+            navigator.geolocation.getCurrentPosition(
+              (netPos) => {
+                applyIncomingFix(
+                  netPos.coords.latitude,
+                  netPos.coords.longitude,
+                  netPos.coords.accuracy
+                );
+              },
+              () => {
+                // Keep waiting for GPS without placing fake pins
+              },
+              {
+                enableHighAccuracy: false,
+                timeout: 4000,
+                maximumAge: 60000,
+              }
+            );
+          } catch {
+            // ignore
+          }
         },
         {
           enableHighAccuracy: true,
@@ -533,6 +612,10 @@ export const ShiftRadarModule: React.FC = () => {
     }
 
     return () => {
+      window.removeEventListener(
+        'buddy-native-location',
+        handleNativeLocationEvent as EventListener
+      );
       if (watchId !== null) {
         try {
           navigator.geolocation.clearWatch(watchId);
@@ -587,7 +670,7 @@ export const ShiftRadarModule: React.FC = () => {
     [setActiveBuddyPopupCourierId]
   );
 
-  // Initialize Leaflet Map once
+  // Initialize Leaflet Map once with Free Key-Free OpenStreetMap Tiles
   useEffect(() => {
     if (!mapContainerRef.current || leafletMapRef.current) return;
 
@@ -602,12 +685,22 @@ export const ShiftRadarModule: React.FC = () => {
       attributionControl: false,
     });
 
-    const initialTileUrl =
-      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+    const initialTileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
     const tileLayer = L.tileLayer(initialTileUrl, {
       maxZoom: 19,
-      subdomains: 'abcd',
+      subdomains: 'abc',
     }).addTo(map);
+
+    // Fallback to direct tile.openstreetmap.org if a subdomain ever errors
+    let switchedToDirectOsm = false;
+    tileLayer.on('tileerror', () => {
+      if (!switchedToDirectOsm && tileLayerRef.current) {
+        switchedToDirectOsm = true;
+        tileLayerRef.current.setUrl(
+          'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+        );
+      }
+    });
 
     const peerLayer = L.layerGroup().addTo(map);
 
@@ -636,7 +729,7 @@ export const ShiftRadarModule: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switch between Street and Satellite tiles
+  // Switch between Free OpenStreetMap ("Ruas") and Esri World Imagery ("Satélite")
   useEffect(() => {
     const tileLayer = tileLayerRef.current;
     if (!tileLayer) return;
@@ -645,13 +738,11 @@ export const ShiftRadarModule: React.FC = () => {
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
       );
     } else {
-      tileLayer.setUrl(
-        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-      );
+      tileLayer.setUrl('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
     }
   }, [mapStyleMode]);
 
-  // Update logged-in user's real GPS marker & auto-follow
+  // Update logged-in user's real GPS marker with the Dynamic 3-State Robot Mascot & auto-follow
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map) return;
@@ -671,12 +762,21 @@ export const ShiftRadarModule: React.FC = () => {
 
     const latLng: [number, number] = [localLiveCoords.lat, localLiveCoords.lng];
     const selfCallsign = (realCourierProfile?.name || 'Tu').trim();
-    const dotColor = isAppPaused ? '#94a3b8' : '#10b981';
+    const dotColor =
+      currentMascotState === 'DELIVERY'
+        ? '#f59e0b'
+        : currentMascotState === 'INACTIVE'
+          ? '#94a3b8'
+          : '#10b981';
 
     // Update or create accuracy circle
     if (selfAccuracyCircleRef.current) {
       selfAccuracyCircleRef.current.setLatLng(latLng);
       selfAccuracyCircleRef.current.setRadius(liveAccuracyMeters);
+      selfAccuracyCircleRef.current.setStyle({
+        color: dotColor,
+        fillColor: dotColor,
+      });
     } else {
       selfAccuracyCircleRef.current = L.circle(latLng, {
         radius: liveAccuracyMeters,
@@ -688,15 +788,25 @@ export const ShiftRadarModule: React.FC = () => {
       }).addTo(map);
     }
 
-    // Compact, clean GPS pin for logged-in user
+    // Dynamic 3-State Robot Mascot GPS Pin for logged-in user
+    const stateBadge =
+      currentMascotState === 'DELIVERY'
+        ? '🚀'
+        : currentMascotState === 'INACTIVE'
+          ? '⚪'
+          : '👍';
+
     const selfIcon = L.divIcon({
       className: 'buddy-clean-self-pin',
       html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);">
-        <div style="position:relative;width:24px;height:24px;display:flex;align-items:center;justify-content:center;">
-          <span style="position:absolute;inset:0;border-radius:9999px;background:${dotColor};opacity:0.35;animation:ping 1.8s cubic-bezier(0,0,0.2,1) infinite;"></span>
-          <div style="width:16px;height:16px;border-radius:9999px;background:${dotColor};border:3px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.45);"></div>
+        <div style="position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center;">
+          <span style="position:absolute;inset:-4px;border-radius:9999px;background:${dotColor};opacity:0.32;animation:ping 1.8s cubic-bezier(0,0,0.2,1) infinite;"></span>
+          <div style="width:42px;height:42px;border-radius:9999px;background:#0f172a;border:3px solid ${dotColor};overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;">
+            <img src="${currentMascotImageUrl}" alt="Buddy" style="width:100%;height:100%;object-fit:cover;border-radius:9999px;" />
+          </div>
+          <span style="position:absolute;bottom:-2px;right:-4px;background:#09090b;border:1.5px solid ${dotColor};border-radius:9999px;font-size:10px;line-height:1;padding:2px 3px;">${stateBadge}</span>
         </div>
-        <span style="margin-top:2px;background:#09090b;color:#ffffff;font-size:10px;font-weight:900;padding:1px 6px;border-radius:9999px;border:1.5px solid ${dotColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4);">
+        <span style="margin-top:3px;background:#09090b;color:#ffffff;font-size:10px;font-weight:900;padding:1.5px 7px;border-radius:9999px;border:1.5px solid ${dotColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.45);">
           ${selfCallsign}
         </span>
       </div>`,
@@ -726,6 +836,8 @@ export const ShiftRadarModule: React.FC = () => {
     liveAccuracyMeters,
     realCourierProfile?.name,
     isAppPaused,
+    currentMascotState,
+    currentMascotImageUrl,
   ]);
 
   // Render active peer couriers (within last 5 minutes only)
@@ -767,6 +879,24 @@ export const ShiftRadarModule: React.FC = () => {
 
     if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
       try {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = Number(pos.coords.latitude.toFixed(6));
+            const lng = Number(pos.coords.longitude.toFixed(6));
+            setLocalLiveCoords({ lat, lng });
+            if (leafletMapRef.current) {
+              leafletMapRef.current.flyTo([lat, lng], 17, {
+                animate: true,
+                duration: 0.6,
+              });
+            }
+          },
+          () => {
+            // ignore
+          },
+          { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 }
+        );
+
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             const lat = Number(pos.coords.latitude.toFixed(6));

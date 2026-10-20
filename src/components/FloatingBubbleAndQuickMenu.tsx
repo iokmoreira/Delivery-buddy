@@ -168,12 +168,40 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
     rainBonusFinanceActive,
     toggleRainBonusFinanceActive,
     openAndFetchAmaranteWeather,
+    currentMascotState,
+    currentMascotImageUrl,
+    bubbleRestingPreset,
   } = useEstafetas();
 
   const [bubblePositions, setBubblePositions] = useState<BubblePositionsMap>(
     () => loadSavedBubblePositions()
   );
   const [isSavingVoiceSkill, setIsSavingVoiceSkill] = useState<boolean>(false);
+
+  // Snap to configured resting preset when minimized or when preset changes
+  useEffect(() => {
+    if (bubbleRestingPreset === 'CUSTOM_DRAG') return;
+    const w = typeof window !== 'undefined' ? window.innerWidth : 400;
+    const h = typeof window !== 'undefined' ? window.innerHeight : 760;
+    const rightX = clampBubbleX(w - 72);
+    const leftX = clampBubbleX(12);
+    const bottomY = clampBubbleY(h - 180);
+    const midY = clampBubbleY(Math.round(h * 0.48));
+
+    let nextLogo: BubbleXY = { x: rightX, y: bottomY };
+    if (bubbleRestingPreset === 'BOTTOM_LEFT') {
+      nextLogo = { x: leftX, y: bottomY };
+    } else if (bubbleRestingPreset === 'MIDDLE_RIGHT') {
+      nextLogo = { x: rightX, y: midY };
+    } else if (bubbleRestingPreset === 'MIDDLE_LEFT') {
+      nextLogo = { x: leftX, y: midY };
+    }
+
+    setBubblePositions((prev) => ({
+      ...prev,
+      logo: nextLogo,
+    }));
+  }, [bubbleRestingPreset, isBubbleMinimized]);
 
   const activeDragRef = useRef<{
     id: DraggableBubbleId;
@@ -1273,14 +1301,14 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
           </div>
         )}
 
-        {/* Single Compact Draggable Circular DB Bubble (60px x 60px, pointer-events: auto, position: fixed) */}
+        {/* Single Compact Draggable Circular DB Robot Mascot Bubble (62px x 62px, pointer-events: auto, position: fixed) */}
         <button
           type="button"
           style={{
             left: `${bubblePositions.logo.x}px`,
             top: `${bubblePositions.logo.y}px`,
-            width: '60px',
-            height: '60px',
+            width: '62px',
+            height: '62px',
             pointerEvents: 'auto',
           }}
           onPointerDown={(e) => handleBubblePointerDown('logo', e)}
@@ -1296,27 +1324,46 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
           aria-label="Maximizar Delivery Buddy (Bolinha Flutuante DB)"
           className={`fixed z-50 rounded-full flex flex-col items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing transition-all duration-200 ${
             isListeningSpeechRecognition
-              ? 'bg-[#10b981] hover:bg-emerald-400 text-slate-950 border-2 border-emerald-200 shadow-[0_0_28px_rgba(16,185,129,0.9)]'
-              : 'bg-[#0f172a] hover:bg-slate-800 text-white border-2 border-emerald-400/80 shadow-[0_0_22px_rgba(15,23,42,0.85)]'
+              ? 'bg-[#10b981] text-slate-950 border-[3px] border-white shadow-[0_0_28px_rgba(16,185,129,0.9)]'
+              : currentMascotState === 'DELIVERY'
+                ? 'bg-[#0f172a] text-white border-[3px] border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.85)]'
+                : currentMascotState === 'INACTIVE'
+                  ? 'bg-[#0f172a] text-white border-[3px] border-slate-500 shadow-[0_0_18px_rgba(15,23,42,0.85)]'
+                  : 'bg-[#0f172a] text-white border-[3px] border-emerald-400 shadow-[0_0_22px_rgba(16,185,129,0.65)]'
           }`}
         >
-          {isListeningSpeechRecognition && (
-            <span className="absolute inset-0 rounded-full bg-emerald-400/55 animate-ping pointer-events-none" />
+          {(isListeningSpeechRecognition || currentMascotState === 'DELIVERY') && (
+            <span
+              className={`absolute inset-0 rounded-full animate-ping pointer-events-none ${
+                isListeningSpeechRecognition
+                  ? 'bg-emerald-400/55'
+                  : 'bg-amber-400/40'
+              }`}
+            />
           )}
+          <div className="h-full w-full rounded-full overflow-hidden pointer-events-none relative z-10">
+            <img
+              src={currentMascotImageUrl}
+              alt="Buddy Mascote"
+              className="h-full w-full object-cover rounded-full"
+            />
+          </div>
           <span
             className={`absolute -top-1.5 -right-1.5 rounded-full px-1.5 py-0.5 text-[7px] font-mono font-extrabold leading-none shadow-sm pointer-events-none z-20 border ${
               isListeningSpeechRecognition
                 ? 'bg-emerald-950 text-emerald-300 border-emerald-300'
-                : 'bg-slate-900 text-emerald-300 border-emerald-500/60'
+                : currentMascotState === 'DELIVERY'
+                  ? 'bg-amber-950 text-amber-200 border-amber-400'
+                  : 'bg-slate-900 text-emerald-300 border-emerald-500/60'
             }`}
           >
-            {isListeningSpeechRecognition ? '🎙️ ON' : '↗️ ABRIR'}
-          </span>
-          <span className="text-sm font-black tracking-tight leading-none pointer-events-none relative z-10">
-            DB
-          </span>
-          <span className="text-[7px] font-mono font-extrabold uppercase leading-none mt-0.5 pointer-events-none relative z-10 opacity-90">
-            Buddy
+            {isListeningSpeechRecognition
+              ? '🎙️ ON'
+              : currentMascotState === 'DELIVERY'
+                ? '🚀 ROTA'
+                : currentMascotState === 'INACTIVE'
+                  ? '⚪ PAUSA'
+                  : '↗️ ABRIR'}
           </span>
         </button>
       </>
