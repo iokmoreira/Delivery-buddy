@@ -969,7 +969,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                             }`}
                           >
                             {isSelf
-                              ? '● TU ONLINE • SUPABASE'
+                              ? '● Online'
                               : getConnectionStateLabel(courier)}
                           </span>
                           <span className="rounded bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 font-mono text-zinc-300 shrink-0">
@@ -1190,7 +1190,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                     className="w-full rounded-xl py-3 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-xs"
                   >
                     <Mic className="h-4 w-4" />
-                    <span>Ditar Mensagem ao Vivo (Pop-up 45%)</span>
+                    <span>Ditar Mensagem ao Vivo</span>
                   </button>
 
                   <button
@@ -1259,7 +1259,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
                     <Radio className="h-3.5 w-3.5 text-zinc-400" />
-                    <span>Últimas Transmissões (Zero-PII)</span>
+                    <span>Últimas Transmissões</span>
                   </span>
                   <span className="text-[10px] font-mono text-zinc-500">
                     Amarante 25km
@@ -1326,7 +1326,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                 Blog da Comunidade Buddys (Amarante 25 km)
               </h2>
               <p className="text-[10px] text-zinc-400">
-                Dicas de rua, alertas e entreajuda (Zero exposição de ganhos)
+                Dicas de rua, alertas e entreajuda
               </p>
             </div>
             <span className="rounded bg-zinc-950 border border-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-300">

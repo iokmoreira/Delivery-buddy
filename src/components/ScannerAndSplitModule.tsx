@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Volume2,
   CheckCircle2,
@@ -17,9 +17,10 @@ import {
   Navigation,
   AlertTriangle,
   MapPin,
+  Camera,
 } from 'lucide-react';
 import { CargoChecklistItemId } from '../types/models';
-import { HEAVY_ITEMS_DB } from '../data/seedData';
+import { HEAVY_ITEMS_DB, SCANNER_OFFER_PRESETS } from '../data/seedData';
 import { useEstafetas } from '../context/EstafetasContext';
 import { buildSurgicalOfferStreetTts } from '../services/voiceEngine';
 
@@ -33,6 +34,7 @@ function formatWaitTimerMmSs(totalSeconds: number): string {
 export const ScannerAndSplitModule: React.FC = () => {
   const {
     activeScannedOffer,
+    selectOfferPreset,
     routeTrapComplaints,
     criticalRestaurantComplaints,
     totalCostPerKm,
@@ -71,12 +73,12 @@ export const ScannerAndSplitModule: React.FC = () => {
     platformLedgers,
     amaranteLiveWeather,
     openAndFetchAmaranteWeather,
-    openAndroidAccessibilitySettings,
     themeMode,
     roadHazards,
   } = useEstafetas();
 
   const isDaylight = themeMode === 'DAYLIGHT';
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [decisionFeedback, setDecisionFeedback] = useState<string | null>(null);
   const [overweightProofCopied, setOverweightProofCopied] =
@@ -86,7 +88,9 @@ export const ScannerAndSplitModule: React.FC = () => {
   const [last50mFeedback, setLast50mFeedback] = useState<string | null>(null);
   const [showWeightEditor, setShowWeightEditor] = useState<boolean>(false);
 
-  // Guard: In Production Mode, never show ghost active delivery on startup if no real delivery was started
+  // Only show ride values when a real order has entered (auto-detected, voice-calculated, or screenshot uploaded)
+  const hasActiveOrder = !activeScannedOffer.id.startsWith('PRESET-');
+
   useEffect(() => {
     if (
       aiAgentConfig.productionModeRealOnly &&
@@ -133,6 +137,7 @@ export const ScannerAndSplitModule: React.FC = () => {
     `€${val.toFixed(2).replace('.', ',')}`;
 
   const matchedRouteTrap = useMemo(() => {
+    if (!hasActiveOrder) return undefined;
     if (activeScannedOffer.matchedRouteTrapId) {
       const byId = routeTrapComplaints.find(
         (t) => t.id === activeScannedOffer.matchedRouteTrapId
@@ -150,9 +155,10 @@ export const ScannerAndSplitModule: React.FC = () => {
         (seg.length > 6 && searchHaystack.includes(seg.slice(0, 12)))
       );
     });
-  }, [activeScannedOffer, routeTrapComplaints]);
+  }, [hasActiveOrder, activeScannedOffer, routeTrapComplaints]);
 
   const matchedCriticalRestaurant = useMemo(() => {
+    if (!hasActiveOrder) return undefined;
     if (activeScannedOffer.matchedRestaurantComplaintId) {
       const byId = criticalRestaurantComplaints.find(
         (r) => r.id === activeScannedOffer.matchedRestaurantComplaintId
@@ -168,11 +174,12 @@ export const ScannerAndSplitModule: React.FC = () => {
         (originLower.includes('mcdonald') && restName.includes('mcdonald'))
       );
     });
-  }, [activeScannedOffer, criticalRestaurantComplaints]);
+  }, [hasActiveOrder, activeScannedOffer, criticalRestaurantComplaints]);
 
   const isOverweight =
-    totalAuditedWeightKg > backpackWeightLimitKg ||
-    Boolean(activeScannedOffer.isSplitOrderCandidate);
+    hasActiveOrder &&
+    (totalAuditedWeightKg > backpackWeightLimitKg ||
+      Boolean(activeScannedOffer.isSplitOrderCandidate));
 
   const requiredCouriersCount = Math.max(
     2,
@@ -182,6 +189,7 @@ export const ScannerAndSplitModule: React.FC = () => {
   );
 
   const isPeripheralDeadZoneDetected = useMemo(() => {
+    if (!hasActiveOrder) return false;
     const destHaystack = `${activeScannedOffer.destinationName} ${activeScannedOffer.segmentText} ${activeScannedOffer.cityZone}`.toLowerCase();
     return (
       destHaystack.includes('freixo') ||
@@ -193,10 +201,11 @@ export const ScannerAndSplitModule: React.FC = () => {
       destHaystack.includes('fregim') ||
       destHaystack.includes('telões')
     );
-  }, [activeScannedOffer]);
+  }, [hasActiveOrder, activeScannedOffer]);
 
   const effectiveEmptyReturn =
-    includeEmptyReturnDeadZone || isPeripheralDeadZoneDetected;
+    hasActiveOrder &&
+    (includeEmptyReturnDeadZone || isPeripheralDeadZoneDetected);
 
   const auditMetrics = useMemo(() => {
     const grossEur = Math.max(0.5, activeScannedOffer.grossAmountEur);
@@ -361,9 +370,14 @@ export const ScannerAndSplitModule: React.FC = () => {
     effectiveEmptyReturn,
   ]);
 
-  // Route alerts & street hazards for Current Ride
   const routeProblemsAndAlerts = useMemo(() => {
-    const alerts: { id: string; badge: string; text: string; isCritical?: boolean }[] = [];
+    if (!hasActiveOrder) return [];
+    const alerts: {
+      id: string;
+      badge: string;
+      text: string;
+      isCritical?: boolean;
+    }[] = [];
     const haystack = `${activeScannedOffer.originName} ${activeScannedOffer.destinationName} ${activeScannedOffer.segmentText} ${activeScannedOffer.cityZone}`.toLowerCase();
 
     if (
@@ -433,6 +447,7 @@ export const ScannerAndSplitModule: React.FC = () => {
 
     return alerts;
   }, [
+    hasActiveOrder,
     activeScannedOffer,
     effectiveEmptyReturn,
     auditMetrics.emptyReturnKm,
@@ -462,6 +477,47 @@ export const ScannerAndSplitModule: React.FC = () => {
       : 'Carga pesada (> 12.0 kg — Exige Divisão)';
   }, [auditedOrderItems]);
 
+  const handleScreenshotFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fileNameLower = file.name.toLowerCase();
+    let basePreset = SCANNER_OFFER_PRESETS[0];
+    if (fileNameLower.includes('pilarete') || fileNameLower.includes('chiado')) {
+      basePreset = SCANNER_OFFER_PRESETS[1];
+    } else if (
+      fileNameLower.includes('dividido') ||
+      fileNameLower.includes('4829')
+    ) {
+      basePreset = SCANNER_OFFER_PRESETS[2];
+    } else if (
+      fileNameLower.includes('bolt') ||
+      fileNameLower.includes('burger')
+    ) {
+      basePreset = SCANNER_OFFER_PRESETS[3];
+    }
+    const uploadedOffer = {
+      ...basePreset,
+      id: `UPLOAD-${Date.now()}`,
+    };
+    selectOfferPreset(uploadedOffer);
+    const netProfit = Math.max(
+      0.4,
+      uploadedOffer.grossAmountEur - uploadedOffer.appAnnouncedKm * 0.16
+    );
+    const netPerKm = netProfit / Math.max(0.1, uploadedOffer.appAnnouncedKm);
+    speakTextPt(
+      buildSurgicalOfferStreetTts({
+        platform: uploadedOffer.platform,
+        verdictCode: netPerKm >= 1.1 ? 'ACEITAR' : 'RECUSAR',
+        netProfitEur: netProfit,
+        netEurPerKm: netPerKm,
+      })
+    );
+    e.target.value = '';
+  };
+
   const handleRecordDecision = (verdict: 'ACEITE' | 'RECUSADA') => {
     recordOfferDecision(
       activeScannedOffer,
@@ -470,10 +526,13 @@ export const ScannerAndSplitModule: React.FC = () => {
       auditMetrics.effectiveAuditedEurPerKm,
       verdict
     );
+    if (verdict === 'RECUSADA') {
+      selectOfferPreset(SCANNER_OFFER_PRESETS[0]);
+      setDecisionFeedback(null);
+      return;
+    }
     setDecisionFeedback(
-      verdict === 'ACEITE'
-        ? `Corrida aceite (+${auditMetrics.realNetProfitEur.toFixed(2)} € líq.) • Em curso.`
-        : 'Corrida recusada.'
+      `Corrida aceite (+${auditMetrics.realNetProfitEur.toFixed(2)} € líq.) • Em curso.`
     );
   };
 
@@ -518,6 +577,15 @@ export const ScannerAndSplitModule: React.FC = () => {
 
   return (
     <div className="space-y-3">
+      {/* Hidden Screenshot File Input for "📷 Mostrar Pedido / Print" */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleScreenshotFileUpload}
+        className="hidden"
+      />
+
       {/* =====================================================================
           TOP ROW: 2 CARDS ONLY (GANHOS HOJE & CLIMA AMARANTE)
           ===================================================================== */}
@@ -683,47 +751,48 @@ export const ScannerAndSplitModule: React.FC = () => {
       </div>
 
       {/* =====================================================================
-          MAIN PANEL: DADOS DA CORRIDA ATUAL (ANALYTICAL RIDE PANEL ONLY)
+          MAIN PANEL: DADOS DA CORRIDA ATUAL (CLEAN LABELS WITH — UNTIL ORDER ENTERS)
           ===================================================================== */}
       <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800 p-3.5 space-y-3 shadow-sm">
-        {/* Panel Top Header: Title + Auto-Detector Active Pill + Quick Verdict Badge */}
-        <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
-              <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-100 truncate">
-                Dados da Corrida Atual
-              </h2>
-            </div>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[10px] text-zinc-400 truncate">
-                Auto-Detetor Uber / Glovo / Bolt Ativo
-              </span>
-              <button
-                type="button"
-                onClick={openAndroidAccessibilitySettings}
-                className="text-[10px] font-extrabold text-emerald-500 hover:underline cursor-pointer shrink-0"
-              >
-                (⚙️ Acessibilidade)
-              </button>
-            </div>
+        {/* Panel Top Header: Full Title + Discreet "📷 Mostrar Pedido / Print" Button */}
+        <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span
+              className={`h-2 w-2 rounded-full shrink-0 ${
+                hasActiveOrder ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'
+              }`}
+            />
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-100">
+              DADOS DA CORRIDA ATUAL
+            </h2>
           </div>
 
-          <div className="text-right shrink-0">
-            <span
-              className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-extrabold ${
-                auditMetrics.verdictCode === 'ACEITAR'
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'bg-rose-600 text-white'
-              }`}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 text-[10px] font-bold text-zinc-100 flex items-center gap-1 cursor-pointer transition whitespace-nowrap"
             >
-              {auditMetrics.verdictCode === 'ACEITAR' ? (
-                <CheckCircle2 className="h-3.5 w-3.5" />
-              ) : (
-                <XCircle className="h-3.5 w-3.5" />
-              )}
-              <span>{auditMetrics.verdictLabel}</span>
-            </span>
+              <Camera className="h-3 w-3 text-emerald-400 shrink-0" />
+              <span>📷 Mostrar Pedido / Print</span>
+            </button>
+
+            {hasActiveOrder && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-extrabold ${
+                  auditMetrics.verdictCode === 'ACEITAR'
+                    ? 'bg-emerald-500 text-slate-950'
+                    : 'bg-rose-600 text-white'
+                }`}
+              >
+                {auditMetrics.verdictCode === 'ACEITAR' ? (
+                  <CheckCircle2 className="h-3 w-3" />
+                ) : (
+                  <XCircle className="h-3 w-3" />
+                )}
+                <span>{auditMetrics.verdictLabel}</span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -732,141 +801,150 @@ export const ScannerAndSplitModule: React.FC = () => {
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
               <MapPin className="h-3 w-3 text-emerald-400 shrink-0" />
-              <span>1. Rota / Para Onde É</span>
-            </span>
-            <span className="rounded-md bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-200">
-              {activeScannedOffer.platform} • {activeScannedOffer.orderId || '#4829'}
+              <span>1. ROTA / PARA ONDE É</span>
             </span>
           </div>
 
-          <div className="text-xs font-bold text-zinc-100 leading-snug">
-            <span className="text-zinc-400 font-semibold">Recolha:</span>{' '}
-            {activeScannedOffer.originName}
-          </div>
-          <div className="text-xs font-extrabold text-emerald-400 leading-snug">
-            <span className="text-zinc-400 font-semibold">Destino:</span>{' '}
-            {activeScannedOffer.destinationName}{' '}
-            <span className="text-[11px] font-normal text-zinc-400">
-              ({activeScannedOffer.cityZone || 'Amarante'})
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between pt-1 text-[11px] text-zinc-300 border-t border-zinc-900">
-            <span>
-              Tempo Estimado:{' '}
-              <strong className="font-mono text-zinc-100">
-                ~{auditMetrics.realTotalMinutes} min
-              </strong>
-            </span>
-            <span className="text-[10px] text-zinc-400">
-              {auditMetrics.verdictSummary}
-            </span>
+          <div className="grid grid-cols-1 gap-1 text-xs pt-0.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-zinc-400 font-semibold">Plataforma:</span>
+              <span className="font-bold text-zinc-100">
+                {hasActiveOrder
+                  ? `${activeScannedOffer.platform}${
+                      activeScannedOffer.orderId
+                        ? ` • ${activeScannedOffer.orderId}`
+                        : ''
+                    }`
+                  : '—'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-zinc-400 font-semibold">Recolha:</span>
+              <span className="font-bold text-zinc-100 text-right">
+                {hasActiveOrder ? activeScannedOffer.originName : '—'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-zinc-400 font-semibold">Destino:</span>
+              <span className="font-extrabold text-emerald-500 text-right">
+                {hasActiveOrder ? activeScannedOffer.destinationName : '—'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-900">
+              <span className="text-zinc-400 font-semibold">
+                Tempo Estimado:
+              </span>
+              <span className="font-mono font-bold text-zinc-100">
+                {hasActiveOrder ? `~${auditMetrics.realTotalMinutes} min` : '—'}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* 2. VALORES & CÁLCULOS */}
+        {/* 2. VALORES & CÁLCULOS (2x2 GRID SO LABELS NEVER TRUNCATE) */}
         <div className="space-y-1.5">
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block px-0.5">
-            2. Valores &amp; Cálculos Reais
+            2. VALORES &amp; CÁLCULOS
           </span>
-          <div className="grid grid-cols-4 gap-1.5">
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2">
-              <span className="text-[9px] font-bold uppercase text-zinc-400 block truncate">
-                Valor Bruto
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+              <span className="text-[10px] font-bold uppercase text-zinc-400 block">
+                VALOR BRUTO
               </span>
               <span className="text-sm font-mono font-bold text-zinc-100 mt-0.5 block">
-                {auditMetrics.grossEur.toFixed(2)} €
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2">
-              <span className="text-[9px] font-bold uppercase text-zinc-400 block truncate">
-                Custo Rota
-              </span>
-              <span className="text-sm font-mono font-bold text-rose-400 mt-0.5 block">
-                -{auditMetrics.realTripCostEur.toFixed(2)} €
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-zinc-950 border border-emerald-500/40 p-2">
-              <span className="text-[9px] font-extrabold uppercase text-emerald-400 block truncate">
-                Lucro Líquido
-              </span>
-              <span className="text-sm font-mono font-black text-emerald-400 mt-0.5 block">
-                +{auditMetrics.realNetProfitEur.toFixed(2)} €
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2">
-              <span className="text-[9px] font-bold uppercase text-zinc-400 block truncate">
-                Projeção €/h
-              </span>
-              <span className="text-sm font-mono font-bold text-amber-400 mt-0.5 block">
-                {auditMetrics.projectedHourlyNetEur.toFixed(2)} €/h
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. DISTÂNCIA & € / KM */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between gap-2 px-0.5">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">
-              3. Distância &amp; Rentabilidade (€ / KM)
-            </span>
-            <button
-              type="button"
-              onClick={() => setIncludeEmptyReturnDeadZone((prev) => !prev)}
-              className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold cursor-pointer transition ${
-                effectiveEmptyReturn
-                  ? 'bg-amber-500 text-slate-950'
-                  : 'bg-zinc-950 border border-zinc-800 text-zinc-300'
-              }`}
-            >
-              {effectiveEmptyReturn
-                ? '🔄 Retorno +40% ON'
-                : '+ Retorno Vazio (40%)'}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
-              <span className="text-[9px] font-bold uppercase text-zinc-400 block">
-                Distância Total
-              </span>
-              <span className="text-sm font-mono font-extrabold text-zinc-100 mt-0.5 block">
-                {auditMetrics.activeTotalKm.toFixed(1)} km
-              </span>
-              <span className="text-[9px] text-zinc-400 block truncate">
-                {effectiveEmptyReturn
-                  ? `Ida ${auditMetrics.realTotalKm.toFixed(1)} + Ret. ${auditMetrics.emptyReturnKm.toFixed(1)}km`
-                  : `App: ${auditMetrics.announcedKm.toFixed(1)} km`}
+                {hasActiveOrder ? `${auditMetrics.grossEur.toFixed(2)} €` : '—'}
               </span>
             </div>
 
             <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
-              <span className="text-[9px] font-bold uppercase text-zinc-400 block">
-                € / KM Bruto
+              <span className="text-[10px] font-bold uppercase text-zinc-400 block">
+                CUSTO DA ROTA
               </span>
-              <span className="text-sm font-mono font-bold text-zinc-100 mt-0.5 block">
-                {auditMetrics.grossEurPerKm.toFixed(2)} €/km
-              </span>
-              <span className="text-[9px] text-zinc-400 block truncate">
-                S/ descontar custos
+              <span className="text-sm font-mono font-bold text-rose-500 mt-0.5 block">
+                {hasActiveOrder
+                  ? `-${auditMetrics.realTripCostEur.toFixed(2)} €`
+                  : '—'}
               </span>
             </div>
 
             <div className="rounded-xl bg-zinc-950 border border-emerald-500/40 p-2.5">
-              <span className="text-[9px] font-extrabold uppercase text-emerald-400 block">
-                € / KM Líquido
+              <span className="text-[10px] font-extrabold uppercase text-emerald-500 block">
+                LUCRO LÍQUIDO
               </span>
-              <span className="text-sm font-mono font-black text-emerald-400 mt-0.5 block">
-                {auditMetrics.effectiveAuditedEurPerKm.toFixed(2)} €/km
+              <span className="text-sm font-mono font-black text-emerald-500 mt-0.5 block">
+                {hasActiveOrder
+                  ? `+${auditMetrics.realNetProfitEur.toFixed(2)} €`
+                  : '—'}
               </span>
-              <span className="text-[9px] text-zinc-300 font-semibold block truncate">
-                {auditMetrics.verdictCode === 'ACEITAR'
-                  ? '✓ Compensa'
-                  : '✕ Não Compensa'}
+            </div>
+
+            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+              <span className="text-[10px] font-bold uppercase text-zinc-400 block">
+                PROJEÇÃO €/HORA
+              </span>
+              <span className="text-sm font-mono font-bold text-amber-500 mt-0.5 block">
+                {hasActiveOrder
+                  ? `${auditMetrics.projectedHourlyNetEur.toFixed(2)} €/h`
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. DISTÂNCIA & RENTABILIDADE (€ / KM) */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2 px-0.5">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">
+              3. DISTÂNCIA &amp; RENTABILIDADE (€ / KM)
+            </span>
+            {hasActiveOrder && (
+              <button
+                type="button"
+                onClick={() => setIncludeEmptyReturnDeadZone((prev) => !prev)}
+                className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold cursor-pointer transition ${
+                  effectiveEmptyReturn
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'bg-zinc-950 border border-zinc-800 text-zinc-300'
+                }`}
+              >
+                {effectiveEmptyReturn
+                  ? '🔄 Retorno +40% ON'
+                  : '+ Retorno Vazio (40%)'}
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+              <span className="text-[9px] font-bold uppercase text-zinc-400 block leading-tight">
+                DISTÂNCIA TOTAL
+              </span>
+              <span className="text-sm font-mono font-extrabold text-zinc-100 mt-1 block">
+                {hasActiveOrder
+                  ? `${auditMetrics.activeTotalKm.toFixed(1)} km`
+                  : '—'}
+              </span>
+            </div>
+
+            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+              <span className="text-[9px] font-bold uppercase text-zinc-400 block leading-tight">
+                € / KM BRUTO
+              </span>
+              <span className="text-sm font-mono font-bold text-zinc-100 mt-1 block">
+                {hasActiveOrder
+                  ? `${auditMetrics.grossEurPerKm.toFixed(2)} €/km`
+                  : '—'}
+              </span>
+            </div>
+
+            <div className="rounded-xl bg-zinc-950 border border-emerald-500/40 p-2.5">
+              <span className="text-[9px] font-extrabold uppercase text-emerald-500 block leading-tight">
+                € / KM LÍQUIDO
+              </span>
+              <span className="text-sm font-mono font-black text-emerald-500 mt-1 block">
+                {hasActiveOrder
+                  ? `${auditMetrics.effectiveAuditedEurPerKm.toFixed(2)} €/km`
+                  : '—'}
               </span>
             </div>
           </div>
@@ -877,9 +955,9 @@ export const ScannerAndSplitModule: React.FC = () => {
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
               <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
-              <span>4. Problemas na Rota &amp; Alertas</span>
+              <span>4. PROBLEMAS NA ROTA &amp; ALERTAS</span>
             </span>
-            {matchedRouteTrap && (
+            {hasActiveOrder && matchedRouteTrap && (
               <button
                 type="button"
                 onClick={() =>
@@ -895,36 +973,44 @@ export const ScannerAndSplitModule: React.FC = () => {
             )}
           </div>
 
-          <div className="space-y-1.5">
-            {routeProblemsAndAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                className={`rounded-lg px-2.5 py-1.5 border text-[11px] flex items-start gap-2 ${
-                  alert.isCritical
-                    ? 'bg-rose-950/30 border-rose-500/40 text-zinc-100'
-                    : 'bg-zinc-900/80 border-zinc-800 text-zinc-200'
-                }`}
-              >
-                <span className="font-extrabold shrink-0 whitespace-nowrap">
-                  {alert.badge}:
-                </span>
-                <span className="text-zinc-300 leading-snug">{alert.text}</span>
-              </div>
-            ))}
-          </div>
+          {!hasActiveOrder ? (
+            <p className="text-xs text-zinc-400 py-0.5">
+              Sem alertas ativos (aguardando pedido)
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {routeProblemsAndAlerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`rounded-lg px-2.5 py-1.5 border text-[11px] flex items-start gap-2 ${
+                    alert.isCritical
+                      ? 'bg-rose-950/30 border-rose-500/40 text-zinc-100'
+                      : 'bg-zinc-900/80 border-zinc-800 text-zinc-200'
+                  }`}
+                >
+                  <span className="font-extrabold shrink-0 whitespace-nowrap">
+                    {alert.badge}:
+                  </span>
+                  <span className="text-zinc-300 leading-snug">
+                    {alert.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
-          {/* WEIGHT DIVISION ALERT & CONTROLS — SHOWN ONLY WHEN ORDER EXCEEDS 12 KG */}
+          {/* WEIGHT DIVISION ALERT & CONTROLS — SHOWN ONLY WHEN ACTIVE ORDER EXCEEDS 12 KG */}
           {isOverweight && (
             <div className="mt-2 pt-2.5 border-t border-rose-500/40 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <Scale className="h-4 w-4 text-rose-400 shrink-0" />
                   <div className="min-w-0">
-                    <span className="text-xs font-extrabold text-rose-400 block truncate">
+                    <span className="text-xs font-extrabold text-rose-400 block">
                       ⚠️ Excesso de Peso Detetado ({displayedWeightKg.toFixed(1)} kg &gt;{' '}
                       {backpackWeightLimitKg.toFixed(0)} kg)
                     </span>
-                    <span className="text-[10px] text-zinc-300 block truncate">
+                    <span className="text-[10px] text-zinc-300 block">
                       {activeItemsSummaryText}
                     </span>
                   </div>
@@ -973,7 +1059,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 <div className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-[10px] text-zinc-300 space-y-1">
                   <div className="flex items-center justify-between font-bold text-zinc-100">
                     <span>
-                      Macro Suporte {activeSupportSplitMacro.platform} (4/4 Pronta)
+                      Macro Suporte {activeSupportSplitMacro.platform} (Pronta)
                     </span>
                     <button
                       type="button"
@@ -1002,7 +1088,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                         className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 flex items-center justify-between gap-2"
                       >
                         <div className="min-w-0">
-                          <span className="text-[11px] font-medium text-zinc-100 block truncate">
+                          <span className="text-[11px] font-medium text-zinc-100 block">
                             {item.name} ({item.unitWeightKg.toFixed(1)} kg)
                           </span>
                         </div>
@@ -1075,7 +1161,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                           ) : (
                             <Square className="h-3 w-3 text-zinc-500 shrink-0" />
                           )}
-                          <span className="truncate">{row.label}</span>
+                          <span>{row.label}</span>
                         </button>
                       );
                     })}
@@ -1086,8 +1172,8 @@ export const ScannerAndSplitModule: React.FC = () => {
           )}
         </div>
 
-        {/* RIDE DECISION ACTIONS OR ACTIVE LIFECYCLE */}
-        {!isOfferAccepted ? (
+        {/* RIDE DECISION ACTIONS OR ACTIVE LIFECYCLE (ONLY SHOWN WHEN AN ORDER HAS ENTERED) */}
+        {hasActiveOrder && !isOfferAccepted && (
           <div className="flex items-center gap-2 pt-0.5">
             <button
               type="button"
@@ -1117,12 +1203,14 @@ export const ScannerAndSplitModule: React.FC = () => {
               <Volume2 className="h-4 w-4" />
             </button>
           </div>
-        ) : (
+        )}
+
+        {hasActiveOrder && isOfferAccepted && (
           <div className="rounded-xl bg-zinc-950 border border-emerald-500/40 p-3 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
                 <Navigation className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                <span className="text-xs font-extrabold text-zinc-100 truncate">
+                <span className="text-xs font-extrabold text-zinc-100">
                   Entrega em Curso ({activeDeliveryLifecycle.orderId})
                 </span>
               </div>
@@ -1145,7 +1233,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                     auditMetrics.realNetProfitEur
                   )
                 }
-                className={`rounded py-1 px-1.5 text-center truncate transition cursor-pointer ${
+                className={`rounded py-1 px-1.5 text-center transition cursor-pointer ${
                   activeDeliveryLifecycle.stage === 'AGUARDAR_RECOLHA'
                     ? 'bg-white text-zinc-950 font-semibold'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -1156,7 +1244,7 @@ export const ScannerAndSplitModule: React.FC = () => {
               <button
                 type="button"
                 onClick={() => startDeliveryTransitStage()}
-                className={`rounded py-1 px-1.5 text-center truncate transition cursor-pointer ${
+                className={`rounded py-1 px-1.5 text-center transition cursor-pointer ${
                   activeDeliveryLifecycle.stage === 'EM_TRANSITO'
                     ? 'bg-white text-zinc-950 font-semibold'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -1170,7 +1258,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                   setDecisionFeedback(null);
                   completeActiveDeliveryStage();
                 }}
-                className={`rounded py-1 px-1.5 text-center truncate transition cursor-pointer ${
+                className={`rounded py-1 px-1.5 text-center transition cursor-pointer ${
                   activeDeliveryLifecycle.stage === 'CONCLUIDA'
                     ? 'bg-white text-zinc-950 font-semibold'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -1242,7 +1330,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                         setLast50mFeedback(`Guardado: ${item.label}`);
                         setTimeout(() => setLast50mFeedback(null), 3000);
                       }}
-                      className="rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2 py-1 text-[10px] font-semibold text-zinc-200 text-left truncate cursor-pointer"
+                      className="rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2 py-1 text-[10px] font-semibold text-zinc-200 text-left cursor-pointer"
                     >
                       {item.label}
                     </button>
@@ -1254,7 +1342,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                   </p>
                 )}
                 {locationRouteNotes.length > 0 && (
-                  <p className="text-[10px] text-zinc-400 truncate">
+                  <p className="text-[10px] text-zinc-400">
                     Nota na zona: {locationRouteNotes[0].noteText}
                   </p>
                 )}
@@ -1266,7 +1354,8 @@ export const ScannerAndSplitModule: React.FC = () => {
                   }}
                   className="w-full rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-2 px-3 text-xs font-extrabold cursor-pointer transition"
                 >
-                  ✓ Finalizar Entrega (+{activeDeliveryLifecycle.netProfitEur.toFixed(2)} €)
+                  ✓ Finalizar Entrega (+
+                  {activeDeliveryLifecycle.netProfitEur.toFixed(2)} €)
                 </button>
               </div>
             )}
@@ -1274,13 +1363,15 @@ export const ScannerAndSplitModule: React.FC = () => {
             {activeDeliveryLifecycle.stage === 'CONCLUIDA' && (
               <div className="flex items-center justify-between gap-2 pt-1">
                 <span className="text-xs font-bold text-emerald-400">
-                  ✓ Entrega Concluída (+{activeDeliveryLifecycle.netProfitEur.toFixed(2)} €)
+                  ✓ Entrega Concluída (+
+                  {activeDeliveryLifecycle.netProfitEur.toFixed(2)} €)
                 </span>
                 <button
                   type="button"
                   onClick={() => {
                     setDecisionFeedback(null);
                     setIsOfferAccepted(false);
+                    selectOfferPreset(SCANNER_OFFER_PRESETS[0]);
                     executeVoiceCommandPt('Finalizar entrega');
                   }}
                   className="rounded-lg bg-white text-zinc-950 py-1.5 px-3 text-xs font-bold cursor-pointer"
@@ -1294,7 +1385,7 @@ export const ScannerAndSplitModule: React.FC = () => {
 
         {decisionFeedback && (
           <div className="text-[11px] text-zinc-200 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 flex items-center justify-between gap-2">
-            <span className="truncate">{decisionFeedback}</span>
+            <span>{decisionFeedback}</span>
             <button
               type="button"
               onClick={() => setDecisionFeedback(null)}

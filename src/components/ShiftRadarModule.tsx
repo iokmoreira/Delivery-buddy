@@ -1136,9 +1136,6 @@ export const ShiftRadarModule: React.FC = () => {
                   <Navigation className="h-3 w-3 text-emerald-400 shrink-0" />
                   <span>Atalhos Rápidos Waze / Google Maps</span>
                 </span>
-                <span className="text-[10px] font-mono text-emerald-400 font-bold">
-                  {liveRateDisplay}
-                </span>
               </div>
               <div className="grid grid-cols-3 gap-1.5">
                 {externalAssistButtons.map((btn) => (
@@ -1202,13 +1199,12 @@ export const ShiftRadarModule: React.FC = () => {
         className="w-full rounded-xl border border-zinc-800 px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] font-bold shadow-sm cursor-pointer hover:border-emerald-500/50 transition shrink-0"
       >
         <span className="truncate">
-          Amarante •{' '}
-          <strong className="font-mono text-emerald-400">{liveRateDisplay}</strong>
+          📍 Amarante ({mapRadiusKm} km)
         </span>
         <span className="text-[10px] font-semibold text-emerald-400 whitespace-nowrap shrink-0">
           {isTelemetrySheetExpanded
-            ? '▾ Ocultar projeções'
-            : '▴ Toque p/ expandir projeções'}
+            ? '▾ Ocultar atalhos'
+            : '▴ Atalhos Waze / Maps'}
         </span>
       </button>
     </div>

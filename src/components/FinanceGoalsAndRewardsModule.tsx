@@ -423,8 +423,8 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
   return (
     <div className="space-y-2.5">
-      {/* Strict 3-Tab Segmented Pill Switcher (Private Section) */}
-      <div className="bg-zinc-900 p-1 rounded-lg grid grid-cols-3 gap-1 border border-zinc-800/80">
+      {/* Strict 2-Tab Segmented Pill Switcher (Estatísticas & Metas | Finanças & Caixa) */}
+      <div className="bg-zinc-900 p-1 rounded-lg grid grid-cols-2 gap-1 border border-zinc-800/80">
         <button
           type="button"
           onClick={() => setSubTab('METAS')}
@@ -446,17 +446,6 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
           }`}
         >
           Finanças &amp; Caixa
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubTab('VANTAGENS')}
-          className={`rounded-md py-1.5 text-xs transition cursor-pointer ${
-            subTab === 'VANTAGENS'
-              ? 'bg-white text-zinc-950 font-semibold'
-              : 'text-zinc-400 hover:text-zinc-100'
-          }`}
-        >
-          Vantagens
         </button>
       </div>
 
@@ -735,21 +724,6 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                 <Plus className="h-4 w-4 shrink-0" />
                 <span>+ Registar Entrega Manual</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  resetRealDeliveriesAndTestData();
-                  setFinanceActionFeedback(
-                    '🧹 Entregas e dados de teste zerados! Pronto para entregas 100% reais.'
-                  );
-                }}
-                title="Zerar entregas de teste e iniciar contabilidade limpa"
-                className="rounded-lg py-2.5 px-2.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-semibold text-[11px] flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
-              >
-                <RotateCcw className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                <span>🧹 Zerar Dados de Teste</span>
-              </button>
             </div>
 
             {/* Inline / Modal Form for "+ Registar Entrega Manual" */}
@@ -866,184 +840,6 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                 </div>
               </div>
             )}
-          </section>
-
-          {/* CARD 2: Mercado & Projeções (Amarante) — Global Hourly Telemetry & Projection Engine */}
-          <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 space-y-3">
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2 flex-wrap">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <TrendingUp className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                <span className="text-xs font-extrabold text-zinc-100 truncate">
-                  Mercado &amp; Projeções (Amarante •{' '}
-                  {marketTelemetry.currentHourWindowLabel})
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => recordMarketTelemetrySnapshot('MANUAL_FINANCAS')}
-                className="rounded bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-400 cursor-pointer shrink-0 whitespace-nowrap"
-              >
-                + Gravar Snapshot ({marketTelemetry.snapshotsRecordedCount})
-              </button>
-            </div>
-
-            {/* 4 Core Global Hourly Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2 space-y-0.5">
-                <span className="text-[10px] text-zinc-400 block">
-                  Média Estafetas Online / Hora
-                </span>
-                <span className="text-xs font-mono font-bold text-zinc-100 block whitespace-nowrap">
-                  {marketTelemetry.onlineCouriersNow} agora (Méd:{' '}
-                  {marketTelemetry.hourlyAvgOnlineCouriers.toFixed(1)}/h)
-                </span>
-                <span className="text-[10px] font-mono text-emerald-400 block whitespace-nowrap">
-                  {marketTelemetry.freeCouriersNow} livres •{' '}
-                  {marketTelemetry.busyCouriersNow} ocupados
-                </span>
-              </div>
-
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2 space-y-0.5">
-                <span className="text-[10px] text-zinc-400 block">
-                  Média de Pedidos / Hora
-                </span>
-                <span className="text-xs font-mono font-bold text-zinc-100 block">
-                  {marketTelemetry.isProductionCleanBaseline
-                    ? 'A aguardar 1ª leitura real'
-                    : `${marketTelemetry.avgOrdersPerHourPerCourier.toFixed(1)} ped/h`}
-                </span>
-                <span className="text-[10px] text-zinc-400 block">
-                  {marketTelemetry.isProductionCleanBaseline
-                    ? 'Lê 1 print ou regista entrega'
-                    : 'Por estafeta ativo'}
-                </span>
-              </div>
-
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2 space-y-0.5">
-                <span className="text-[10px] text-zinc-400 block">
-                  Média Valor Entrega / Hora
-                </span>
-                <span className="text-xs font-mono font-bold text-emerald-400 block">
-                  {marketTelemetry.isProductionCleanBaseline
-                    ? 'A aguardar 1ª leitura real'
-                    : `${marketTelemetry.avgGrossPerDeliveryEur.toFixed(2)}\u00A0€ (${marketTelemetry.avgNetPerDeliveryEur.toFixed(2)}\u00A0€ líq.)`}
-                </span>
-                <span className="text-[10px] font-mono text-zinc-300 block">
-                  {marketTelemetry.isProductionCleanBaseline
-                    ? '0 snapshots acumulados'
-                    : `Ritmo: ${marketTelemetry.avgHourlyPaceEur.toFixed(2)}\u00A0€/h`}
-                </span>
-              </div>
-
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2 space-y-0.5">
-                <span className="text-[10px] text-zinc-400 block">
-                  Quanto Paga por KM (€/km Atual)
-                </span>
-                <span className="text-xs font-mono font-bold text-emerald-400 block">
-                  {marketTelemetry.isProductionCleanBaseline
-                    ? 'A aguardar 1ª leitura real'
-                    : isSinglePlatformMode
-                      ? `${enabledPlatforms[0]}: ${marketTelemetry.liveEurPerKmByScope[enabledPlatforms[0]].toFixed(2)}\u00A0€/km`
-                      : `Global: ${marketTelemetry.liveEurPerKmByScope.GLOBAL_CRUZADO.toFixed(2)}\u00A0€/km`}
-                </span>
-                <span className="text-[9px] font-mono text-zinc-400 block truncate">
-                  {marketTelemetry.isProductionCleanBaseline
-                    ? 'Sem dados fictícios ativos'
-                    : enabledPlatforms
-                        .map(
-                          (p) =>
-                            `${p.split(' ')[0]} ${marketTelemetry.liveEurPerKmByScope[p].toFixed(2)}`
-                        )
-                        .join(' • ')}
-                </span>
-              </div>
-            </div>
-
-            {/* Projeção Próximas 3 Horas & Turno */}
-            <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2.5 space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="text-[11px] font-extrabold text-zinc-100">
-                  Projeção Próximas 3 Horas &amp; Turno
-                </span>
-                <span className="text-[10px] font-mono text-indigo-300">
-                  {aiAgentConfig.productionModeRealOnly
-                    ? 'Modo Produção Real (Sem Dados Fictícios)'
-                    : 'Motor de Projeções Amarante'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-1.5">
-                {marketTelemetry.next3HoursProjections.map((proj) => (
-                  <div
-                    key={proj.hourLabel}
-                    className="rounded-lg bg-zinc-900 border border-zinc-800 p-2 space-y-0.5"
-                  >
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[10px] font-mono font-bold text-zinc-100">
-                        {proj.hourLabel}
-                      </span>
-                      <span
-                        className={`text-[9px] font-bold px-1 rounded ${
-                          proj.demandLabel === 'Alta Demanda'
-                            ? 'bg-emerald-500/20 text-emerald-300'
-                            : proj.demandLabel === 'Moderada'
-                              ? 'bg-amber-500/20 text-amber-300'
-                              : 'bg-zinc-800 text-zinc-400'
-                        }`}
-                      >
-                        {proj.demandLabel}
-                      </span>
-                    </div>
-                    <p className="text-[11px] font-mono font-bold text-emerald-400">
-                      {marketTelemetry.isProductionCleanBaseline
-                        ? 'A aguardar leitura'
-                        : `${proj.projectedEurPerKm.toFixed(2)}\u00A0€/km • ${proj.projectedOrdersPerHour.toFixed(1)} ped/h`}
-                    </p>
-                    <p className="text-[10px] font-mono text-zinc-400">
-                      ~{proj.expectedOnlineCouriers} estafeta{proj.expectedOnlineCouriers === 1 ? '' : 's'} ({proj.saturationPct}% sat.)
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <p className="text-[10px] text-zinc-300 leading-snug">
-                {marketTelemetry.shiftRecommendationText}
-              </p>
-
-              <div className="grid grid-cols-3 gap-1 pt-0.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    executeVoiceCommandPt(
-                      'Buddy, quantos estafetas tem online agora?'
-                    )
-                  }
-                  className="rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 py-1.5 px-2 text-[10px] font-bold text-zinc-200 cursor-pointer transition truncate"
-                >
-                  🎙️ Quantos online?
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    executeVoiceCommandPt(
-                      'Buddy, quanto tá pagando por quilómetro?'
-                    )
-                  }
-                  className="rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 py-1.5 px-2 text-[10px] font-bold text-zinc-200 cursor-pointer transition truncate"
-                >
-                  🎙️ Quanto paga/km?
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    executeVoiceCommandPt('Buddy, qual a projeção para hoje?')
-                  }
-                  className="rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 py-1.5 px-2 text-[10px] font-bold text-zinc-200 cursor-pointer transition truncate"
-                >
-                  🎙️ Projeção hoje?
-                </button>
-              </div>
-            </div>
           </section>
         </div>
       )}
@@ -1493,103 +1289,6 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
               );
             })()
           )}
-        </div>
-      )}
-
-      {/* =====================================================================
-          VIEW 3: VANTAGENS (MONOCHROME PARTNER VOUCHERS)
-          ===================================================================== */}
-      {subTab === 'VANTAGENS' && (
-        <div className="space-y-2.5">
-          {/* Courier Level Badge Header */}
-          <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="h-9 w-9 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-100 shrink-0">
-                <Award className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-xs font-semibold text-zinc-100 block truncate">
-                  {courierTier}
-                </span>
-                <span className="text-[11px] text-zinc-400 block">
-                  Reputação: {communityReputationPct}%
-                </span>
-              </div>
-            </div>
-
-            <div className="text-right shrink-0">
-              <span className="rounded-lg bg-zinc-100 text-zinc-950 px-2.5 py-1 text-xs font-mono font-semibold">
-                {buddyRewards.buddyCoins} Coins
-              </span>
-            </div>
-          </section>
-
-          {voucherNotice && (
-            <div className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-200 flex items-center justify-between gap-2">
-              <span className="truncate">{voucherNotice}</span>
-              <button
-                type="button"
-                onClick={() => setVoucherNotice(null)}
-                className="text-[10px] text-zinc-400 hover:text-white shrink-0 cursor-pointer"
-              >
-                OK
-              </button>
-            </div>
-          )}
-
-          {/* Clean Monochrome Partner Vouchers List */}
-          <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 space-y-2">
-            <span className="text-xs font-semibold text-zinc-100 block">
-              Vales de Parceiros (Combustível, Oficina &amp; Seguros)
-            </span>
-
-            <div className="space-y-1.5">
-              {allMarketplaceRewards.slice(0, 5).map((item) => {
-                const claimed = buddyRewards.claimedRewardIds.includes(item.id);
-                const voucherCode = buddyRewards.claimedVoucherCodes[item.id];
-                return (
-                  <div
-                    key={item.id}
-                    className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2.5 flex items-center justify-between gap-2.5"
-                  >
-                    <div className="min-w-0">
-                      <span className="text-xs font-semibold text-zinc-100 block truncate">
-                        {item.title}
-                      </span>
-                      <span className="text-[11px] text-zinc-400 block truncate">
-                        {item.partnerBadge} • {item.costBuddyCoins} Coins
-                      </span>
-                      {claimed && voucherCode && (
-                        <span className="text-[10px] font-mono text-zinc-300 flex items-center gap-1 mt-0.5">
-                          <QrCode className="h-3 w-3" />
-                          <span>Código: {voucherCode}</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleClaimVoucher(item.id)}
-                      className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1 cursor-pointer transition ${
-                        claimed
-                          ? 'bg-zinc-800 text-zinc-300'
-                          : 'bg-white hover:bg-zinc-200 text-zinc-950'
-                      }`}
-                    >
-                      {claimed ? (
-                        <>
-                          <Check className="h-3 w-3" />
-                          <span>Ativo</span>
-                        </>
-                      ) : (
-                        <span>Resgatar</span>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
         </div>
       )}
     </div>

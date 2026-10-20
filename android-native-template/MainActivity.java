@@ -902,6 +902,16 @@ public class MainActivity extends BridgeActivity {
     public class BuddyNativeOverlayBridge {
 
         @JavascriptInterface
+        public void startSingleShotVoice() {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    startSingleShotVoiceRecognition();
+                }
+            });
+        }
+
+        @JavascriptInterface
         public void startNativeVoice() {
             mainHandler.post(new Runnable() {
                 @Override

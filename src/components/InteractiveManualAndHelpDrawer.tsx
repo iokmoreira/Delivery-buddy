@@ -1474,221 +1474,6 @@ export const MenuMaisHubView: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {/* High-Contrast Interactive "📲 Gerar & Baixar .APK Nativo" Guide Card */}
-      <div
-        style={{ backgroundColor: '#022c22', color: '#ecfdf5' }}
-        className="rounded-2xl border-2 border-emerald-400/80 p-3.5 space-y-2.5 shadow-[0_0_24px_rgba(16,185,129,0.2)]"
-      >
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span
-                style={{ backgroundColor: '#10b981', color: '#022c22' }}
-                className="rounded-full px-2 py-0.5 text-[9px] font-mono font-black uppercase tracking-wider"
-              >
-                {hasNativeOverlayBridge
-                  ? '✓ PONTE NATIVA APK DETETADA'
-                  : 'CAPACITOR + GITHUB ACTIONS APK BUILDER'}
-              </span>
-              <span
-                style={{ backgroundColor: '#064e3b', color: '#6ee7b7' }}
-                className="rounded-full border border-emerald-400/50 px-2 py-0.5 text-[9px] font-mono font-bold"
-              >
-                Voz 1-Toque: {isListeningSpeechRecognition ? '🟢 Ouvindo comando...' : '🎙️ OFF (Pronto)'}
-              </span>
-            </div>
-            <h3
-              style={{ color: '#ffffff' }}
-              className="text-sm font-black tracking-tight pt-0.5"
-            >
-              📲 APK Nativo + Atualização Automática OTA (GitHub Pages)
-            </h3>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowApkBuildSteps((prev) => !prev)}
-            style={{ backgroundColor: '#065f46', color: '#d1fae5' }}
-            className="rounded-lg border border-emerald-400/40 px-2.5 py-1 text-[10px] font-extrabold cursor-pointer shrink-0"
-          >
-            {showApkBuildSteps ? 'Ocultar Passos' : 'Ver 3 Passos'}
-          </button>
-        </div>
-
-        {/* 1-Tap OTA Cloud Reload + Invisible Minimized Bubble Test */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
-          <button
-            type="button"
-            onClick={() => {
-              const winAny = window as unknown as {
-                BuddyNativeOverlay?: {
-                  reloadOtaNow?: () => void;
-                };
-              };
-              if (typeof winAny.BuddyNativeOverlay?.reloadOtaNow === 'function') {
-                winAny.BuddyNativeOverlay.reloadOtaNow();
-                return;
-              }
-              try {
-                if ('caches' in window) {
-                  caches.keys().then((names) => {
-                    names.forEach((n) => caches.delete(n));
-                  });
-                }
-              } catch {
-                // ignore
-              }
-              const baseUrl = window.location.href.split('?')[0];
-              window.location.replace(`${baseUrl}?ota_ts=${Date.now()}`);
-            }}
-            style={{ backgroundColor: '#0284c7', color: '#ffffff' }}
-            className="rounded-xl border border-sky-300 px-3 py-2 text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-95 transition"
-          >
-            <span>🔄 Atualizar App Agora (OTA)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setIsBubbleMinimized(true);
-            }}
-            style={{ backgroundColor: '#10b981', color: '#022c22' }}
-            className="rounded-xl border border-emerald-200 px-3 py-2 text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-95 transition"
-          >
-            <span>🟢 Testar Bolinha Minimizada Invisível</span>
-          </button>
-        </div>
-
-        {showApkBuildSteps && (
-          <div
-            style={{ backgroundColor: '#042f2e', color: '#ecfdf5' }}
-            className="rounded-xl border border-emerald-500/40 p-2.5 space-y-1.5 text-[11px]"
-          >
-            <div
-              style={{ color: '#6ee7b7' }}
-              className="text-[10px] font-extrabold uppercase tracking-wider"
-            >
-              Como Baixar o Ficheiro Delivery-Buddy-Amarante.apk (3 Passos):
-            </div>
-            <ol className="space-y-1 text-[11px] leading-snug list-decimal list-inside">
-              <li>
-                <strong style={{ color: '#ffffff' }}>GitHub Actions Cloud Builder:</strong>{' '}
-                Aceda ao separador <strong>Actions &rarr; &ldquo;Build Signed Android APK (Delivery Buddy)&rdquo;</strong> no seu repositório GitHub.
-              </li>
-              <li>
-                <strong style={{ color: '#ffffff' }}>Download Direto do Artifact:</strong>{' '}
-                Abra o último build concluído e toque em{' '}
-                <code
-                  style={{ backgroundColor: '#064e3b', color: '#a7f3d0' }}
-                  className="px-1.5 py-0.5 rounded font-mono font-bold"
-                >
-                  Delivery-Buddy-Amarante-APK
-                </code>{' '}
-                para descarregar o `.apk` assinado com `SYSTEM_ALERT_WINDOW` + Serviço de Voz em 1.º Plano.
-              </li>
-              <li>
-                <strong style={{ color: '#ffffff' }}>Ativar Sobreposição no Android:</strong>{' '}
-                Instale o `.apk`, autorize <em>&ldquo;Sobrepor a outras aplicações&rdquo;</em> e diga{' '}
-                <strong>&ldquo;Buddy minimizar&rdquo;</strong> para deixar apenas a bolinha verde `DB` (`56dp`) sobre a Uber Eats / Glovo!
-              </li>
-            </ol>
-          </div>
-        )}
-      </div>
-
-      {/* Prominent 1-Click Native Fullscreen App Install Card (PWA Standalone + Capacitor APK/OTA) */}
-      {isAppInstalledStandalone ? (
-        <div
-          style={{ backgroundColor: '#064e3b', color: '#ecfdf5' }}
-          className="rounded-xl border border-emerald-500/60 px-3 py-2 flex items-center justify-between gap-2 shadow-sm"
-        >
-          <span
-            style={{ color: '#a7f3d0' }}
-            className="text-[11px] font-extrabold truncate"
-          >
-            ✓ App Instalada • Modo Ecrã Inteiro Ativo (OTA Capacitor)
-          </span>
-          <span
-            style={{ backgroundColor: '#065f46', color: '#ffffff' }}
-            className="rounded-md px-2 py-0.5 text-[10px] font-mono font-bold shrink-0"
-          >
-            100% Ecrã
-          </span>
-        </div>
-      ) : (
-        <div
-          style={{ backgroundColor: '#064e3b', color: '#ecfdf5' }}
-          className="rounded-xl border border-emerald-500/60 p-3 space-y-2 shadow-lg"
-        >
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="min-w-0">
-              <span
-                style={{ color: '#6ee7b7' }}
-                className="text-[10px] font-mono font-bold uppercase tracking-wider block"
-              >
-                {canPromptNativeInstall
-                  ? 'INSTALAÇÃO DIRETA 1-CLIQUE PRONTA • OTA CAPACITOR'
-                  : 'MODO STANDALONE FULLSCREEN • ANDROID & IOS'}
-              </span>
-              <h3
-                style={{ color: '#ffffff' }}
-                className="text-xs font-black"
-              >
-                📲 Instalar Aplicativo Delivery Buddy (Modo Nativo Ecrã Inteiro)
-              </h3>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                void triggerNativeAppInstallPrompt();
-              }}
-              style={{ backgroundColor: '#10b981', color: '#022c22' }}
-              className="rounded-xl px-3 py-2 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow shrink-0"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>📲 Instalar Aplicativo no Telemóvel</span>
-            </button>
-          </div>
-
-          <p
-            style={{ color: '#d1fae5' }}
-            className="text-[10px] leading-relaxed"
-          >
-            Remove a barra de endereço do Chrome para ganhar{' '}
-            <strong style={{ color: '#ffffff' }}>100% do ecrã vertical</strong> e
-            calibrar os toques <code style={{ color: '#a7f3d0' }}>%X / %Y</code> com
-            precisão milimétrica (com.deliverybuddy.app • Live OTA Ativo).
-          </p>
-
-          {showManualInstallGuideModal && (
-            <div
-              style={{ backgroundColor: '#022c22', color: '#ecfdf5' }}
-              className="rounded-xl border border-emerald-400/50 p-2.5 space-y-1.5 text-[11px]"
-            >
-              <div className="flex items-center justify-between">
-                <span style={{ color: '#6ee7b7' }} className="font-extrabold">
-                  Guia Rápido (5 Segundos — Ecrã Inteiro no Android/iOS):
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowManualInstallGuideModal(false)}
-                  style={{ color: '#a7f3d0' }}
-                  className="text-[10px] cursor-pointer"
-                >
-                  Fechar ✕
-                </button>
-              </div>
-              <p style={{ color: '#ffffff' }} className="font-semibold">
-                1. Toque nos <strong>3 pontos do Chrome ⋮</strong> (canto superior direito) &rarr; <strong>&ldquo;Instalar aplicação&rdquo;</strong> / <strong>&ldquo;Adicionar ao ecrã principal&rdquo;</strong>.
-              </p>
-              <p style={{ color: '#a7f3d0' }} className="text-[10px]">
-                2. Abra o ícone <strong>Delivery Buddy</strong> na sua gaveta de apps: abrirá 100% em ecrã inteiro como um APK nativo e receberá todas as atualizações automaticamente via OTA.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Gemini-Style Natural Voice Engine Tuning Card (1.15x Default +15% Faster) */}
       <div className="rounded-xl bg-zinc-900/95 border border-indigo-500/35 p-3 space-y-2.5">
         <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1971,193 +1756,74 @@ export const MenuMaisHubView: React.FC = () => {
         </div>
       </div>
 
-      {/* Compact Android Native APK & Overlay Readiness Diagnostics Card */}
-      <div className="rounded-xl bg-zinc-900/90 border border-indigo-500/30 p-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-extrabold text-zinc-100 flex items-center gap-1.5">
-            <Smartphone className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-            <span>Prontidão Android Nativo (.APK &amp; Sobreposição)</span>
-          </span>
-          <span className="rounded-md bg-emerald-500/15 border border-emerald-500/35 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-300">
-            CAPACITOR / APK READY
-          </span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
-          <div className="rounded-lg bg-zinc-950/90 border border-zinc-800/80 px-2.5 py-1.5 flex items-center justify-between">
-            <span className="text-zinc-400">GPS de Alta Precisão:</span>
-            <span className="font-mono font-bold text-emerald-400">Ativo</span>
-          </div>
-          <div className="rounded-lg bg-zinc-950/90 border border-zinc-800/80 px-2.5 py-1.5 flex items-center justify-between">
-            <span className="text-zinc-400">Microfone &amp; Voz (pt-BR):</span>
-            <span className="font-mono font-bold text-emerald-400">Pronto</span>
-          </div>
-          <div className="rounded-lg bg-zinc-950/90 border border-zinc-800/80 px-2.5 py-1.5 flex items-center justify-between">
-            <span className="text-zinc-400">Ecrã Sempre Ligado (WakeLock):</span>
-            <span className="font-mono font-bold text-emerald-300">
-              {wakeLockActiveOnDevice
-                ? 'Suportado / Ativo (Hardware)'
-                : wakeLockEnabled
-                  ? 'Suportado / Ativo'
-                  : 'Em Espera (OFF)'}
-            </span>
-          </div>
-          <div className="rounded-lg bg-zinc-950/90 border border-zinc-800/80 px-2.5 py-1.5 flex items-center justify-between">
-            <span className="text-zinc-400">Proporção de Tela Detetada:</span>
-            <span className="font-mono font-bold text-indigo-300">
-              {deviceScreenProfile.screenAspectRatio} (
-              {deviceScreenProfile.screenWidthPx}x
-              {deviceScreenProfile.screenHeightPx})
-            </span>
-          </div>
-          <div className="sm:col-span-2 rounded-lg bg-zinc-950/90 border border-zinc-800/80 px-2.5 py-1.5 flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-zinc-400">
-              Ponte Nativa Overlay / Acessibilidade:
-            </span>
-            <span className="font-mono font-bold text-emerald-400">
-              Pronta para Empacotamento Capacitor/Android
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Compact Soft Clean iOS/Uber Settings List */}
+      {/* Compact Soft Clean Settings List */}
       <div className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 overflow-hidden">
-        {/* 0. Automatic Device Model & Screen Aspect Ratio Fingerprinting */}
+        {/* Auto-Detetor de Pedidos (Acessibilidade) */}
         <button
           type="button"
           onClick={() => {
-            setCustomDeviceModelDraft(deviceScreenProfile.deviceModel);
-            setIsDeviceProfileOpen((prev) => !prev);
+            const winAny = window as unknown as {
+              BuddyNativeOverlay?: {
+                openAccessibilitySettings?: () => void;
+              };
+            };
+            if (
+              typeof winAny.BuddyNativeOverlay?.openAccessibilitySettings ===
+              'function'
+            ) {
+              winAny.BuddyNativeOverlay.openAccessibilitySettings();
+            } else {
+              speakTextPt(
+                'Ative o serviço Delivery Buddy nas definições de Acessibilidade do Android para leitura automática de pedidos.'
+              );
+            }
           }}
           className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
         >
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2 min-w-0">
-            <Smartphone className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-            <span className="truncate">
-              Modelo de Telemóvel &amp; Proporção IA
-            </span>
+          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
+            <Smartphone className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+            <span>Auto-Detetor de Pedidos (Acessibilidade)</span>
           </span>
-          <div className="flex items-center gap-1.5 shrink-0 ml-2">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-emerald-300">
-              {deviceScreenProfile.deviceModel} • Tela{' '}
-              {deviceScreenProfile.screenAspectRatio} (
-              {deviceScreenProfile.screenWidthPx}x
-              {deviceScreenProfile.screenHeightPx})
-            </span>
-            <ChevronRight className="h-4 w-4 text-zinc-500" />
-          </div>
+          <span className="rounded bg-emerald-500/15 border border-emerald-500/35 px-2 py-0.5 text-[10px] font-mono text-emerald-300 shrink-0">
+            Configurar
+          </span>
         </button>
 
-        {isDeviceProfileOpen && (
-          <div className="p-3.5 bg-zinc-950 border-b border-zinc-800 space-y-2.5">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div>
-                <p className="text-xs font-extrabold text-zinc-100">
-                  {deviceScreenProfile.deviceModel} • Tela{' '}
-                  {deviceScreenProfile.screenAspectRatio} (
-                  {deviceScreenProfile.screenWidthPx}x
-                  {deviceScreenProfile.screenHeightPx})
-                </p>
-                <p className="text-[10px] text-zinc-400">
-                  Skills aprendidas em ecrãs {deviceScreenProfile.screenAspectRatio}{' '}
-                  ficam automaticamente{' '}
-                  <strong className="text-emerald-400">
-                    Compatíveis &amp; Prontas
-                  </strong>{' '}
-                  para todos os colegas com a mesma proporção.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={redetectDeviceScreenProfile}
-                className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1 text-[10px] font-bold cursor-pointer shrink-0"
-              >
-                Auto-Detetar Ecrã
-              </button>
-            </div>
-
-            {/* Common Courier Phone Presets */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-              {COMMON_COURIER_DEVICE_PRESETS.map((preset) => {
-                const isSelected =
-                  deviceScreenProfile.deviceModel === preset.deviceModel &&
-                  deviceScreenProfile.screenAspectRatio ===
-                    preset.screenAspectRatio;
-                return (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => {
-                      setCustomDeviceModelDraft(preset.deviceModel);
-                      updateDeviceScreenProfile({
-                        deviceModel: preset.deviceModel,
-                        screenAspectRatio: preset.screenAspectRatio,
-                        screenWidthPx: preset.widthPx,
-                        screenHeightPx: preset.heightPx,
-                      });
-                    }}
-                    className={`rounded-lg py-1.5 px-2.5 text-left text-[11px] flex items-center justify-between cursor-pointer transition ${
-                      isSelected
-                        ? 'bg-white text-zinc-950 font-bold'
-                        : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 border border-zinc-800'
-                    }`}
-                  >
-                    <span className="truncate">{preset.deviceModel}</span>
-                    <span className="text-[10px] font-mono opacity-80 ml-1.5 shrink-0">
-                      {preset.screenAspectRatio}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Custom Model Name & Aspect Ratio Refinement */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1">
-              <input
-                type="text"
-                value={customDeviceModelDraft}
-                onChange={(e) => setCustomDeviceModelDraft(e.target.value)}
-                onBlur={() => {
-                  if (customDeviceModelDraft.trim()) {
-                    updateDeviceScreenProfile({
-                      deviceModel: customDeviceModelDraft.trim(),
-                    });
-                  }
-                }}
-                placeholder="Ex: Samsung Galaxy A54 / S23"
-                className="sm:col-span-2 rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 focus:outline-none"
-              />
-              <select
-                value={deviceScreenProfile.screenAspectRatio}
-                onChange={(e) =>
-                  updateDeviceScreenProfile({
-                    screenAspectRatio: e.target.value as ScreenAspectRatioTag,
-                  })
-                }
-                className="rounded-lg bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-xs font-mono text-zinc-100 focus:outline-none"
-              >
-                <option value="20:9">Tela 20:9</option>
-                <option value="19.5:9">Tela 19.5:9</option>
-                <option value="19:9">Tela 19:9</option>
-                <option value="16:9">Tela 16:9</option>
-              </select>
-            </div>
-
-            {/* Quick Voice Skill Teaching Action */}
-            <button
-              type="button"
-              onClick={() =>
-                startVoiceTeachSkillMode('Caminho de Botões no App')
+        {/* Atualizar App Agora (OTA) */}
+        <button
+          type="button"
+          onClick={() => {
+            const winAny = window as unknown as {
+              BuddyNativeOverlay?: {
+                reloadOtaNow?: () => void;
+              };
+            };
+            if (typeof winAny.BuddyNativeOverlay?.reloadOtaNow === 'function') {
+              winAny.BuddyNativeOverlay.reloadOtaNow();
+              return;
+            }
+            try {
+              if ('caches' in window) {
+                caches.keys().then((names) => {
+                  names.forEach((n) => caches.delete(n));
+                });
               }
-              className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
-            >
-              <Mic className="h-3.5 w-3.5" />
-              <span>
-                🎙️ Ensinar Caminho à IA (&ldquo;Buddy, ensinar caminho&rdquo;)
-              </span>
-            </button>
-          </div>
-        )}
+            } catch {
+              // ignore
+            }
+            const baseUrl = window.location.href.split('?')[0];
+            window.location.replace(`${baseUrl}?ota_ts=${Date.now()}`);
+          }}
+          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
+        >
+          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
+            <RefreshCw className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+            <span>Atualizar App Agora (OTA)</span>
+          </span>
+          <span className="rounded bg-sky-500/15 border border-sky-500/35 px-2 py-0.5 text-[10px] font-mono text-sky-300 shrink-0">
+            Recarregar
+          </span>
+        </button>
 
         {/* 1. Navigable Item: Personalizar Alertas (±45%), Voz & Trigger */}
         <button
@@ -2200,22 +1866,16 @@ export const MenuMaisHubView: React.FC = () => {
           </div>
         </button>
 
-        {/* 4. Arquivo de Provas (Moved from Mapa to Ajustes) */}
+        {/* 3. Metas Financeiras & Caixa */}
         <button
           type="button"
-          onClick={() => setSubPage('ARQUIVO_PROVAS')}
+          onClick={() => setActiveTab('financas')}
           className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
         >
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-            <FileCheck2 className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-            <span>Arquivo de Provas (Dossiê 5 Categorias)</span>
+          <span className="text-xs font-semibold text-zinc-100">
+            Metas Financeiras &amp; Caixa
           </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-200">
-              {evidentiaryVaultRecords.length} Provas
-            </span>
-            <ChevronRight className="h-4 w-4 text-zinc-500" />
-          </div>
+          <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
         </button>
 
         {/* 5. Acordos de Zona (Renamed from Pactos & Moved from Mapa to Ajustes) */}
@@ -2331,18 +1991,6 @@ export const MenuMaisHubView: React.FC = () => {
           </div>
         )}
 
-        {/* 9. Árvore de Comandos de Voz & Calibrador %X/%Y */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('voz_suporte')}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100">
-            Árvore de Comandos de Voz &amp; Calibrador %X/%Y
-          </span>
-          <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
-        </button>
-
         {/* 10. Predefinições & Fiscal (Critérios de Aceitação, Veículo & Impostos) */}
         <button
           type="button"
@@ -2350,7 +1998,7 @@ export const MenuMaisHubView: React.FC = () => {
           className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
         >
           <span className="text-xs font-semibold text-zinc-100">
-            Predefinições &amp; Fiscal (Veículo, Critérios &amp; Impostos)
+            Veículo, Custos &amp; Impostos
           </span>
           <div className="flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
             <span className="text-[11px] font-mono text-zinc-400">
@@ -2364,125 +2012,10 @@ export const MenuMaisHubView: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('reclamacoes')}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
+          className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
         >
           <span className="text-xs font-semibold text-zinc-100">
             Rotas Proibidas &amp; Reclamações
-          </span>
-          <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
-        </button>
-
-        {/* 12. Testar Cenários (Simulador) */}
-        <button
-          type="button"
-          onClick={() => setIsSimulatorOpen((prev) => !prev)}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100">
-            Testar Cenários (Simulador de Ofertas)
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-300">
-              Plataformas Ativas ({activePlatforms.length})
-            </span>
-            <ChevronRight className="h-4 w-4 text-zinc-500" />
-          </div>
-        </button>
-
-        {isSimulatorOpen && (
-          <div className="p-3.5 bg-zinc-950 border-b border-zinc-800 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
-                <FlaskConical className="h-3.5 w-3.5" />
-                <span>Simular Oferta no Início</span>
-              </span>
-              <span className="text-[10px] font-mono text-zinc-500">
-                Peso: {totalAuditedWeightKg.toFixed(1)} kg
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-1">
-              {SCANNER_OFFER_PRESETS.filter((preset) =>
-                activePlatforms.includes(preset.platform)
-              ).map((preset) => {
-                const selected = activeScannedOffer.id === preset.id;
-                return (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => handlePickPreset(preset)}
-                    className={`rounded-lg py-1.5 px-2.5 text-left text-xs flex items-center justify-between cursor-pointer ${
-                      selected
-                        ? 'bg-white text-zinc-950 font-semibold'
-                        : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
-                    }`}
-                  >
-                    <span className="truncate">{preset.presetBadge}</span>
-                    <span className="text-[10px] font-mono opacity-80 ml-2 shrink-0">
-                      {preset.appAnnouncedKm.toFixed(1)}km
-                    </span>
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={handlePickSubMinimum}
-                className="rounded-lg py-1.5 px-2.5 text-left text-xs flex items-center justify-between bg-zinc-900 hover:bg-zinc-800 text-zinc-300 cursor-pointer"
-              >
-                <span>6. Corrida Curta Abaixo Mín (3,00 €)</span>
-                <span className="text-[10px] font-mono text-zinc-500">
-                  1.5km
-                </span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-1.5 pt-1">
-              <button
-                type="button"
-                onClick={() => simulateSpeedAlert(68, 'URBANO')}
-                className="rounded-lg py-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-zinc-300 cursor-pointer"
-              >
-                Excesso 68km/h
-              </button>
-              <button
-                type="button"
-                onClick={simulatePhoneMisuseInMotion}
-                className="rounded-lg py-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-zinc-300 cursor-pointer"
-              >
-                Toque &gt;8s
-              </button>
-              <button
-                type="button"
-                onClick={clearSafetyAlerts}
-                className="rounded-lg py-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-zinc-300 cursor-pointer"
-              >
-                Normalizar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 13. Guia Rápido */}
-        <button
-          type="button"
-          onClick={openWelcomeTour}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100">
-            Guia Rápido (4 Passos)
-          </span>
-          <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
-        </button>
-
-        {/* 14. Consola do Proprietário (Moved from Top Bar to Ajustes) */}
-        <button
-          type="button"
-          onClick={() => setViewMode('PAINEL_ADMIN')}
-          className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-            <Shield className="h-3.5 w-3.5 text-zinc-400" />
-            <span>Consola do Proprietário (Admin Isolado)</span>
           </span>
           <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
         </button>

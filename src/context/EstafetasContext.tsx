@@ -7618,6 +7618,18 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           'Minimizar → A minimizar para Bolha DB.'
         );
         setIsBubbleMinimized(true);
+        if (typeof window !== 'undefined') {
+          const winAny = window as unknown as {
+            BuddyNativeOverlay?: {
+              minimizeToFloatingBubble?: () => void;
+            };
+          };
+          try {
+            winAny.BuddyNativeOverlay?.minimizeToFloatingBubble?.();
+          } catch {
+            // ignore
+          }
+        }
         commandMatched = '"Minimizar" (Modo Minimizado Ativo)';
         actionSummary = 'A minimizar.';
         speakTextPt('A minimizar.');
@@ -8918,15 +8930,32 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   );
 
   // Register global window.onBuddyNativeTranscript callback for Native Android SpeechRecognizer
+  const nativePartialDebounceTimerRef = useRef<number | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const winAny = window as unknown as {
       onBuddyNativeTranscript?: (text: string, isFinal: boolean) => void;
     };
     winAny.onBuddyNativeTranscript = (text: string, isFinal: boolean) => {
-      processIncomingVoiceTranscript(text, Boolean(isFinal));
+      if (nativePartialDebounceTimerRef.current !== null) {
+        window.clearTimeout(nativePartialDebounceTimerRef.current);
+        nativePartialDebounceTimerRef.current = null;
+      }
+      const executedImmediately = processIncomingVoiceTranscript(
+        text,
+        Boolean(isFinal)
+      );
+      if (!isFinal && !executedImmediately && text && text.trim().length >= 2) {
+        nativePartialDebounceTimerRef.current = window.setTimeout(() => {
+          nativePartialDebounceTimerRef.current = null;
+          processIncomingVoiceTranscript(text, true);
+        }, 900);
+      }
     };
     return () => {
+      if (nativePartialDebounceTimerRef.current !== null) {
+        window.clearTimeout(nativePartialDebounceTimerRef.current);
+      }
       if (winAny.onBuddyNativeTranscript) {
         delete winAny.onBuddyNativeTranscript;
       }
@@ -8969,32 +8998,30 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       return;
     }
 
-    // 1. If running inside the Native Android .APK v2.2.7+ (bridgeVersion >= 7):
+    // 1. When window.BuddyNativeOverlay is available (Native Android .APK),
+    // NEVER start webkitSpeechRecognition (which causes a microphone lock conflict).
+    // Route 100% of in-app "🎙️ Falar" taps exclusively through window.BuddyNativeOverlay!
     const winAny = window as unknown as {
       BuddyNativeOverlay?: {
-        getNativeBridgeVersion?: () => number;
+        startSingleShotVoice?: () => void;
         startNativeVoice?: () => void;
         stopNativeVoice?: () => void;
         setBubbleListeningState?: (listening: boolean) => void;
       };
     };
-    let nativeBridgeVer = 0;
-    try {
-      if (typeof winAny.BuddyNativeOverlay?.getNativeBridgeVersion === 'function') {
-        nativeBridgeVer = Number(
-          winAny.BuddyNativeOverlay.getNativeBridgeVersion()
-        );
-      }
-    } catch {
-      nativeBridgeVer = 0;
-    }
 
     if (
-      nativeBridgeVer >= 7 &&
-      typeof winAny.BuddyNativeOverlay?.startNativeVoice === 'function'
+      winAny.BuddyNativeOverlay &&
+      (typeof winAny.BuddyNativeOverlay.startSingleShotVoice === 'function' ||
+        typeof winAny.BuddyNativeOverlay.startNativeVoice === 'function')
     ) {
+      abortActiveSpeechRecOnly();
       try {
-        winAny.BuddyNativeOverlay.startNativeVoice();
+        if (typeof winAny.BuddyNativeOverlay.startSingleShotVoice === 'function') {
+          winAny.BuddyNativeOverlay.startSingleShotVoice();
+        } else if (typeof winAny.BuddyNativeOverlay.startNativeVoice === 'function') {
+          winAny.BuddyNativeOverlay.startNativeVoice();
+        }
         winAny.BuddyNativeOverlay.setBubbleListeningState?.(true);
       } catch {
         // ignore
@@ -9003,7 +9030,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       return;
     }
 
-    // 2. Web SpeechRecognition (for browsers AND OTA updates on older APKs < v2.2.7):
+    // 2. Web SpeechRecognition (ONLY when running in a standard browser outside the Native APK):
     if (activeSpeechRecRef.current) {
       return;
     }

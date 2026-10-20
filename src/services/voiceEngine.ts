@@ -4,6 +4,8 @@ export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate';
 export const DEFAULT_BUDDY_VOICE_RATE = 1.15;
 export const DEFAULT_BUDDY_VOICE_PITCH = 1.0;
 
+let activeHtml5TtsAudio: HTMLAudioElement | null = null;
+
 export function getSavedBuddyVoiceRate(): number {
   if (typeof window === 'undefined') return DEFAULT_BUDDY_VOICE_RATE;
   try {
@@ -37,12 +39,6 @@ export function saveBuddyVoiceRate(rate: number): number {
   return clamped;
 }
 
-/**
- * Priority Neural / Natural Voice Selection (Gemini Timbre Match):
- * Automatically scans available voices and locks onto the highest-quality natural
- * Google/Neural voice (`Google português do Brasil`, `pt-BR-Neural`, `Natural`, or `Google` premium voice)
- * instead of generic robotic system defaults.
- */
 export function selectBestGeminiLikePtVoice(
   voices: SpeechSynthesisVoice[]
 ): SpeechSynthesisVoice | undefined {
@@ -62,7 +58,6 @@ export function selectBestGeminiLikePtVoice(
 
   const candidatePool = ptBrVoices.length > 0 ? ptBrVoices : ptVoices;
 
-  // Tier 1: Exact Google português do Brasil / pt-BR-Neural / Natural neural voices
   const tier1Keywords = [
     'google português do brasil',
     'google portugues do brasil',
@@ -79,7 +74,6 @@ export function selectBestGeminiLikePtVoice(
     if (match) return match;
   }
 
-  // Tier 2: Any Google or premium voice in Portuguese
   const tier2Keywords = ['google', 'premium', 'enhanced', 'luciana', 'microsoft'];
   for (const kw of tier2Keywords) {
     const match = candidatePool.find((v) => v.name.toLowerCase().includes(kw));
@@ -96,6 +90,15 @@ export function cancelBuddySpeechNow(): void {
       BuddyNativeOverlay?: { stopNativeTts?: () => void };
     };
     winAny.BuddyNativeOverlay?.stopNativeTts?.();
+  } catch {
+    // ignore
+  }
+  try {
+    if (activeHtml5TtsAudio) {
+      activeHtml5TtsAudio.pause();
+      activeHtml5TtsAudio.currentTime = 0;
+      activeHtml5TtsAudio = null;
+    }
   } catch {
     // ignore
   }
@@ -140,6 +143,47 @@ export function playBuddyConfirmationChime(): void {
   }
 }
 
+function playHtml5StreamTtsFallback(
+  text: string,
+  onStart?: () => void,
+  onEnd?: () => void
+): boolean {
+  if (typeof window === 'undefined' || typeof Audio === 'undefined') return false;
+  try {
+    if (activeHtml5TtsAudio) {
+      activeHtml5TtsAudio.pause();
+      activeHtml5TtsAudio = null;
+    }
+    const cleanChunk = text.trim().slice(0, 190);
+    const ttsUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=pt-PT&client=tw-ob&q=${encodeURIComponent(
+      cleanChunk
+    )}`;
+    const audio = new Audio(ttsUrl);
+    audio.setAttribute('referrerpolicy', 'no-referrer');
+    audio.volume = 1.0;
+    audio.playbackRate = 1.08;
+    activeHtml5TtsAudio = audio;
+    audio.onplay = () => onStart?.();
+    audio.onended = () => {
+      activeHtml5TtsAudio = null;
+      onEnd?.();
+    };
+    audio.onerror = () => {
+      activeHtml5TtsAudio = null;
+      onEnd?.();
+    };
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => {
+        activeHtml5TtsAudio = null;
+      });
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function speakBuddy(text: string): void {
   speakWithBuddyVoiceEngine({ text });
 }
@@ -157,8 +201,9 @@ export interface SpeakBuddyVoiceOptions {
 
 /**
  * Centralized Gemini-Style Natural Voice Engine (+15% Faster 1.15x Default).
- * Uses Native Android TextToSpeech (speakText / speakNativeTts) inside the .APK
- * and Web SpeechSynthesis + Audio Chime in browsers.
+ * 1. Uses Native Android TextToSpeech (`window.BuddyNativeOverlay.speakText`) when available.
+ * 2. Guarantees spoken audio via HTML5 Audio TTS stream (`translate_tts`) on older OTA APK shells.
+ * 3. Falls back to Web SpeechSynthesis in desktop browsers.
  */
 export function speakWithBuddyVoiceEngine(
   options: SpeakBuddyVoiceOptions
@@ -180,14 +225,15 @@ export function speakWithBuddyVoiceEngine(
 
   playBuddyConfirmationChime();
 
+  const winAny = window as unknown as {
+    BuddyNativeOverlay?: {
+      speakText?: (spokenText: string) => void;
+      speakNativeTts?: (spokenText: string) => void;
+    };
+  };
+
   // 1. Native Android APK TextToSpeech Bridge (speakText / speakNativeTts)
   try {
-    const winAny = window as unknown as {
-      BuddyNativeOverlay?: {
-        speakText?: (spokenText: string) => void;
-        speakNativeTts?: (spokenText: string) => void;
-      };
-    };
     const nativeSpeakFn =
       winAny.BuddyNativeOverlay?.speakText ||
       winAny.BuddyNativeOverlay?.speakNativeTts;
@@ -201,15 +247,28 @@ export function speakWithBuddyVoiceEngine(
       return;
     }
   } catch {
-    // fallback to speechSynthesis
+    // continue to HTML5 Audio / speechSynthesis fallback
   }
 
+  // 2. Immediate OTA Guarantee for Android APK shells without native speakText:
+  // Play HTML5 Audio TTS stream in European Portuguese
+  const hasNativeOverlayShell = Boolean(winAny.BuddyNativeOverlay);
+  if (hasNativeOverlayShell) {
+    const startedStream = playHtml5StreamTtsFallback(text, onStart, onEnd);
+    if (startedStream) {
+      onVoiceResolved?.('Voz Audio Stream PT-PT (OTA)');
+    }
+  }
+
+  // 3. Also trigger Web SpeechSynthesis (works on desktop browsers & fallback)
   if (!('speechSynthesis' in window)) {
+    if (!hasNativeOverlayShell) {
+      playHtml5StreamTtsFallback(text, onStart, onEnd);
+    }
     return;
   }
 
   try {
-    // Cancel any queued stale speech before speaking new street alerts
     window.speechSynthesis.cancel();
     window.speechSynthesis.resume?.();
 
@@ -233,10 +292,20 @@ export function speakWithBuddyVoiceEngine(
 
     if (onStart) utterance.onstart = onStart;
     if (onEnd) utterance.onend = onEnd;
-    if (onError) utterance.onerror = onError;
+    if (onError) {
+      utterance.onerror = () => {
+        if (!hasNativeOverlayShell) {
+          playHtml5StreamTtsFallback(text, onStart, onEnd);
+        }
+        onError();
+      };
+    }
 
     window.speechSynthesis.speak(utterance);
   } catch {
+    if (!hasNativeOverlayShell) {
+      playHtml5StreamTtsFallback(text, onStart, onEnd);
+    }
     onError?.();
   }
 }
@@ -251,12 +320,6 @@ function shortPlatformLabel(platform: PlatformName): string {
   return 'Glovo';
 }
 
-/**
- * Surgical, High-Speed Street Phrasing (Ultra-Concise Telemetry under 2 seconds):
- * - Good Offer: "Uber: 6,20 limpos, 1,55 por km. Vale a pena."
- * - Bad / Dead-Zone Offer: "Glovo: 0,75 por km com retorno vazio. Não compensa."
- * - Heavy Order: "Atenção: 14 quilos estimados. Diga 'dividir pedido' para acionar suporte."
- */
 export function buildSurgicalOfferStreetTts(input: {
   platform: PlatformName;
   verdictCode: 'ACEITAR' | 'RECUSAR';
