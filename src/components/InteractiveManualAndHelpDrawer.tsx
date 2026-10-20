@@ -853,10 +853,9 @@ export const InteractiveManualAndHelpDrawer: React.FC = () => {
 };
 
 type OfficialManualTabId =
-  | 'GUIA_RAPIDO'
-  | 'COMANDOS_VOZ'
-  | 'FINANCAS_CAIXA'
-  | 'MANUAL_ADMIN';
+  | 'MANUAL_ESTAFETA'
+  | 'MANUAL_EXECUTIVO'
+  | 'DOSSIE_LEGAL_RGPD';
 
 interface ManualSectionItem {
   id: string;
@@ -869,106 +868,148 @@ interface ManualSectionItem {
 
 const OFFICIAL_MANUAL_SECTIONS: ManualSectionItem[] = [
   {
-    id: 'guia-scanner',
-    tab: 'GUIA_RAPIDO',
-    badge: '1. INÍCIO (SCANNER)',
-    title: 'Scanner de Lucro Real, Desvio de KM (±45%) e Divisão de Peso',
+    id: 'estafeta-scanner-bolinha',
+    tab: 'MANUAL_ESTAFETA',
+    badge: '1. INÍCIO, BOLINHA FLUTUANTE & SCANNER OCR',
+    title: 'Scanner de Lucro Real, Bolinha Flutuante 3D e Divisão de Peso',
     summary:
       'Audita em milissegundos se uma oferta da Uber Eats, Glovo ou Bolt Food dá lucro líquido real após combustível, desgaste, impostos e retorno.',
     bullets: [
-      'Semáforo instantâneo: ACEITAR (Verde), AVALIAR (Âmbar) ou RECUSAR (Vermelho) segundo os seus critérios €/km e €/hora.',
-      'Auditoria de Desvio de KM: Compara os KM anunciados pela plataforma com a distância real de estrada. Se exceder o limiar (±45%), abre popup de voz e arquiva prova legal.',
-      'Auditoria de Peso (>10kg / >20kg): Deteta garrafões de 5L/6L e sacos pesados, gerando mensagem pronta para exigir Divisão de Pedido com 2.º estafeta no Suporte.',
+      'Bolinha Flutuante 3D (Poses Online, Pausa e Entrega a Jato): Sobrepõe-se às apps de entrega sem bloquear o ecrã; lê automaticamente o valor e a distância assim que toca um pedido.',
+      'Semáforo instantâneo: ACEITAR, AVALIAR ou RECUSAR segundo a sua meta líquida €/km e €/hora.',
+      'Auditoria de Desvio de KM (±45%) e Peso (>10kg / >20kg): Deteta desvios de rota e garrafões pesados, gerando mensagem pronta para exigir Divisão de Pedido com 2.º estafeta no Suporte.',
     ],
   },
   {
-    id: 'guia-mapa',
-    tab: 'GUIA_RAPIDO',
-    badge: '2. MAPA (AMARANTE 60%)',
-    title: 'Mapa em Tempo Real (60% Ecrã), Pins de Colegas e Projeção Horária',
+    id: 'estafeta-financas-caixa',
+    tab: 'MANUAL_ESTAFETA',
+    badge: '2. FINANÇAS, METAS & CAIXA',
+    title: 'Gestão Financeira Automática, Projeções e Dinheiro na Mão vs Banco',
     summary:
-      'Registo rápido em 1 clique com GPS em tempo real, pins de colegas online e histórico de mercado por hora.',
+      'Acompanhe a evolução do lucro líquido diário, semanal e mensal ao cêntimo e reconcilie pagamentos em numerário.',
     bullets: [
-      'O seu pino aparece ao vivo com foto de perfil Zero-AI (120x120px) e anel verde pulsante (Disponível) ou âmbar (Em Entrega).',
-      'Seletor de Projeção Horária (Agora vs 12h, 13h, 19h, 20h, 21h, 22h): Combina procura histórica em Amarante com o n.º real de estafetas registados no Supabase.',
-    ],
-  },
-  {
-    id: 'guia-buddys',
-    tab: 'GUIA_RAPIDO',
-    badge: '3. BUDDYS & SOS',
-    title: 'Rede de Estafetas, Walkie-Talkie Mãos-Livres, Encontros e Botão SOS',
-    summary:
-      'Comunicação direta entre estafetas da zona, alertas de trânsito/espera e botão de emergência SOS.',
-    bullets: [
-      'Walkie-Talkie e Chat da Zona sincronizados via Supabase Realtime (`buddy_messages`).',
-      'Agendar Ponto de Encontro (Café / Descanso / Carregamento) visível para colegas próximos.',
-      'Botão SOS de Emergência: Partilha coordenadas GPS exatas no canal da zona e aciona contactos de emergência.',
-    ],
-  },
-  {
-    id: 'guia-ajustes-provas',
-    tab: 'GUIA_RAPIDO',
-    badge: '4. DEFESA LEGAL & PERFIL',
-    title: 'Arquivo de Provas (Dossiê Legal), Plataformas Ativas e WakeLock',
-    summary:
-      'Personalize as plataformas em que trabalha, mantenha o ecrã sempre ligado na mota e exporte provas de discrepâncias.',
-    bullets: [
-      'Seletor de Plataformas Ativas (Uber Eats, Glovo, Bolt Food): Oculta automaticamente as plataformas que não usa em todas as abas para ganhar espaço no ecrã.',
-      'Foto de Perfil Circular Zero-AI: Recorte e compressão 120x120px no próprio telemóvel (0 custo de API).',
-      'Manter Ecrã Ligado na Mota (WakeLock): Impede o bloqueio do ecrã durante o turno ativo.',
-    ],
-  },
-  {
-    id: 'financas-metas',
-    tab: 'FINANCAS_CAIXA',
-    badge: 'METAS & EFICIÊNCIA',
-    title: 'Meta Diária, Semanal, Mensal e Matriz Comparativa (€/h e €/km)',
-    summary:
-      'Acompanhe a evolução do lucro líquido em tempo real e compare qual plataforma rende mais na sua zona.',
-    bullets: [
-      'Barras de progresso Diária, Semanal e Mensal com cálculo automático do valor restante.',
-      'Matriz de Eficiência Real: Compara €/Hora Bruto, €/KM e Tempo Médio por entrega nas suas plataformas ativas.',
-      'Se trabalhar apenas numa única plataforma, a aba "Global (Cruzado)" é ocultada para maximizar a leitura.',
-    ],
-  },
-  {
-    id: 'financas-caixa',
-    tab: 'FINANCAS_CAIXA',
-    badge: 'CAIXA & ADIANTAMENTOS',
-    title: 'Reconciliação de Dinheiro na Mão (Glovo/Uber) vs Transferência Bancária',
-    summary:
-      'Nunca mais seja surpreendido por descontos de dinheiro recebido em espécie no fecho semanal.',
-    bullets: [
-      'Fórmula de Fecho: Ganho Bruto Total − Dinheiro Já Recebido na Mão (Cash) − Taxas de App = Valor Exato a Receber no Banco.',
-      'Calendário de Pagamentos: Uber Eats (Terça-feira), Bolt Food (Quarta-feira) e Glovo (Quinta-feira).',
+      'Metas e Projeções Diárias, Semanais e Mensais com cálculo automático de quanto falta e quantos pedidos restam.',
+      'Fórmula de Fecho de Caixa: Ganho Bruto Total − Dinheiro Já Recebido na Mão (Cash) − Taxas de App = Valor Exato a Receber por Transferência Bancária.',
       'Registo Rápido em 1 Clique (+ Entrega Manual, + Gorjeta Digital ou + Recebi Dinheiro na Mão) com exportação CSV.',
     ],
   },
   {
-    id: 'admin-motor-ia',
-    tab: 'MANUAL_ADMIN',
-    badge: 'MOTOR GEMINI & SKILLS',
-    title: 'Motor Híbrido IA + Regra 0-Custo por Proporção de Ecrã (20:9 / 19.5:9)',
+    id: 'estafeta-tradutor-libras',
+    tab: 'MANUAL_ESTAFETA',
+    badge: '3. TRADUTOR SIMULTÂNEO & LIBRAS (MÃOS DO BUDDY)',
+    title: 'Tradução Voz/Texto em 8 Idiomas + Linguagem Gestual 3D com Teclado PIN',
     summary:
-      'Como o proprietário gere a chave Gemini Pro e reutiliza Skills aprendidas sem gastar tokens repetidos.',
+      'Comunique instantaneamente na porta com clientes estrangeiros ou clientes surdos sem sair da aplicação.',
     bullets: [
-      'Quando um estafeta ensina um botão ("Buddy ensinar comando"), o sistema grava as coordenadas relativas (%X, %Y) associadas ao modelo e proporção de ecrã (ex.: 20:9).',
-      'Todos os outros estafetas com ecrã 20:9 executam a mesma ação a 0 custo de API (100% determinístico).',
-      'Interruptor Global do Motor IA: Híbrido (Recomendado), Sempre Gemini Live ou 100% Local Offline.',
+      'Tradutor Simultâneo (8 Idiomas: Inglês, Francês, Espanhol, Alemão, Italiano, Ucraniano, Hindi e Mandarim): Microfone duplo Estafeta ↔ Cliente, botão Virar Cartão 180° e 5 frases rápidas de entrega.',
+      'Libras — Mãos do Buddy: Duas mãos robóticas 3D do Buddy que executam os sinais de entrega (Olá, Encomenda, Código PIN, Confirmar, Aguardar 1 Minuto, Obrigado) e soletram qualquer palavra ou número (A–Z e 0–9) por texto ou voz.',
+      'Área do Cliente Surdo: Botões de resposta rápida ("👍 Obrigado!", "⏳ Só 1 minuto", "🚪 Pode deixar na porta") e teclado numérico de 4 dígitos para o cliente digitar o Código PIN da entrega.',
     ],
   },
   {
-    id: 'admin-supabase-kyc',
-    tab: 'MANUAL_ADMIN',
-    badge: 'SUPABASE & KYC B2B',
-    title: 'Banco de Dados Supabase Realtime, Controlo KYC e Patrocínios B2B',
+    id: 'estafeta-mapa-buddys-sos',
+    tab: 'MANUAL_ESTAFETA',
+    badge: '4. MAPA, REDE BUDDYS, WALKIE-TALKIE & SOS',
+    title: 'Radar Regional, Chat, Walkie-Talkie Mãos-Livres, Queda 45s e Alerta SOS',
     summary:
-      'Configuração em 1 clique do esquema SQL, aprovação/suspensão de estafetas e receitas de oficinas parceiras.',
+      'Banco de dados completo da sua região com clima em tempo real, perigos na via, rotas proibidas e proteção ativa no trânsito.',
     bullets: [
-      'Botão "📋 Copiar Script SQL das Tabelas": Inclui tabelas `couriers`, `buddy_messages`, `admin_broadcasts`, `shared_learned_skills` e `hourly_market_snapshots` com migrações idempotentes.',
-      'Aba Estafetas (KYC): Verifica estafetas registados ao vivo no mapa, aprova contas ou suspende infratores.',
-      'Aba Patrocínios B2B: Gere parceiros locais (oficinas, seguros, pneus) exibidos aos estafetas.',
+      'Mapa Operacional (Raio 35 km): Mostra colegas online em tempo real, zonas quentes, alertas de perigo na via e acordos de piso mínimo.',
+      'Comunicação Buddys: Chat da Zona, Walkie-Talkie de voz em tempo real, Blog Informativo e agendamento de pontos de encontro.',
+      'Segurança de Rua: Modo Chuva & Luvas (bloqueio contra gotas de água), Deteção Passiva de Impacto/Queda (countdown 45s) e Botão SOS imediato com coordenadas GPS.',
+    ],
+  },
+  {
+    id: 'executivo-telemetria-ia',
+    tab: 'MANUAL_EXECUTIVO',
+    badge: '1. TELEMETRIA REAL & MOTOR IA HÍBRIDO',
+    title: 'Gestão Executiva (CEO / Admin), Calibração de Skills e Telemetria 100% Real',
+    summary:
+      'Consola exclusiva do fundador para monitorizar utilizadores reais autenticados, aprovar skills de ecrã e gerir custos de API.',
+    bullets: [
+      'Telemetria 100% Real (Zero Dados Fictícios): O Painel de Administrador exibe exclusivamente contas reais autenticadas no dispositivo e na base de dados Supabase.',
+      'Aprovação Global de Skills (%X, %Y): Quando um estafeta ensina um botão num modelo de telemóvel (ex.: proporção 20:9), o Admin publica a skill para toda a frota a 0 custo de API.',
+      'Alertas Globais para a Frota: Envio instantâneo de comunicados sonoros e visuais para todos os Buddys ativos.',
+    ],
+  },
+  {
+    id: 'executivo-b2b-ota-vault',
+    tab: 'MANUAL_EXECUTIVO',
+    badge: '2. PROJEÇÕES B2B, OTA & COFRE PRIVADO',
+    title: 'Simulador de Escala SaaS/B2B, Atualizações OTA e Arquitetura Anti-Cópia',
+    summary:
+      'Arquitetura de segurança industrial que separa o código-fonte privado do pacote público compilado.',
+    bullets: [
+      'Projeções Financeiras & Patrocínios B2B: Simulação de receitas recorrentes, parcerias com oficinas, seguradoras e stands locais.',
+      'Atualizações Instantâneas OTA (Over-The-Air): O APK nativo Android verifica e aplica automaticamente a versão mais recente publicada sem exigir reinstalação manual.',
+      'Blindagem Anti-Engenharia Reversa: Compilação sem sourcemaps (`sourcemap: false`), bloqueio de inspeção e validação de domínio/pacote oficial (`com.pbg.deliverybuddy`).',
+    ],
+  },
+  {
+    id: 'dossie-legal-1-rgpd',
+    tab: 'DOSSIE_LEGAL_RGPD',
+    badge: '1. SEGURANÇA DE DADOS & CONFORMIDADE RGPD',
+    title: 'Regulamento (UE) 2016/679 (RGPD) e Lei n.º 58/2019 (Portugal)',
+    summary:
+      'Garantia absoluta de privacidade, isolamento criptográfico e soberania total do estafeta sobre os seus dados pessoais, localização e contabilidade.',
+    bullets: [
+      'Encriptação e Armazenamento Isolado: Todas as comunicações utilizam encriptação TLS/SSL de ponta a ponta e armazenamento isolado por perfil autenticado.',
+      'Proibição Estrita de Partilha com Plataformas ou Terceiros: Os dados pessoais, coordenadas GPS, histórico de ganhos e métricas financeiras são 100% privados do utilizador e NUNCA são partilhados, vendidos ou transmitidos à Uber Eats, Glovo, Bolt Food, Autoridade Tributária ou quaisquer terceiros.',
+      'Direitos do Titular dos Dados (Acesso, Portabilidade e Esquecimento): Em cumprimento dos artigos 15.º a 20.º do RGPD, o estafeta pode exportar toda a sua contabilidade em formato aberto (.CSV / .MD) ou eliminar/repor integralmente os seus dados a 1 toque em Ajustes.',
+      'Minimização de Dados e Processamento Local (Zero-AI no Dispositivo): O recorte de foto de perfil e o cálculo financeiro de corridas ocorrem localmente no processador do telemóvel, garantindo máxima privacidade.',
+    ],
+  },
+  {
+    id: 'dossie-legal-2-propriedade-intelectual',
+    tab: 'DOSSIE_LEGAL_RGPD',
+    badge: '2. PROPRIEDADE INTELECTUAL & DIREITOS DE AUTOR',
+    title: 'Decreto-Lei n.º 252/94 (Programas de Computador), CDADC e Registo INPI',
+    summary:
+      'Proteção jurídica integral do código-fonte, arquitetura visual, algoritmos financeiros, voz interativa e mascote 3D Delivery Buddy.',
+    bullets: [
+      'Titularidade Exclusiva (Decreto-Lei n.º 252/94 e Código do Direito de Autor — CDADC): O código-fonte, estrutura de base de dados, algoritmos de cálculo de lucro líquido por km/hora, interface gráfica (Preto/Branco + Azul Neon #00E5FF), mãos robóticas 3D de Libras e a mascote 3D Delivery Buddy constituem obra original protegida por direitos de autor em Portugal e na União Europeia.',
+      'Proteção de Marca e Identidade Visual (INPI / EUIPO): A denominação "Delivery Buddy", o logótipo do robô 3D com mochila propulsora (Jetpack DB) e a assinatura vocal estão reservados ao titular do projeto.',
+      'Proibição de Engenharia Reversa e Clonagem: É expressamente proibida a descompilação, extração de assets, cópia parcial ou total da interface ou redistribuição não autorizada do pacote APK, sob pena de responsabilidade civil e criminal.',
+    ],
+  },
+  {
+    id: 'dossie-legal-3-trabalho-digno-act',
+    tab: 'DOSSIE_LEGAL_RGPD',
+    badge: '3. ENQUADRAMENTO LEGAL DO ESTAFETA EM PORTUGAL',
+    title: 'Lei n.º 13/2023 (Agenda do Trabalho Digno — Art.º 12.º-A do Código do Trabalho) & ACT',
+    summary:
+      'Direitos legais dos trabalhadores em plataformas digitais em Portugal, transparência algorítmica, limites de carga e meios de prova.',
+    bullets: [
+      'Transparência Algorítmica e Direito à Informação (Lei n.º 13/2023): O estafeta tem o direito de conhecer os parâmetros que determinam o valor pago por entrega, a distância real de deslocação e os tempos de espera.',
+      'Limites de Segurança, Saúde no Trabalho e Excesso de Peso: O transporte de cargas excessivas (>10 kg / >20 kg em sacos ou garrafões múltiplos) em veículos de duas rodas coloca em risco a integridade física do condutor, assistindo ao estafeta o direito de solicitar divisão de pedido ou recusar condições inseguras.',
+      'Valor Probatório do Arquivo de Provas Delivery Buddy: O registo cronológico de discrepâncias de quilometragem (±45%) e tempos de espera abusivos serve como dossiê documental de apoio em reclamações junto do suporte das plataformas ou da Autoridade para as Condições do Trabalho (ACT).',
+    ],
+  },
+  {
+    id: 'dossie-legal-4-fisco-at-seguranca-social',
+    tab: 'DOSSIE_LEGAL_RGPD',
+    badge: '4. OBRIGAÇÕES FISCAIS, AT & SEGURANÇA SOCIAL',
+    title: 'Guia Burocrático: Finanças (Recibos Verdes / CIRS), IVA (Art.º 53.º) e Seguros Obrigatórios',
+    summary:
+      'Resumo prático das obrigações fiscais e contributivas aplicáveis aos estafetas independentes em Portugal.',
+    bullets: [
+      'Abertura de Atividade na Autoridade Tributária (AT): Enquadramento como Trabalhador Independente (Regime Simplificado de IRS — Categoria B) com CAE/código de atividade adequado a serviços de entregas urbanas e emissão de Faturas-Recibo no Portal das Finanças.',
+      'Regime de IVA (Isenção Art.º 53.º CIVA vs. Regime Normal): Estafetas abaixo do limiar legal anual de faturação podem beneficiar de isenção de IVA ao abrigo do Art.º 53.º do CIVA (sem prejuízo das regras específicas de autoliquidação em serviços intracomunitários); acima do limiar ou por opção, aplica-se a entrega trimestral da Declaração Periódica de IVA.',
+      'Segurança Social dos Trabalhadores Independentes: Após o período inicial de isenção (primeiros 12 meses de início de atividade), a taxa contributiva geral (21,4%) incide sobre o rendimento relevante (70% do valor total de prestação de serviços do trimestre anterior), declarada trimestralmente em janeiro, abril, julho e outubro.',
+      'Seguros Obrigatórios por Lei: 1) Seguro de Acidentes de Trabalho para Trabalhadores Independentes (obrigatório pelo Decreto-Lei n.º 159/99); 2) Seguro de Responsabilidade Civil Automóvel / Motociclo válido para a circulação na via pública.',
+    ],
+  },
+  {
+    id: 'dossie-legal-5-termos-independencia',
+    tab: 'DOSSIE_LEGAL_RGPD',
+    badge: '5. TERMOS DE UTILIZAÇÃO & INDEPENDÊNCIA TECNOLÓGICA',
+    title: 'Natureza de Copiloto Pessoal, Acessibilidade Android e Isenção de Interferência',
+    summary:
+      'Declaração formal de independência tecnológica face às plataformas de entrega.',
+    bullets: [
+      'Assistente Pessoal e Calculadora Independente: O Delivery Buddy funciona exclusivamente como ferramenta auxiliar de contabilidade, leitura de acessibilidade, tradução linguística/Libras e segurança rodoviária ao serviço do estafeta.',
+      'Zero Modificação ou Injeção nas Plataformas: A aplicação não altera, não manipula nem interfere no código, servidores ou APIs privadas da Uber Eats, Glovo ou Bolt Food, utilizando apenas leitura ótica/acessibilidade autorizada pelo próprio utilizador no seu dispositivo Android.',
+      'Segurança Rodoviária Prioritária: O utilizador compromete-se a respeitar integralmente o Código da Estrada, utilizando os comandos de voz mãos-livres ("Buddy...") e o suporte físico no guiador durante a condução.',
     ],
   },
 ];
@@ -989,6 +1030,12 @@ const VOICE_COMMANDS_REFERENCE_TABLE: Array<{
     phrase: '"Buddy recusar" / "Rejeitar oferta"',
     context: 'Início (Scanner)',
     action: 'Recusa a oferta abaixo do piso mínimo e regista estatística',
+    cost: '0 Tokens (Local)',
+  },
+  {
+    phrase: '"Buddy traduzir" / "Buddy abrir Libras"',
+    context: 'Tradutor & Libras',
+    action: 'Abre o Tradutor Simultâneo (8 idiomas) ou o ecrã Libras — Mãos do Buddy',
     cost: '0 Tokens (Local)',
   },
   {
@@ -1030,7 +1077,7 @@ const VOICE_COMMANDS_REFERENCE_TABLE: Array<{
   {
     phrase: '"Buddy abrir mapa" / "Quantos estafetas online"',
     context: 'Mapa (Amarante)',
-    action: 'Muda para o Mapa 60% e anuncia quantos estafetas estão online na zona',
+    action: 'Muda para o Mapa e anuncia quantos estafetas estão online na zona',
     cost: '0 Tokens (Local)',
   },
   {
@@ -1047,80 +1094,72 @@ const VOICE_COMMANDS_REFERENCE_TABLE: Array<{
   },
 ];
 
-const COMPLETE_MARKDOWN_MANUAL_EXPORT = `# MANUAL OFICIAL COMPLETO — DELIVERY BUDDY (AMARANTE & PORTUGAL)
+const COMPLETE_MARKDOWN_MANUAL_EXPORT = `# MANUAL OFICIAL & DOSSIÊ LEGAL, BUROCRÁTICO E RGPD — DELIVERY BUDDY (PORTUGAL / UE)
 **Versão de Produção:** 2026.10 • **Idioma:** Português (pt-PT / Voz pt-BR)
-**Arquitetura:** Copiloto Financeiro, Auditor de Rotas/Peso, Rede de Estafetas em Tempo Real e Consola de Administração.
+**Arquitetura:** Copiloto Financeiro, Auditor de Rotas/Peso, Tradutor Simultâneo & Libras 3D, Rede de Estafetas em Tempo Real e Consola Executiva.
 
 ---
 
-## PARTE 1 — GUIA PRÁTICO DO ESTAFETA
+## TAB 1 — MANUAL DO ESTAFETA (GUIA COMPLETO DE FUNCIONALIDADES E VOZ)
 
-### 1. Registo Rápido em 1 Clique, Foto Zero-AI e Plataformas Ativas
-- Ao abrir o aplicativo pela primeira vez (ou clicando em **"Editar Meu Perfil / Registo"** no topo de \`Mapa\`, \`Buddys\` ou \`Ajustes\`), configure:
-  1. **Nome / Apelido no Mapa** (ex.: \`Caio M.\`)
-  2. **Foto de Perfil Circular Zero-AI (\`120x120px\`):** Toque em **"📷 Importar / Escolher Foto de Perfil"**, ajuste o zoom/posição e guarde. O recorte e compressão são feitos 100% no telemóvel (0 custo de API).
-  3. **Plataformas em que Trabalhas (\`Uber Eats\`, \`Glovo\`, \`Bolt Food\`):** Desmarque as plataformas que não utiliza. O aplicativo oculta automaticamente as plataformas desmarcadas de todas as tabelas, filtros e calendários para dar mais espaço visual.
-  4. **Veículo e Zona Base (Amarante 25km).**
+### 1. Bolinha Flutuante 3D, Scanner OCR e Divisão de Peso (\`Início\`)
+- **Bolinha Flutuante 3D (Poses Online, Pausa e Entrega a Jato):** Sobrepõe-se às aplicações Uber Eats, Glovo e Bolt Food; lê automaticamente a oferta e calcula o Lucro Líquido Real descontando combustível, desgaste por km e impostos.
+- **Auditoria de Desvio de Rota (±45%) e Peso (>10 kg / >20 kg):** Deteta desvios abusivos de quilometragem e encomendas pesadas, arquivando prova legal e gerando texto pronto para exigir **2.º estafeta (Divisão de Pedido)**.
 
-### 2. Scanner de Lucro Real, Desvio de KM e Divisão de Peso (\`Início\`)
-- **Semáforo de Rentabilidade:** Calcula o Lucro Líquido Real descontando combustível/energia, desgaste por km, reserva fiscal (Segurança Social/IRS) e distância de retorno.
-- **Auditoria de Desvio de Rota (±45%):** Compara os KM anunciados pela plataforma com a rota real. Quando o desvio ultrapassa o seu limite configurado em \`Ajustes\`, dispara um alerta visual + voz e guarda a evidência no **Arquivo de Provas**.
-- **Divisão de Pedidos Pesados (>10 kg / >20 kg):** Selecionando itens pesados (ex.: garrafões de água 5L/6L), o Delivery Buddy gera automaticamente a mensagem formal para colar no chat do Suporte exigindo um **2.º estafeta (Divisão de Pedido)** ou taxa extra de peso.
-
-### 3. Gestão de Metas, Eficiência €/h e Dinheiro na Mão (\`Finanças\`)
-- **Estatísticas & Metas:** Defina e acompanhe a sua Meta Diária, Semanal e Mensal. Compare a eficiência real (\`€/h\` e \`€/km\`) entre as suas plataformas ativas.
+### 2. Gestão Financeira Automática, Metas e Caixa (\`Finanças\`)
+- **Metas Diária, Semanal e Mensal:** Acompanhamento ao cêntimo do lucro por quilómetro (\`€/km\`) e por hora (\`€/h\`).
 - **Reconciliação de Dinheiro na Mão (Cash vs Banco):**
   - \`Fórmula:\` **Ganho Bruto Total − Dinheiro Recebido na Mão − Taxas = Valor Líquido a Receber por Transferência Bancária**.
-  - Registe entregas manuais, gorjetas e pagamentos recebidos em numerário em 1 clique e exporte o fecho em \`.CSV\`.
 
-### 4. Mapa de Amarante em Tempo Real (60% Ecrã) & Projeções Horárias (\`Mapa\`)
-- **Presença GPS Real:** O seu pino aparece ao vivo no mapa de Amarante com a sua foto e anel verde (\`Disponível\`) ou âmbar (\`Em Entrega\`), juntamente com todos os colegas ligados ao Supabase.
-- **Seletor de Projeção Horária (\`Agora\` vs \`12h\`, \`13h\`, \`19h\`, \`20h\`, \`21h\`, \`22h\`):** Consulta a relação entre estafetas online e restaurantes quentes por faixa horária para decidir as melhores horas de turno.
+### 3. Tradutor Simultâneo (8 Idiomas) & Libras — Mãos do Buddy (\`🌍 Tradutor & Libras\`)
+- **Tradutor Simultâneo Voz/Texto:** Inglês, Francês, Espanhol, Alemão, Italiano, Ucraniano, Hindi e Mandarim com duplo microfone, botão **🔄 Virar Cartão (180°)** e 5 frases rápidas de entrega.
+- **🤟 Libras — Mãos do Buddy:** Duas mãos robóticas 3D do Buddy que sinalizam gestos de entrega e soletram palavras/números (\`A–Z\` e \`0–9\`), além de barra de resposta rápida para o cliente surdo e teclado de 4 dígitos para o Código PIN.
 
-### 5. Rede de Estafetas, Walkie-Talkie, Encontros e SOS (\`Buddys\`)
-- **Chat da Zona & Walkie-Talkie:** Mensagens instantâneas e avisos de voz entre estafetas da mesma região.
-- **Pontos de Encontro:** Marque pausas para café, descanso ou carregamento elétrico.
-- **Botão SOS:** Em caso de acidente ou avaria grave, transmite a sua localização GPS exata para todos os colegas próximos.
-
-### 6. Ecrã Sempre Ligado na Mota (\`WakeLock\`) & Defesa Legal (\`Ajustes\`)
-- **🔒 Manter Ecrã Ligado na Mota (\`WakeLock\`):** Ative na barra superior ou em \`Ajustes\` para impedir que o ecrã do telemóvel bloqueie durante o turno.
-- **Arquivo de Provas (Dossiê Legal):** Consulte e exporte todas as discrepâncias de KM e tempos de espera abusivos registados.
+### 4. Mapa Regional (Raio 35 km), Rede Buddys, Walkie-Talkie e SOS (\`Mapa\` & \`Buddys\`)
+- **Radar Regional:** Clima em tempo real, acordos de piso mínimo, alertas de perigos na via e registo de rotas proibidas.
+- **Segurança de Rua:** Modo Chuva & Luvas, Deteção Automática de Queda (45s) e Botão SOS com coordenadas GPS.
 
 ---
 
-## PARTE 2 — MANUAL DA CONSOLA DO PROPRIETÁRIO (ADMIN)
+## TAB 2 — MANUAL EXECUTIVO (CEO / ADMIN)
 
-1. **Acesso:** Em \`Ajustes -> Consola do Proprietário (Admin Isolado)\` ou no botão de topo.
-2. **Motor Gemini Pro / Híbrido:** Insira a sua chave Google Gemini API e escolha o modo de operação (\`Híbrido Recomendado\`, \`Sempre Gemini Live\` ou \`100% Local Offline\`).
-3. **Skills Aprendidas por Proporção de Ecrã (\`20:9\`, \`19.5:9\`, \`16:9\`):** As coordenadas relativas (\`%X\`, \`%Y\`) ensinadas num telemóvel ficam imediatamente disponíveis a **0 custo de API** para todos os aparelhos com a mesma proporção de ecrã.
-4. **Supabase Realtime & SQL em 1 Clique:** Na aba \`Sistema & API\`, clique em **"📋 Copiar Script SQL das Tabelas"** e execute no SQL Editor do Supabase para criar/atualizar todas as tabelas e colunas (\`avatar_url\`, \`active_platforms\`, \`hourly_market_snapshots\`).
-5. **Controlo KYC, Comunicados e Patrocínios B2B:** Aprove estafetas reais registados no mapa, envie alertas globais para a frota e gira patrocínios de oficinas e parceiros.
+1. **Telemetria 100% Real (Zero Dados Fictícios):** Contabiliza exclusivamente contas reais autenticadas no dispositivo e no Supabase.
+2. **Aprovação Global de Skills IA (%X, %Y):** Publicação de coordenadas por proporção de ecrã (\`20:9\`, \`19.5:9\`, \`16:9\`) para toda a frota a **0 custo de API**.
+3. **Alertas de Frota, Projeções B2B, OTA & Cofre Privado:** Emissão de alertas para todos os estafetas, simulador de receitas SaaS/B2B, atualizações Over-The-Air e proteção anti-engenharia reversa (\`sourcemap: false\`).
 
 ---
 
-## PARTE 3 — TABELA COMPLETA DE COMANDOS DE VOZ (PT-BR)
+## TAB 3 — DOSSIÊ LEGAL, BUROCRÁTICO & RGPD (PORTUGAL / UNIÃO EUROPEIA)
 
-| Comando de Voz ("Buddy...") | Contexto | Ação Executada | Custo API |
-| :--- | :--- | :--- | :--- |
-| **"Buddy aceitar"** | Início (Scanner) | Aceita a oferta auditada e inicia rota GPS | 0 Tokens |
-| **"Buddy recusar"** | Início (Scanner) | Recusa a oferta abaixo do mínimo configurado | 0 Tokens |
-| **"Buddy dividir pedido"** | Início / Suporte | Gera e copia mensagem exigindo 2.º estafeta (>10kg) | 0 Tokens |
-| **"Buddy suporte atraso"** | Voz & Suporte | Copia mensagem formal de atraso no restaurante | 0 Tokens |
-| **"Buddy cliente ausente"** | Voz & Suporte | Aciona protocolo e texto de cliente ausente | 0 Tokens |
-| **"Buddy ensinar comando"** | Global | Abre calibrador visual %X/%Y para gravar novo botão | 0 Tokens |
-| **"Buddy quanto falta para a meta"** | Finanças | Anuncia por voz o lucro atual e o valor restante da meta | 0 Tokens |
-| **"Buddy registar gorjeta"** | Finanças | Abre o registo rápido de gorjeta / dinheiro na mão | 0 Tokens |
-| **"Buddy abrir mapa"** | Mapa | Abre o Mapa 60% de Amarante e lê estafetas online | 0 Tokens |
-| **"Buddy alerta trânsito"** | Mapa / Buddys | Regista perigo na via para os colegas da zona | 0 Tokens |
-| **"Buddy SOS"** | Emergência | Envia alerta SOS com coordenadas GPS na rede Buddys | 0 Tokens |
+### 1. Segurança de Dados & Conformidade RGPD (Regulamento UE 2016/679 e Lei n.º 58/2019)
+- **Encriptação e Isolamento:** Transmissão encriptada via TLS/SSL e armazenamento isolado por conta.
+- **Proibição Estrita de Partilha:** Os dados pessoais, a localização GPS e toda a contabilidade do estafeta são **100% privados** e **nunca são partilhados** com plataformas de entrega (Uber Eats, Glovo, Bolt Food) ou terceiros.
+- **Direitos do Utilizador:** Acesso, exportação/portabilidade (\`.CSV\` / \`.MD\`) e eliminação total de dados a 1 toque.
+
+### 2. Propriedade Intelectual & Direitos de Autor (Decreto-Lei n.º 252/94 e CDADC)
+- **Titularidade Exclusiva:** Código-fonte, algoritmos financeiros, voz interativa, mãos 3D de Libras e mascote 3D Delivery Buddy protegidos pelo Decreto-Lei n.º 252/94 e pelo Código do Direito de Autor e dos Direitos Conexos (CDADC), com reserva de marca junto do INPI.
+- **Proibição de Engenharia Reversa:** Proteção técnica e legal contra descompilação, clonagem ou redistribuição não autorizada.
+
+### 3. Enquadramento Legal do Estafeta em Portugal (Lei n.º 13/2023 — Trabalho Digno & ACT)
+- **Direitos em Plataformas Digitais:** Transparência algorítmica sobre tarifas e rotas (Art.º 12.º-A do Código do Trabalho), proteção de segurança e saúde no trabalho (limites de carga/peso) e arquivo probatório para atuação junto da ACT.
+
+### 4. Obrigações Fiscais, AT & Segurança Social (Guia Burocrático)
+- **Finanças (AT):** Abertura de atividade como Trabalhador Independente (Recibos Verdes / Regime Simplificado CIRS), isenção de IVA ao abrigo do **Art.º 53.º do CIVA** (quando aplicável) ou regime normal trimestral.
+- **Segurança Social & Seguros Obrigatórios:** Enquadramento no regime dos Trabalhadores Independentes (declaração trimestral) e obrigatoriedade legal de **Seguro de Acidentes de Trabalho** (DL n.º 159/99) e **Seguro de Responsabilidade Civil**.
+
+### 5. Termos de Utilização & Independência Tecnológica
+- **Independência Total:** O Delivery Buddy opera exclusivamente como assistente pessoal de cálculo, acessibilidade e segurança do utilizador, sem qualquer injeção ou modificação nos sistemas internos das plataformas de entrega.
 `;
 
 const OfficialManualAndCommandsModal: React.FC<{
   onClose: () => void;
   onSpeakPt: (text: string) => void;
 }> = ({ onClose, onSpeakPt }) => {
+  const { themeMode } = useEstafetas();
+  const isDaylight = themeMode === 'DAYLIGHT';
+
   const [activeManualTab, setActiveManualTab] =
-    useState<OfficialManualTabId>('GUIA_RAPIDO');
+    useState<OfficialManualTabId>('MANUAL_ESTAFETA');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [downloadFeedback, setDownloadFeedback] = useState<string | null>(null);
 
@@ -1141,17 +1180,25 @@ const OfficialManualAndCommandsModal: React.FC<{
     return haystack.includes(normalizedQuery);
   });
 
-  const handleDownloadMarkdownManual = () => {
+  const handleDownloadManualFile = (ext: 'md' | 'txt') => {
+    const mime =
+      ext === 'md'
+        ? 'text/markdown;charset=utf-8;'
+        : 'text/plain;charset=utf-8;';
+    const filename =
+      ext === 'md'
+        ? 'MANUAL_E_DOSSIE_LEGAL_DELIVERY_BUDDY.md'
+        : 'MANUAL_E_DOSSIE_LEGAL_DELIVERY_BUDDY.txt';
     const blob = new Blob([COMPLETE_MARKDOWN_MANUAL_EXPORT], {
-      type: 'text/markdown;charset=utf-8;',
+      type: mime,
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'MANUAL_DELIVERY_BUDDY.md';
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    setDownloadFeedback('MANUAL_DELIVERY_BUDDY.md transferido com sucesso!');
+    setDownloadFeedback(`${filename} transferido com sucesso!`);
     setTimeout(() => setDownloadFeedback(null), 3500);
   };
 
@@ -1159,86 +1206,174 @@ const OfficialManualAndCommandsModal: React.FC<{
     window.print();
   };
 
+  const surfaceBg = isDaylight ? '#FFFFFF' : '#05070B';
+  const cardBg = isDaylight ? '#F8FAFC' : '#0B0F17';
+  const innerBg = isDaylight ? '#FFFFFF' : '#111827';
+  const primaryText = isDaylight ? '#090D16' : '#FFFFFF';
+  const secondaryText = isDaylight ? '#475569' : '#94A3B8';
+  const borderCol = isDaylight ? '#CBD5E1' : 'rgba(0, 229, 255, 0.32)';
+
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
-      aria-label="Manual Oficial de Uso e Lista de Comandos Delivery Buddy"
+      aria-label="Manual e Dossiê Legal, Burocrático e RGPD Delivery Buddy"
     >
-      <div className="w-full max-w-2xl rounded-2xl bg-zinc-900 border border-indigo-500/40 p-4 space-y-3 shadow-2xl my-auto max-h-[92vh] flex flex-col">
+      <div
+        style={{
+          backgroundColor: surfaceBg,
+          borderColor: '#00E5FF',
+          color: primaryText,
+        }}
+        className="w-full max-w-2xl rounded-2xl border-2 p-4 space-y-3 shadow-[0_0_35px_rgba(0,229,255,0.22)] my-auto max-h-[92vh] flex flex-col"
+      >
         {/* Header */}
-        <div className="flex items-start justify-between gap-2 border-b border-zinc-800 pb-2.5 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-300 shrink-0">
+        <div
+          style={{ borderColor: borderCol }}
+          className="flex items-start justify-between gap-2 border-b pb-2.5 shrink-0"
+        >
+          <div className="flex items-center gap-2.5">
+            <div
+              style={{
+                backgroundColor: '#0B0F17',
+                borderColor: '#00E5FF',
+                color: '#00E5FF',
+              }}
+              className="h-9 w-9 rounded-xl border flex items-center justify-center shrink-0"
+            >
               <BookOpen className="h-5 w-5" />
             </div>
             <div>
-              <span className="text-[10px] uppercase tracking-wider text-indigo-400 block">
-                DOCUMENTAÇÃO OFICIAL • PT-PT &amp; VOZ PT-BR
+              <span
+                style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                className="text-[10px] font-extrabold uppercase tracking-wider block"
+              >
+                DOCUMENTAÇÃO OFICIAL &amp; CONFORMIDADE UE / PORTUGAL
               </span>
-              <h2 className="text-sm font-black text-zinc-100">
-                📘 Manual de Uso &amp; Lista Completa de Comandos
+              <h2
+                style={{ color: primaryText }}
+                className="text-sm sm:text-base font-black"
+              >
+                📘 Manual &amp; Dossiê Legal, Burocrático e RGPD
               </h2>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 cursor-pointer"
+            style={{
+              backgroundColor: '#0B0F17',
+              borderColor: '#00E5FF',
+              color: '#00E5FF',
+            }}
+            className="rounded-xl border px-2.5 py-1.5 text-xs font-extrabold flex items-center gap-1 cursor-pointer shrink-0"
             aria-label="Fechar Manual"
           >
             <X className="h-4 w-4" />
+            <span>Fechar</span>
           </button>
         </div>
 
-        {/* Search & Export Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shrink-0">
-          <div className="relative flex-1">
-            <Search className="h-3.5 w-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        {/* Search & Download Complete Dossier Bar */}
+        <div className="flex flex-col gap-2 shrink-0">
+          <div className="relative">
+            <Search
+              style={{ color: secondaryText }}
+              className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2"
+            />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Pesquisar comando de voz, caixa, peso >10kg, SQL, WakeLock..."
-              className="w-full rounded-xl bg-zinc-950 border border-zinc-800 pl-8 pr-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-indigo-500"
+              placeholder="Pesquisar RGPD, AT, IVA Art. 53, INPI, Libras, comandos de voz..."
+              style={{
+                backgroundColor: innerBg,
+                borderColor: borderCol,
+                color: primaryText,
+              }}
+              className="w-full rounded-xl border pl-8 pr-3 py-2 text-xs font-bold focus:outline-none focus:border-[#00E5FF]"
             />
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
-              onClick={handleDownloadMarkdownManual}
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow"
+              onClick={() => handleDownloadManualFile('txt')}
+              style={{
+                backgroundColor: '#0B0F17',
+                borderColor: '#00E5FF',
+                color: '#00E5FF',
+              }}
+              className="flex-1 rounded-xl border px-3 py-2 text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95 shadow-xs"
             >
-              <Download className="h-3.5 w-3.5" />
-              <span>⬇️ Baixar Manual Completo (.MD / Imprimir PDF)</span>
+              <Download className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                📥 Baixar Manual &amp; Dossiê Completo (.TXT / .MD / Imprimir PDF)
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDownloadManualFile('md')}
+              style={{
+                backgroundColor: cardBg,
+                borderColor: borderCol,
+                color: primaryText,
+              }}
+              className="rounded-xl border px-2.5 py-2 text-[11px] font-extrabold cursor-pointer"
+              title="Transferir em formato Markdown (.MD)"
+            >
+              .MD
             </button>
             <button
               type="button"
               onClick={handlePrintPdfManual}
-              className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-2 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+              style={{
+                backgroundColor: cardBg,
+                borderColor: borderCol,
+                color: primaryText,
+              }}
+              className="rounded-xl border px-2.5 py-2 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer"
               title="Imprimir ou Guardar como PDF"
             >
-              <Printer className="h-3.5 w-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">PDF</span>
+              <Printer className="h-3.5 w-3.5 text-[#00E5FF]" />
+              <span>PDF</span>
             </button>
           </div>
         </div>
 
         {downloadFeedback && (
-          <div className="rounded-lg bg-emerald-950/60 border border-emerald-500/40 px-3 py-1.5 text-[11px] font-bold text-emerald-300 shrink-0">
-            {downloadFeedback}
+          <div
+            style={{
+              backgroundColor: '#0B0F17',
+              borderColor: '#00E5FF',
+              color: '#00E5FF',
+            }}
+            className="rounded-xl border px-3 py-1.5 text-xs font-extrabold shrink-0"
+          >
+            ✓ {downloadFeedback}
           </div>
         )}
 
-        {/* 4 Tabs */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-zinc-950 p-1 rounded-xl border border-zinc-800 shrink-0">
+        {/* 3 Structured Tabs: Manual do Estafeta | Manual Executivo | Dossiê Legal, Burocrático & RGPD */}
+        <div
+          style={{ backgroundColor: cardBg, borderColor: borderCol }}
+          className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-1.5 rounded-xl border shrink-0"
+        >
           {(
             [
-              { id: 'GUIA_RAPIDO', label: '1. Guia Rápido' },
-              { id: 'COMANDOS_VOZ', label: '2. Comandos de Voz' },
-              { id: 'FINANCAS_CAIXA', label: '3. Finanças & Caixa' },
-              { id: 'MANUAL_ADMIN', label: '4. Manual Admin' },
+              {
+                id: 'MANUAL_ESTAFETA',
+                label: '📘 Manual do Estafeta',
+              },
+              {
+                id: 'MANUAL_EXECUTIVO',
+                label: '🛡️ Manual Executivo (CEO / Admin)',
+              },
+              {
+                id: 'DOSSIE_LEGAL_RGPD',
+                label: '⚖️ Dossiê Legal, Burocrático & RGPD',
+              },
             ] as const
           ).map((t) => {
             const active = activeManualTab === t.id && !normalizedQuery;
@@ -1250,11 +1385,20 @@ const OfficialManualAndCommandsModal: React.FC<{
                   setSearchQuery('');
                   setActiveManualTab(t.id);
                 }}
-                className={`rounded-lg py-2 px-2 text-[11px] font-extrabold transition cursor-pointer ${
+                style={
                   active
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
-                }`}
+                    ? {
+                        backgroundColor: '#0B0F17',
+                        borderColor: '#00E5FF',
+                        color: '#00E5FF',
+                      }
+                    : {
+                        backgroundColor: 'transparent',
+                        borderColor: 'transparent',
+                        color: secondaryText,
+                      }
+                }
+                className="rounded-lg border py-2 px-2.5 text-xs font-black transition cursor-pointer text-center"
               >
                 {t.label}
               </button>
@@ -1264,41 +1408,149 @@ const OfficialManualAndCommandsModal: React.FC<{
 
         {/* Content Body */}
         <div className="overflow-y-auto space-y-2.5 pr-1 flex-1">
-          {(activeManualTab === 'COMANDOS_VOZ' || normalizedQuery) && (
-            <div className="rounded-xl bg-zinc-950/90 border border-zinc-800 p-3 space-y-2">
+          {filteredSections.map((sec) => (
+            <div
+              key={sec.id}
+              style={{
+                backgroundColor: cardBg,
+                borderColor: borderCol,
+              }}
+              className="rounded-xl border p-3.5 space-y-2"
+            >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-extrabold text-indigo-300 flex items-center gap-1.5">
-                  <Volume2 className="h-3.5 w-3.5" />
+                <span
+                  style={{
+                    backgroundColor: '#0B0F17',
+                    borderColor: '#00E5FF',
+                    color: '#00E5FF',
+                  }}
+                  className="rounded-md border px-2 py-0.5 text-[10px] font-extrabold"
+                >
+                  {sec.badge}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSpeakPt(
+                      `${sec.title}. ${sec.summary} ${sec.bullets.join(' ')}`
+                    )
+                  }
+                  style={{
+                    backgroundColor: innerBg,
+                    borderColor: borderCol,
+                    color: primaryText,
+                  }}
+                  className="rounded-lg border px-2.5 py-1 text-[10px] font-extrabold flex items-center gap-1 cursor-pointer"
+                >
+                  <Volume2 className="h-3 w-3 text-[#00E5FF]" />
+                  <span>Ouvir</span>
+                </button>
+              </div>
+              <h3
+                style={{ color: primaryText }}
+                className="text-xs sm:text-sm font-black"
+              >
+                {sec.title}
+              </h3>
+              <p
+                style={{ color: secondaryText }}
+                className="text-xs leading-relaxed font-semibold"
+              >
+                {sec.summary}
+              </p>
+              <ul className="space-y-1.5 pt-1">
+                {sec.bullets.map((b, idx) => (
+                  <li
+                    key={idx}
+                    style={{ color: primaryText }}
+                    className="text-xs flex items-start gap-1.5 leading-snug"
+                  >
+                    <span className="text-[#00E5FF] font-black">•</span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          {(activeManualTab === 'MANUAL_ESTAFETA' || normalizedQuery) && (
+            <div
+              style={{
+                backgroundColor: cardBg,
+                borderColor: borderCol,
+              }}
+              className="rounded-xl border p-3 space-y-2"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  style={{ color: primaryText }}
+                  className="text-xs font-black flex items-center gap-1.5"
+                >
+                  <Volume2 className="h-3.5 w-3.5 text-[#00E5FF]" />
                   <span>
                     Tabela Completa de Comandos de Voz Mãos-Livres (pt-BR)
                   </span>
                 </span>
-                <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">
+                <span
+                  style={{
+                    backgroundColor: '#0B0F17',
+                    borderColor: '#00E5FF',
+                    color: '#00E5FF',
+                  }}
+                  className="rounded border px-2 py-0.5 text-[10px] font-extrabold"
+                >
                   {filteredVoiceCommands.length} Comandos
                 </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-[11px]">
                   <thead>
-                    <tr className="border-b border-zinc-800 text-zinc-400">
-                      <th className="py-1.5 pr-2 font-bold">Frase (&ldquo;Buddy...&rdquo;)</th>
-                      <th className="py-1.5 px-2 font-bold">Módulo</th>
-                      <th className="py-1.5 px-2 font-bold">Ação Executada</th>
-                      <th className="py-1.5 pl-2 font-bold text-right">Custo</th>
+                    <tr
+                      style={{ borderColor: borderCol, color: secondaryText }}
+                      className="border-b"
+                    >
+                      <th className="py-1.5 pr-2 font-extrabold">
+                        Frase (&ldquo;Buddy...&rdquo;)
+                      </th>
+                      <th className="py-1.5 px-2 font-extrabold">Módulo</th>
+                      <th className="py-1.5 px-2 font-extrabold">
+                        Ação Executada
+                      </th>
+                      <th className="py-1.5 pl-2 font-extrabold text-right">
+                        Custo
+                      </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/60">
+                  <tbody className="divide-y divide-slate-500/20">
                     {filteredVoiceCommands.map((cmd) => (
-                      <tr key={cmd.phrase} className="hover:bg-zinc-900/60">
-                        <td className="py-2 pr-2 font-bold text-emerald-300">
+                      <tr key={cmd.phrase}>
+                        <td
+                          style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                          className="py-2 pr-2 font-black"
+                        >
                           {cmd.phrase}
                         </td>
-                        <td className="py-2 px-2 text-zinc-300 whitespace-nowrap">
+                        <td
+                          style={{ color: primaryText }}
+                          className="py-2 px-2 font-bold whitespace-nowrap"
+                        >
                           {cmd.context}
                         </td>
-                        <td className="py-2 px-2 text-zinc-400">{cmd.action}</td>
+                        <td
+                          style={{ color: secondaryText }}
+                          className="py-2 px-2 font-semibold"
+                        >
+                          {cmd.action}
+                        </td>
                         <td className="py-2 pl-2 text-right whitespace-nowrap">
-                          <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-emerald-400">
+                          <span
+                            style={{
+                              backgroundColor: '#0B0F17',
+                              borderColor: '#00E5FF',
+                              color: '#00E5FF',
+                            }}
+                            className="rounded border px-1.5 py-0.5 text-[10px] font-bold"
+                          >
                             {cmd.cost}
                           </span>
                         </td>
@@ -1309,58 +1561,25 @@ const OfficialManualAndCommandsModal: React.FC<{
               </div>
             </div>
           )}
-
-          {(activeManualTab !== 'COMANDOS_VOZ' || normalizedQuery) &&
-            filteredSections.map((sec) => (
-              <div
-                key={sec.id}
-                className="rounded-xl bg-zinc-950/90 border border-zinc-800 p-3.5 space-y-2"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="rounded-md bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-bold text-indigo-300">
-                    {sec.badge}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onSpeakPt(`${sec.title}. ${sec.summary} ${sec.bullets.join(' ')}`)
-                    }
-                    className="rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2 py-1 text-[10px] font-semibold text-zinc-300 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Volume2 className="h-3 w-3 text-indigo-400" />
-                    <span>Ouvir</span>
-                  </button>
-                </div>
-                <h3 className="text-xs font-extrabold text-zinc-100">
-                  {sec.title}
-                </h3>
-                <p className="text-[11px] text-zinc-400 leading-relaxed">
-                  {sec.summary}
-                </p>
-                <ul className="space-y-1 pt-1">
-                  {sec.bullets.map((b, idx) => (
-                    <li
-                      key={idx}
-                      className="text-[11px] text-zinc-300 flex items-start gap-1.5"
-                    >
-                      <span className="text-emerald-400 font-bold">•</span>
-                      <span>{b}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-2 border-t border-zinc-800 shrink-0">
-          <span className="text-[10px] text-zinc-400">
-            Ficheiro raiz: <code className="text-zinc-200">MANUAL_DELIVERY_BUDDY.md</code>
+        <div
+          style={{ borderColor: borderCol }}
+          className="flex items-center justify-between pt-2 border-t shrink-0"
+        >
+          <span style={{ color: secondaryText }} className="text-[11px] font-bold">
+            RGPD (UE 2016/679) • Lei n.º 58/2019 • DL n.º 252/94 • Lei n.º 13/2023
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-1.5 text-xs font-bold cursor-pointer"
+            style={{
+              backgroundColor: '#0B0F17',
+              borderColor: '#00E5FF',
+              color: '#00E5FF',
+            }}
+            className="rounded-xl border px-4 py-1.5 text-xs font-extrabold cursor-pointer"
           >
             Fechar Manual
           </button>
@@ -1703,9 +1922,10 @@ export const MenuMaisHubView: React.FC = () => {
         style={{
           backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
           borderColor:
-            themeMode === 'DAYLIGHT' ? '#E2E8F0' : 'rgba(0, 229, 255, 0.25)',
+            themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.25)',
+          borderRadius: '12px',
         }}
-        className="rounded-2xl border p-3 shadow-xs space-y-2"
+        className="border p-3 shadow-xs space-y-2"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <button
@@ -1715,11 +1935,12 @@ export const MenuMaisHubView: React.FC = () => {
               backgroundColor: themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#111827',
               borderColor:
                 themeMode === 'DAYLIGHT'
-                  ? '#E2E8F0'
+                  ? '#CBD5E1'
                   : 'rgba(0, 229, 255, 0.28)',
               color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+              borderRadius: '12px',
             }}
-            className="w-full rounded-xl border py-2.5 px-3 text-left flex items-center justify-between gap-2.5 cursor-pointer transition hover:border-[#00E5FF]"
+            className="w-full border py-2.5 px-3 text-left flex items-center justify-between gap-2.5 cursor-pointer transition hover:border-[#00E5FF]"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <span
@@ -1728,7 +1949,7 @@ export const MenuMaisHubView: React.FC = () => {
                   borderColor: 'rgba(0, 229, 255, 0.45)',
                   color: '#00E5FF',
                 }}
-                className="h-9 w-9 rounded-xl border flex items-center justify-center shrink-0"
+                className="h-9 w-9 rounded-lg border flex items-center justify-center shrink-0"
               >
                 <Download className="h-4 w-4 text-[#00E5FF]" />
               </span>
@@ -1761,11 +1982,12 @@ export const MenuMaisHubView: React.FC = () => {
               backgroundColor: themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#111827',
               borderColor:
                 themeMode === 'DAYLIGHT'
-                  ? '#E2E8F0'
+                  ? '#CBD5E1'
                   : 'rgba(0, 229, 255, 0.28)',
               color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+              borderRadius: '12px',
             }}
-            className="w-full rounded-xl border py-2.5 px-3 text-left flex items-center justify-between gap-2.5 cursor-pointer transition hover:border-[#00E5FF]"
+            className="w-full border py-2.5 px-3 text-left flex items-center justify-between gap-2.5 cursor-pointer transition hover:border-[#00E5FF]"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <span
@@ -1774,7 +1996,7 @@ export const MenuMaisHubView: React.FC = () => {
                   borderColor: 'rgba(0, 229, 255, 0.45)',
                   color: '#00E5FF',
                 }}
-                className="h-9 w-9 rounded-xl border flex items-center justify-center shrink-0 text-base"
+                className="h-9 w-9 rounded-lg border flex items-center justify-center shrink-0 text-base"
               >
                 💬
               </span>
@@ -1800,6 +2022,51 @@ export const MenuMaisHubView: React.FC = () => {
             <ChevronRight className="h-4 w-4 text-[#00E5FF] shrink-0" />
           </button>
         </div>
+
+        {/* Direct 1-Tap Access to Manual & Dossiê Legal */}
+        <button
+          type="button"
+          onClick={() => setIsOfficialManualModalOpen(true)}
+          style={{
+            backgroundColor: themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#111827',
+            borderColor: '#00E5FF',
+            color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+            borderRadius: '12px',
+          }}
+          className="w-full border py-2.5 px-3 text-left flex items-center justify-between gap-2.5 cursor-pointer transition hover:opacity-95"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span
+              style={{
+                backgroundColor: '#0B0F17',
+                borderColor: '#00E5FF',
+                color: '#00E5FF',
+              }}
+              className="h-9 w-9 rounded-lg border flex items-center justify-center shrink-0"
+            >
+              <BookOpen className="h-4 w-4 text-[#00E5FF]" />
+            </span>
+            <div className="min-w-0">
+              <span
+                style={{
+                  color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                }}
+                className="block text-sm font-extrabold truncate"
+              >
+                📘 Manual &amp; Dossiê Legal (RGPD / Finanças / AT)
+              </span>
+              <span
+                style={{
+                  color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+                }}
+                className="block text-xs truncate"
+              >
+                Guia do Estafeta, Manual Executivo e Enquadramento Legal UE
+              </span>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-[#00E5FF] shrink-0" />
+        </button>
       </div>
 
       {/* Live Support Modal inside Ajustes */}
@@ -1817,25 +2084,52 @@ export const MenuMaisHubView: React.FC = () => {
       {/* =====================================================================
           ACCORDION CARD 1: 👤 MEU PERFIL & PLATAFORMAS
           ===================================================================== */}
-      <div className="rounded-2xl bg-zinc-900/95 border border-zinc-800 overflow-hidden shadow-md">
+      <div
+        style={{
+          backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+          borderColor:
+            themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.25)',
+          borderRadius: '12px',
+        }}
+        className="border overflow-hidden shadow-xs"
+      >
         <button
           type="button"
           onClick={() => toggleAccordionCard('PERFIL')}
-          className="w-full px-4 py-3.5 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/40 transition cursor-pointer"
+          style={{
+            backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+            color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+            borderRadius: '0px',
+          }}
+          className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left transition cursor-pointer"
         >
-          <span className="text-base font-extrabold text-zinc-100 flex items-center gap-2">
-            <span>👤 Meu Perfil &amp; Plataformas</span>
-          </span>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-0.5 text-xs font-extrabold text-emerald-300">
-              {realCourierProfile?.name || 'Estafeta'} • {activePlatforms.length} App(s)
+          <div className="min-w-0">
+            <span
+              style={{
+                color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+              }}
+              className="block text-sm sm:text-base font-extrabold truncate"
+            >
+              👤 Meu Perfil &amp; Plataformas
             </span>
-            <ChevronRight
-              className={`h-5 w-5 text-zinc-400 transition-transform ${
-                openAccordion === 'PERFIL' ? 'rotate-90' : ''
-              }`}
-            />
+            <span
+              style={{
+                color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+              }}
+              className="block text-xs font-semibold truncate mt-0.5"
+            >
+              {realCourierProfile?.name || 'Estafeta'} •{' '}
+              {activePlatforms.join(', ')}
+            </span>
           </div>
+          <ChevronRight
+            style={{
+              color: themeMode === 'DAYLIGHT' ? '#090D16' : '#00E5FF',
+            }}
+            className={`h-5 w-5 shrink-0 transition-transform ${
+              openAccordion === 'PERFIL' ? 'rotate-90' : ''
+            }`}
+          />
         </button>
 
         {openAccordion === 'PERFIL' && (
@@ -1913,38 +2207,52 @@ export const MenuMaisHubView: React.FC = () => {
       {/* =====================================================================
           ACCORDION CARD 2: 🎙️ VOZ & POSIÇÃO DA BOLINHA
           ===================================================================== */}
-      <div className="rounded-2xl bg-zinc-900/95 border border-zinc-800 overflow-hidden shadow-md">
+      <div
+        style={{
+          backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+          borderColor:
+            themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.25)',
+          borderRadius: '12px',
+        }}
+        className="border overflow-hidden shadow-xs"
+      >
         <button
           type="button"
           onClick={() => toggleAccordionCard('VOZ_BOLINHA')}
-          className="w-full px-4 py-3.5 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/40 transition cursor-pointer"
+          style={{
+            backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+            color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+            borderRadius: '0px',
+          }}
+          className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left transition cursor-pointer"
         >
-          <span className="text-base font-extrabold text-zinc-100 flex items-center gap-2">
-            <span>🎙️ Voz &amp; Posição da Bolinha</span>
-          </span>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="min-w-0">
             <span
               style={{
-                backgroundColor:
-                  themeMode === 'DAYLIGHT'
-                    ? '#F0F9FF'
-                    : 'rgba(0, 229, 255, 0.14)',
-                borderColor:
-                  themeMode === 'DAYLIGHT'
-                    ? '#00B8D4'
-                    : 'rgba(0, 229, 255, 0.45)',
-                color: themeMode === 'DAYLIGHT' ? '#00838F' : '#00E5FF',
+                color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
               }}
-              className="rounded-lg border px-2.5 py-0.5 text-xs font-extrabold"
+              className="block text-sm sm:text-base font-extrabold truncate"
             >
-              {buddyVoiceRate.toFixed(2)}x • pt-BR
+              🎙️ Voz &amp; Posição da Bolinha
             </span>
-            <ChevronRight
-              className={`h-5 w-5 text-zinc-400 transition-transform ${
-                openAccordion === 'VOZ_BOLINHA' ? 'rotate-90' : ''
-              }`}
-            />
+            <span
+              style={{
+                color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+              }}
+              className="block text-xs font-semibold truncate mt-0.5"
+            >
+              Velocidade {buddyVoiceRate.toFixed(2)}x • Voz Masculina pt-BR &amp;
+              Repouso
+            </span>
           </div>
+          <ChevronRight
+            style={{
+              color: themeMode === 'DAYLIGHT' ? '#090D16' : '#00E5FF',
+            }}
+            className={`h-5 w-5 shrink-0 transition-transform ${
+              openAccordion === 'VOZ_BOLINHA' ? 'rotate-90' : ''
+            }`}
+          />
         </button>
 
         {openAccordion === 'VOZ_BOLINHA' && (
@@ -2269,27 +2577,53 @@ export const MenuMaisHubView: React.FC = () => {
       </div>
 
       {/* =====================================================================
-          ACCORDION CARD 3: 📍 CENTRO: AMARANTE (RAIO 35 KM) & FINANÇAS
+          ACCORDION CARD 3: 📍 CENTRO: AMARANTE & FINANÇAS
           ===================================================================== */}
-      <div className="rounded-2xl bg-zinc-900/95 border border-zinc-800 overflow-hidden shadow-md">
+      <div
+        style={{
+          backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+          borderColor:
+            themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.25)',
+          borderRadius: '12px',
+        }}
+        className="border overflow-hidden shadow-xs"
+      >
         <button
           type="button"
           onClick={() => toggleAccordionCard('CENTRO_FINANCAS')}
-          className="w-full px-4 py-3.5 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/40 transition cursor-pointer"
+          style={{
+            backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+            color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+            borderRadius: '0px',
+          }}
+          className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left transition cursor-pointer"
         >
-          <span className="text-base font-extrabold text-zinc-100 flex items-center gap-2">
-            <span>📍 Centro: Amarante (Raio 35 km) &amp; Finanças</span>
-          </span>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-0.5 text-xs font-extrabold text-emerald-300">
-              Ativo • 35 km
+          <div className="min-w-0">
+            <span
+              style={{
+                color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+              }}
+              className="block text-sm sm:text-base font-extrabold truncate"
+            >
+              📍 Centro: {selectedRegionName} &amp; Finanças
             </span>
-            <ChevronRight
-              className={`h-5 w-5 text-zinc-400 transition-transform ${
-                openAccordion === 'CENTRO_FINANCAS' ? 'rotate-90' : ''
-              }`}
-            />
+            <span
+              style={{
+                color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+              }}
+              className="block text-xs font-semibold truncate mt-0.5"
+            >
+              Raio operacional {mapRadiusKm} km • Metas, Custos &amp; Acordos
+            </span>
           </div>
+          <ChevronRight
+            style={{
+              color: themeMode === 'DAYLIGHT' ? '#090D16' : '#00E5FF',
+            }}
+            className={`h-5 w-5 shrink-0 transition-transform ${
+              openAccordion === 'CENTRO_FINANCAS' ? 'rotate-90' : ''
+            }`}
+          />
         </button>
 
         {openAccordion === 'CENTRO_FINANCAS' && (
@@ -2362,25 +2696,52 @@ export const MenuMaisHubView: React.FC = () => {
       {/* =====================================================================
           ACCORDION CARD 4: 🛡️ SEGURANÇA DE RUA & SISTEMA
           ===================================================================== */}
-      <div className="rounded-2xl bg-zinc-900/95 border border-zinc-800 overflow-hidden shadow-md">
+      <div
+        style={{
+          backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+          borderColor:
+            themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.25)',
+          borderRadius: '12px',
+        }}
+        className="border overflow-hidden shadow-xs"
+      >
         <button
           type="button"
           onClick={() => toggleAccordionCard('SEGURANCA_SISTEMA')}
-          className="w-full px-4 py-3.5 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/40 transition cursor-pointer"
+          style={{
+            backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+            color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+            borderRadius: '0px',
+          }}
+          className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left transition cursor-pointer"
         >
-          <span className="text-base font-extrabold text-zinc-100 flex items-center gap-2">
-            <span>🛡️ Segurança de Rua &amp; Sistema</span>
-          </span>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="rounded-lg bg-zinc-800 px-2.5 py-0.5 text-xs font-extrabold text-emerald-300">
-              {batteryLevelPct}% {isBatteryCharging ? '⚡' : '🔋'}
+          <div className="min-w-0">
+            <span
+              style={{
+                color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+              }}
+              className="block text-sm sm:text-base font-extrabold truncate"
+            >
+              🛡️ Segurança de Rua &amp; Sistema
             </span>
-            <ChevronRight
-              className={`h-5 w-5 text-zinc-400 transition-transform ${
-                openAccordion === 'SEGURANCA_SISTEMA' ? 'rotate-90' : ''
-              }`}
-            />
+            <span
+              style={{
+                color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+              }}
+              className="block text-xs font-semibold truncate mt-0.5"
+            >
+              Modo Chuva, Queda 45s, SOS, Dossiê Legal &amp; Bateria (
+              {batteryLevelPct}%)
+            </span>
           </div>
+          <ChevronRight
+            style={{
+              color: themeMode === 'DAYLIGHT' ? '#090D16' : '#00E5FF',
+            }}
+            className={`h-5 w-5 shrink-0 transition-transform ${
+              openAccordion === 'SEGURANCA_SISTEMA' ? 'rotate-90' : ''
+            }`}
+          />
         </button>
 
         {openAccordion === 'SEGURANCA_SISTEMA' && (
@@ -2499,7 +2860,7 @@ export const MenuMaisHubView: React.FC = () => {
                 className="rounded-xl border py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition hover:border-[#00E5FF]"
               >
                 <BookOpen className="h-4 w-4 text-[#00E5FF] shrink-0" />
-                <span>Manual de Uso &amp; Comandos</span>
+                <span>📘 Manual &amp; Dossiê Legal</span>
               </button>
 
               <button
@@ -2729,7 +3090,7 @@ export const MenuMaisHubView: React.FC = () => {
         )}
       </div>
 
-      {/* Bottom Secondary Outlined Button: Terminar Sessão / Trocar Conta */}
+      {/* Bottom Architectural Rectangular Card: Terminar Sessão / Trocar Conta */}
       <div className="pt-1">
         <button
           type="button"
@@ -2739,11 +3100,37 @@ export const MenuMaisHubView: React.FC = () => {
             borderColor:
               themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.25)',
             color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+            borderRadius: '12px',
           }}
-          className="w-full rounded-xl border py-2.5 px-4 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition hover:border-[#00E5FF]"
+          className="w-full border px-4 py-3 text-left flex items-center justify-between gap-3 cursor-pointer transition hover:border-[#00E5FF] shadow-xs"
         >
-          <LogOut className="h-4 w-4 text-rose-500 shrink-0" />
-          <span>Terminar Sessão / Trocar Conta</span>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <LogOut className="h-4 w-4 text-rose-500 shrink-0" />
+            <div className="min-w-0">
+              <span
+                style={{
+                  color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                }}
+                className="block text-sm font-extrabold truncate"
+              >
+                Terminar Sessão / Trocar Conta
+              </span>
+              <span
+                style={{
+                  color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+                }}
+                className="block text-xs font-semibold truncate"
+              >
+                Sair do turno atual de forma segura
+              </span>
+            </div>
+          </div>
+          <ChevronRight
+            style={{
+              color: themeMode === 'DAYLIGHT' ? '#090D16' : '#00E5FF',
+            }}
+            className="h-5 w-5 shrink-0"
+          />
         </button>
       </div>
 

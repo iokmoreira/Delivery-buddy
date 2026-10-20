@@ -30,7 +30,8 @@ export const BUDDY_LOGIN_INTRO_SENTENCES: string[] = [
   'Olá! Sou o Buddy, o seu robozinho e copiloto inteligente de rua, criado para organizar a tua rotina, proteger-te no trânsito e aumentar os teus ganhos reais.',
   'Enquanto trabalhas na Glovo, Uber ou Bolt, eu fico flutuando na tua tela. Tocou pedido? Eu leio na hora e desconto combustível, desgaste do veículo e impostos. Faço toda a tua gestão financeira automática, acompanhando as tuas metas e projeções diárias, semanais e mensais para saberes ao cêntimo o teu lucro por quilómetro e por hora.',
   'Comigo tens acesso a um banco de dados completo da tua região: vês o clima em tempo real, acordos de piso mínimo, alertas de perigos na via e todo o registo de rotas proibidas, problemas e reclamações para evitares atrasos e ciladas.',
-  'Além disso, comunicas com outros Buddys pelo chat, walkie-talkie e blog informativo, comandas tudo por voz sem tirar a mão da direção e contas com deteção automática de queda e alerta SOS de emergência. Faz login ou cria a tua conta aqui embaixo e vamos trabalhar. Boas entregas e conduza com segurança!',
+  'Os teus dados pessoais, a tua localização e toda a tua contabilidade são cem por cento privados, protegidos por criptografia avançada segundo a lei europeia de proteção de dados e nunca são partilhados com as plataformas de entrega ou terceiros.',
+  'Além disso, comunicas com outros Buddys pelo chat, walkie-talkie, blog e tradutor simultâneo com Libras, comandas tudo por voz sem tirar a mão da direção e contas com deteção automática de queda e alerta SOS. Faz login ou cria a tua conta aqui embaixo e vamos trabalhar. Boas entregas e conduza com segurança!',
 ];
 
 export interface SavedLocalAccountRecord {

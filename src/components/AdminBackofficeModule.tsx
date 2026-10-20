@@ -503,7 +503,7 @@ export const AdminBackofficeModule: React.FC = () => {
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
               <div
                 style={{
                   backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
@@ -511,23 +511,23 @@ export const AdminBackofficeModule: React.FC = () => {
                     ? '#CBD5E1'
                     : 'rgba(0, 229, 255, 0.28)',
                 }}
-                className="rounded-xl border p-2.5 min-w-0"
+                className="rounded-xl border p-2 sm:p-2.5 min-w-0 flex flex-col justify-between"
               >
                 <span
                   style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
-                  className="block text-xs font-bold truncate"
+                  className="block text-[11px] sm:text-xs font-extrabold leading-tight"
                 >
                   Online Agora
                 </span>
                 <span
                   style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
-                  className="block text-2xl font-extrabold mt-0.5"
+                  className="block text-2xl font-extrabold my-0.5 leading-none"
                 >
                   {liveOnlineCount}
                 </span>
                 <span
                   style={{ color: isDaylight ? '#64748B' : '#94A3B8' }}
-                  className="block text-[11px] font-semibold truncate"
+                  className="block text-[10px] sm:text-[11px] font-semibold leading-tight"
                 >
                   No Mapa (Amarante)
                 </span>
@@ -539,23 +539,23 @@ export const AdminBackofficeModule: React.FC = () => {
                     ? '#CBD5E1'
                     : 'rgba(0, 229, 255, 0.28)',
                 }}
-                className="rounded-xl border p-2.5 min-w-0"
+                className="rounded-xl border p-2 sm:p-2.5 min-w-0 flex flex-col justify-between"
               >
                 <span
                   style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
-                  className="block text-xs font-bold truncate"
+                  className="block text-[11px] sm:text-xs font-extrabold leading-tight"
                 >
                   Contas Registadas
                 </span>
                 <span
                   style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                  className="block text-2xl font-extrabold mt-0.5"
+                  className="block text-2xl font-extrabold my-0.5 leading-none"
                 >
                   {totalRegisteredCount}
                 </span>
                 <span
                   style={{ color: isDaylight ? '#64748B' : '#94A3B8' }}
-                  className="block text-[11px] font-semibold truncate"
+                  className="block text-[10px] sm:text-[11px] font-semibold leading-tight"
                 >
                   Estafetas Verificados
                 </span>
@@ -567,23 +567,23 @@ export const AdminBackofficeModule: React.FC = () => {
                     ? '#CBD5E1'
                     : 'rgba(0, 229, 255, 0.28)',
                 }}
-                className="rounded-xl border p-2.5 min-w-0"
+                className="rounded-xl border p-2 sm:p-2.5 min-w-0 flex flex-col justify-between"
               >
                 <span
                   style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
-                  className="block text-xs font-bold truncate"
+                  className="block text-[11px] sm:text-xs font-extrabold leading-tight"
                 >
                   Hub Regional
                 </span>
                 <span
                   style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                  className="block text-sm sm:text-base font-extrabold mt-1 leading-snug"
+                  className="block text-sm sm:text-base font-extrabold my-0.5 leading-tight"
                 >
                   Amarante
                 </span>
                 <span
                   style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
-                  className="block text-[11px] font-extrabold mt-0.5"
+                  className="block text-[10px] sm:text-[11px] font-extrabold leading-tight"
                 >
                   Raio 35 km
                 </span>
@@ -1106,7 +1106,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   onChange={(e) =>
                     setSupabaseKeyDraft(sanitizeSupabaseKeyInput(e.target.value))
                   }
-                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  placeholder="••••••••••••••••••••••••••••••••••••"
                   aria-label="2. CHAVE API PÚBLICA (anon / public key)"
                   className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
                 />
@@ -1318,51 +1318,56 @@ export const AdminBackofficeModule: React.FC = () => {
                   return (
                     <div
                       key={log.id}
-                      className="rounded-xl bg-zinc-950 border border-zinc-800/90 p-3 space-y-2"
+                      className="rounded-xl bg-zinc-950 border border-zinc-800/90 p-3.5 space-y-2.5"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="rounded bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 text-[9px] font-bold text-indigo-300">
-                              {log.platformOrApp} • {log.zoneContext}
-                            </span>
-                            <span className="text-[10px] font-semibold text-zinc-400">
-                              {getCategoryBadgeLabel(log.category)}
-                            </span>
-                            <span className="text-[10px] text-emerald-400">
-                              • Confiança: {log.confidenceScorePct.toFixed(1)}%
-                            </span>
-                            {log.learningOrigin === 'ENSINO_VOZ_GUIADO' && (
-                              <span className="rounded bg-indigo-500/20 border border-indigo-500/40 px-1.5 py-0.5 text-[9px] font-extrabold text-indigo-300">
-                                🎙️ Ensinada por Voz
-                              </span>
-                            )}
-                            {log.learningOrigin === 'PASSIVA_AUTOMATICA' && (
-                              <span className="rounded bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-300">
-                                ⚡ Passiva Automática
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs font-bold text-zinc-100 leading-snug">
-                            {log.skillTitle}
-                          </p>
-                        </div>
-
+                      {/* Top Stacked Row: Status Badge + Origin & Confidence Badges */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
                         <span
-                          className={`rounded-md px-2 py-0.5 text-[9px] font-extrabold shrink-0 ${
+                          className={`rounded-md px-2.5 py-0.5 text-[10px] font-extrabold shrink-0 ${
                             isPublished
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                               : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                           }`}
                         >
                           {isPublished
-                            ? 'Publicada para Todos os Buddys'
-                            : 'Em Análise'}
+                            ? '✓ Publicada para Todos os Buddys'
+                            : '⏳ Em Análise'}
                         </span>
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="rounded bg-zinc-900 border border-zinc-700 px-2 py-0.5 text-[10px] font-bold text-[#00E5FF]">
+                            {log.platformOrApp} • {log.zoneContext}
+                          </span>
+                          <span className="text-[10px] font-extrabold text-emerald-400">
+                            Confiança: {log.confidenceScorePct.toFixed(1)}%
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Device Model & Screen Aspect Ratio Compatibility Strip */}
-                      <div className="flex items-center justify-between gap-2 flex-wrap rounded-lg bg-zinc-900/90 border border-zinc-800 px-2.5 py-1.5">
+                      {/* Full-Width Skill Title & Category Metadata */}
+                      <div className="space-y-1 w-full">
+                        <p className="text-sm font-extrabold text-zinc-100 leading-snug w-full">
+                          {log.skillTitle}
+                        </p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-semibold text-zinc-400">
+                            {getCategoryBadgeLabel(log.category)}
+                          </span>
+                          {log.learningOrigin === 'ENSINO_VOZ_GUIADO' && (
+                            <span className="rounded bg-indigo-500/20 border border-indigo-500/40 px-1.5 py-0.5 text-[9px] font-extrabold text-indigo-300">
+                              🎙️ Ensinada por Voz
+                            </span>
+                          )}
+                          {log.learningOrigin === 'PASSIVA_AUTOMATICA' && (
+                            <span className="rounded bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-300">
+                              ⚡ Passiva Automática
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Full-Width Device Model & Screen Aspect Ratio Compatibility Strip */}
+                      <div className="w-full flex items-center justify-between gap-2 flex-wrap rounded-lg bg-zinc-900/90 border border-zinc-800 px-2.5 py-1.5">
                         <span className="text-[10px] text-zinc-300 flex items-center gap-1">
                           <Smartphone className="h-3 w-3 text-zinc-400 shrink-0" />
                           <span>
@@ -1381,7 +1386,7 @@ export const AdminBackofficeModule: React.FC = () => {
                         )}
                       </div>
 
-                      <p className="text-[11px] text-zinc-400 leading-snug">
+                      <p className="w-full text-xs text-zinc-300 leading-relaxed">
                         {log.actionSequenceSummary}
                       </p>
 

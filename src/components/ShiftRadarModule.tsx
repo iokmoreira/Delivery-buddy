@@ -1263,42 +1263,116 @@ export const ShiftRadarModule: React.FC = () => {
   };
 
   return (
-    <div className="space-y-2.5">
-      {/* ACTIVE OPERATIONAL HUB BADGE (35 KM REGIONAL LOCK — NO TRUNCATION ON AMARANTE) */}
-      <button
-        type="button"
-        onClick={() => setIsHubSelectorModalOpen(true)}
+    <div className="space-y-2">
+      {/* UNIFIED COMPACT MAP CONTROL TOOLBAR: [📍 Amarante (Raio 35 km) | Mudar Centro] + [🗺️ Ruas | 🛰️ Satélite | 🎯 Centrar] */}
+      <div
         style={{
           backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
-          borderColor: isDaylight ? '#00B8D4' : '#00E5FF',
+          borderColor: isDaylight ? '#CBD5E1' : 'rgba(0, 229, 255, 0.35)',
           color: isDaylight ? '#090D16' : '#FFFFFF',
         }}
-        className="w-full rounded-2xl border px-3 py-2 flex items-center justify-between gap-2 cursor-pointer transition shadow-xs"
+        className="w-full rounded-2xl border p-2.5 space-y-2 shadow-sm"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#00E5FF] shadow-[0_0_8px_rgba(0,229,255,0.85)] shrink-0" />
-          <span
-            style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-            className="text-sm font-extrabold whitespace-nowrap"
+        {/* Row 1: Hub Badge & Mudar Centro (Zero Truncation) */}
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setIsHubSelectorModalOpen(true)}
+            className="flex items-center gap-2 min-w-0 text-left cursor-pointer"
           >
-            📍 Centro: Amarante (35 km)
-          </span>
+            <span className="h-2.5 w-2.5 rounded-full bg-[#00E5FF] shadow-[0_0_8px_rgba(0,229,255,0.85)] shrink-0" />
+            <span
+              style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+              className="text-sm font-extrabold whitespace-nowrap"
+            >
+              📍 Amarante (Raio 35 km)
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsHubSelectorModalOpen(true)}
+            style={{
+              backgroundColor: '#0B0F17',
+              borderColor: '#00E5FF',
+              color: '#00E5FF',
+            }}
+            className="rounded-xl border px-2.5 py-1 text-xs font-extrabold shrink-0 whitespace-nowrap cursor-pointer transition hover:opacity-90"
+          >
+            Mudar Centro
+          </button>
         </div>
-        <span
-          style={{
-            backgroundColor: '#0B0F17',
-            borderColor: '#00E5FF',
-            color: '#00E5FF',
-          }}
-          className="rounded-xl border px-2.5 py-1 text-xs font-extrabold shrink-0 whitespace-nowrap"
-        >
-          Mudar Centro
-        </span>
-      </button>
+
+        {/* Row 2: Merged [🗺️ Ruas | 🛰️ Satélite] + [🎯 Centrar] Compact Toolbar */}
+        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-zinc-800/40">
+          <div className="inline-flex items-center rounded-xl bg-zinc-950 border border-zinc-800 p-0.5">
+            <button
+              type="button"
+              onClick={() => setMapStyleMode('RUAS')}
+              style={
+                mapStyleMode === 'RUAS'
+                  ? {
+                      backgroundColor: '#00E5FF',
+                      color: '#090D16',
+                    }
+                  : undefined
+              }
+              className={`rounded-lg px-3 py-1 text-xs font-extrabold transition cursor-pointer ${
+                mapStyleMode === 'RUAS'
+                  ? 'shadow-xs'
+                  : 'text-zinc-300 hover:text-white'
+              }`}
+            >
+              🗺️ Ruas
+            </button>
+            <button
+              type="button"
+              onClick={() => setMapStyleMode('SATELITE')}
+              style={
+                mapStyleMode === 'SATELITE'
+                  ? {
+                      backgroundColor: '#00E5FF',
+                      color: '#090D16',
+                    }
+                  : undefined
+              }
+              className={`rounded-lg px-3 py-1 text-xs font-extrabold transition cursor-pointer ${
+                mapStyleMode === 'SATELITE'
+                  ? 'shadow-xs'
+                  : 'text-zinc-300 hover:text-white'
+              }`}
+            >
+              🛰️ Satélite
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleRecenterAndFollowGps}
+            style={
+              isAutoFollowActive && localLiveCoords
+                ? {
+                    backgroundColor: '#0B0F17',
+                    borderColor: '#00E5FF',
+                    color: '#00E5FF',
+                  }
+                : undefined
+            }
+            className={`rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition ${
+              isAutoFollowActive && localLiveCoords
+                ? 'shadow-[0_0_10px_rgba(0,229,255,0.2)]'
+                : 'bg-zinc-950 border-zinc-700 text-zinc-100 hover:bg-zinc-900'
+            }`}
+          >
+            <Compass className="h-3.5 w-3.5 shrink-0" />
+            <span>🎯 Centrar</span>
+          </button>
+        </div>
+      </div>
 
       {/* FULL INTERACTIVE LEAFLET MAP CONTAINER */}
       <div
-        className={`relative rounded-2xl overflow-hidden border shadow-xl h-[calc(100vh-196px)] min-h-[440px] max-h-[740px] ${
+        className={`relative rounded-2xl overflow-hidden border shadow-xl h-[calc(100vh-225px)] min-h-[430px] max-h-[720px] ${
           isDaylight
             ? 'border-slate-300 bg-slate-100'
             : 'border-zinc-800 bg-zinc-950'
@@ -1309,49 +1383,6 @@ export const ShiftRadarModule: React.FC = () => {
           ref={mapContainerRef}
           className="absolute inset-0 z-0 h-full w-full"
         />
-
-        {/* TOP OVERLAY BAR: ONLY [🗺️ Ruas | 🛰️ Satélite] on Left AND [🎯 Centrar] on Right */}
-        <div className="absolute top-3 left-3 right-3 z-[400] flex items-center justify-between gap-2 pointer-events-none">
-          {/* Left: Street vs Satellite Toggle */}
-          <div className="pointer-events-auto inline-flex items-center rounded-xl bg-zinc-950/90 backdrop-blur-md border border-zinc-700 p-1 shadow-lg">
-            <button
-              type="button"
-              onClick={() => setMapStyleMode('RUAS')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition cursor-pointer ${
-                mapStyleMode === 'RUAS'
-                  ? 'bg-emerald-500 text-zinc-950 shadow'
-                  : 'text-zinc-200 hover:text-white'
-              }`}
-            >
-              🗺️ Ruas
-            </button>
-            <button
-              type="button"
-              onClick={() => setMapStyleMode('SATELITE')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition cursor-pointer ${
-                mapStyleMode === 'SATELITE'
-                  ? 'bg-emerald-500 text-zinc-950 shadow'
-                  : 'text-zinc-200 hover:text-white'
-              }`}
-            >
-              🛰️ Satélite
-            </button>
-          </div>
-
-          {/* Right: Centrar + Auto-Follow GPS Button (No Perfil button!) */}
-          <button
-            type="button"
-            onClick={handleRecenterAndFollowGps}
-            className={`pointer-events-auto rounded-xl backdrop-blur-md border px-3.5 py-2 text-xs font-black flex items-center gap-1.5 shadow-lg cursor-pointer transition ${
-              isAutoFollowActive && localLiveCoords
-                ? 'bg-emerald-600/95 border-emerald-400 text-white'
-                : 'bg-zinc-950/90 border-zinc-700 text-zinc-100 hover:bg-zinc-900'
-            }`}
-          >
-            <Compass className="h-3.5 w-3.5 shrink-0" />
-            <span>🎯 Centrar</span>
-          </button>
-        </div>
 
         {/* CLEAN COMPACT BOTTOM STATUS PILL (No black drawer, no duplicate Disponível button) */}
         <div className="absolute bottom-3 left-3 right-3 z-[400] flex items-center justify-between gap-2 pointer-events-none">

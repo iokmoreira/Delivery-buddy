@@ -183,21 +183,6 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
     setBlogPostInput('');
   };
 
-  const getConnectionStateLabel = (
-    courier: (typeof onlineDirectoryCouriers)[0]
-  ): string => {
-    if (courier.isOnlineActive === false) {
-      return '● Offline';
-    }
-    if (courier.contactPermission === 'PENDENTE') {
-      return '◌ Pedido Enviado';
-    }
-    if (courier.contactPermission === 'APROVADO') {
-      return '● Amigo Conectado';
-    }
-    return '○ Perfil Público';
-  };
-
   // =========================================================================
   // INTERACTIVE BUDDY PROFILE POP-UP (45% <-> 80% EXPANDABLE + MINIMIZE TO BUBBLE)
   // =========================================================================
@@ -233,11 +218,67 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
               : 'bg-zinc-900 text-zinc-100'
           }`}
         >
-          {/* Top Bar: Avatar + Name + Expand (45%/80%) + Minimize to Bubble + Close (X) */}
+          {/* Top Bar: Window Controls Row + Full-Width Avatar & Identity Row */}
           <div className="space-y-3">
-            <div className="flex items-start justify-between gap-2 border-b border-zinc-800/40 pb-2.5">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="relative h-12 w-12 rounded-full overflow-hidden border-2 border-emerald-500 bg-slate-900 shrink-0 flex items-center justify-center">
+            <div className="space-y-2.5 border-b border-zinc-800/40 pb-3">
+              {/* Row 1: Dedicated Top Bar with Window Controls (Never overlaps courier name) */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#00E5FF]">
+                  Perfil &amp; Estatísticas do Buddy
+                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBuddyPopupSizeMode(isExpanded80 ? '45VH' : '80VH')
+                    }
+                    title={
+                      isExpanded80
+                        ? 'Retrair para 45% da tela (ou diga "Retrair")'
+                        : 'Estender para 80% da tela (ou diga "Estender" / "Maximizar")'
+                    }
+                    className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-2.5 py-1 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                  >
+                    {isExpanded80 ? (
+                      <>
+                        <Minimize2 className="h-3 w-3" />
+                        <span>Retrair 45%</span>
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="h-3 w-3" />
+                        <span>Estender 80%</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      minimizeBuddyPopupToAvatarBubble(popupCourier.id)
+                    }
+                    title="Minimizar em Bolinha Flutuante com Foto do Perfil"
+                    className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-2.5 py-1 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                  >
+                    <CircleDot className="h-3 w-3 text-[#00E5FF]" />
+                    <span>Bolinha</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveBuddyPopupCourierId(null)}
+                    title="Fechar Pop-up"
+                    aria-label="Fechar Pop-up"
+                    className="h-7 w-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center cursor-pointer transition"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Row 2: Avatar + Courier Name + AMIGO Badge + Vehicle & Tenure */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF] bg-slate-900 shrink-0 flex items-center justify-center">
                   {popupCourier.avatarPhotoUrl ? (
                     <img
                       src={popupCourier.avatarPhotoUrl}
@@ -251,13 +292,13 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="text-sm font-extrabold truncate">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-base font-extrabold truncate">
                       {popupCourier.callsign}
                     </h3>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold shrink-0 ${
                         isFriend
                           ? 'bg-emerald-500 text-slate-950'
                           : 'bg-zinc-800 text-zinc-300'
@@ -266,64 +307,14 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                       {isFriend ? 'AMIGO' : 'PÚBLICO'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 truncate">
+                  <p className="text-xs text-zinc-400 truncate">
                     {popupCourier.vehicle} • {popupCourier.zoneName} (
                     {popupCourier.distanceKm.toFixed(1)} km)
                   </p>
-                  <p className="text-[10px] font-medium text-emerald-500">
-                    {popupCourier.buddyTenureText || 'Buddy há 1 ano e 2 meses'}
+                  <p className="text-xs font-bold text-[#00E5FF]">
+                    {popupCourier.buddyTenureText || 'Fundador • Out 2026'}
                   </p>
                 </div>
-              </div>
-
-              {/* Action Controls: Estender 80% / Retrair 45% | Minimizar em Bolinha | X */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setBuddyPopupSizeMode(isExpanded80 ? '45VH' : '80VH')
-                  }
-                  title={
-                    isExpanded80
-                      ? 'Retrair para 45% da tela (ou diga "Retrair")'
-                      : 'Estender para 80% da tela (ou diga "Estender" / "Maximizar")'
-                  }
-                  className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-2 py-1.5 text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition"
-                >
-                  {isExpanded80 ? (
-                    <>
-                      <Minimize2 className="h-3 w-3" />
-                      <span>Retrair 45%</span>
-                    </>
-                  ) : (
-                    <>
-                      <Maximize2 className="h-3 w-3" />
-                      <span>Estender 80%</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    minimizeBuddyPopupToAvatarBubble(popupCourier.id)
-                  }
-                  title="Minimizar em Bolinha Flutuante com Foto do Perfil"
-                  className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-2 py-1.5 text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition"
-                >
-                  <CircleDot className="h-3 w-3 text-emerald-400" />
-                  <span>Bolinha</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveBuddyPopupCourierId(null)}
-                  title="Fechar Pop-up"
-                  aria-label="Fechar Pop-up"
-                  className="h-7 w-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center cursor-pointer transition"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
               </div>
             </div>
 
@@ -672,48 +663,51 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
       {/* Interactive 45% / 80% Buddy Profile Pop-up */}
       {renderBuddyProfilePopup()}
 
-      {/* Top Bar: Courier Identity & 1-Click Registration / Profile Edit */}
-      <div className="rounded-2xl bg-zinc-900 border border-zinc-800 px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
-          {realCourierProfile?.isRegistered && realCourierProfile.avatar_url ? (
-            <img
-              src={realCourierProfile.avatar_url}
-              alt={realCourierProfile.name}
-              className="h-6 w-6 rounded-full object-cover ring-2 ring-emerald-500 shrink-0"
-            />
-          ) : (
-            <MapPin className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-          )}
-          <span className="text-xs font-extrabold text-zinc-100 truncate">
-            {realCourierProfile?.isRegistered && realCourierProfile.name
-              ? `Meu Perfil Online: ${realCourierProfile.name} (${realCourierProfile.vehicle}) • ${activePlatforms.join(' + ')}`
-              : 'Novo Dispositivo: Toque em "Editar Meu Perfil / Registo" para entrar online'}
-          </span>
+      {/* Top Bar: Courier Identity & 1-Click Registration / Profile Edit (Fits 100% Inside Card Padding) */}
+      <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-3 space-y-2.5">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            {realCourierProfile?.isRegistered && realCourierProfile.avatar_url ? (
+              <img
+                src={realCourierProfile.avatar_url}
+                alt={realCourierProfile.name}
+                className="h-6 w-6 rounded-full object-cover ring-2 ring-[#00E5FF] shrink-0"
+              />
+            ) : (
+              <MapPin className="h-4 w-4 text-[#00E5FF] shrink-0" />
+            )}
+            <span className="text-xs font-extrabold text-zinc-100 truncate">
+              {realCourierProfile?.isRegistered && realCourierProfile.name
+                ? `${realCourierProfile.name} (${realCourierProfile.vehicle}) • ${activePlatforms.join(' + ')}`
+                : 'Novo Dispositivo: Toque em "Editar Perfil" para entrar online'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsCourierRegistrationModalOpen(true)}
+            className="rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-[#00E5FF]/50 text-[#00E5FF] px-2.5 py-1 text-xs font-extrabold flex items-center gap-1 cursor-pointer transition shrink-0"
+          >
+            <UserCheck className="h-3.5 w-3.5 shrink-0" />
+            <span>Editar Perfil</span>
+          </button>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+
+        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => setIsDirectApkShareModalOpen(true)}
             style={{ backgroundColor: '#0284c7', color: '#ffffff' }}
-            className="rounded-lg px-2.5 py-1.5 text-base font-extrabold flex items-center gap-1 cursor-pointer transition shadow-sm"
+            className="col-span-2 rounded-xl px-3 py-2 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm truncate"
           >
-            <span>📲 Enviar App a um Colega</span>
+            <span className="truncate">📲 Enviar App a um Colega</span>
           </button>
           <button
             type="button"
             onClick={refreshLiveGpsPosition}
-            className="rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 px-2.5 py-1.5 text-base font-bold text-zinc-200 flex items-center gap-1 cursor-pointer transition"
+            className="col-span-1 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 px-2.5 py-2 text-xs sm:text-sm font-extrabold text-zinc-100 flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
           >
-            <RefreshCw className="h-3.5 w-3.5 text-emerald-400" />
-            <span>GPS</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsCourierRegistrationModalOpen(true)}
-            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 text-base font-extrabold flex items-center gap-1 cursor-pointer transition"
-          >
-            <UserCheck className="h-3.5 w-3.5" />
-            <span>Editar Meu Perfil</span>
+            <RefreshCw className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+            <span>🔄 GPS</span>
           </button>
         </div>
       </div>
@@ -948,152 +942,123 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                         setActiveBuddyPopupCourierId(courier.id);
                       }
                     }}
-                    className={`h-[112px] mb-3 last:mb-0 rounded-2xl p-3 flex items-center justify-between gap-2.5 cursor-pointer transition ${
+                    className={`mb-3 last:mb-0 rounded-2xl p-3.5 space-y-3 cursor-pointer transition ${
                       isSelf
-                        ? 'bg-zinc-900 hover:bg-zinc-800/90 border-2 border-emerald-500/60'
+                        ? 'bg-zinc-900 hover:bg-zinc-800/90 border-2 border-[#00E5FF]/60'
                         : 'bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800'
                     }`}
                   >
-                    {/* Left: Avatar Photo + Full Courier Name (Line 1) + Vehicle/Distance/Zone (Line 2) + Tenure/Status (Line 3) */}
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div
-                        className={`relative h-12 w-12 rounded-full overflow-hidden border shrink-0 flex items-center justify-center ${
-                          isSelf
-                            ? 'border-emerald-400 bg-emerald-700'
-                            : 'border-zinc-700 bg-zinc-950'
-                        }`}
-                      >
-                        {courier.avatarPhotoUrl ? (
-                          <img
-                            src={courier.avatarPhotoUrl}
-                            alt={courier.callsign}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs font-bold text-white">
-                            {courier.avatarInitials ||
-                              courier.callsign.slice(0, 2).toUpperCase()}
-                          </span>
-                        )}
-                        <span
-                          className={`absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border border-zinc-950 ${
-                            isOffline
-                              ? 'bg-zinc-500'
-                              : isCourierAvailable
-                                ? 'bg-emerald-500'
-                                : 'bg-amber-500'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        {/* Line 1: Full Courier Name (High-contrast solid text-slate-900 in Daylight / text-white in Night) */}
-                        <span
-                          style={{
-                            color: isDaylight ? '#0f172a' : '#ffffff',
-                          }}
-                          className={`text-sm sm:text-base font-bold leading-tight block truncate ${
-                            isDaylight ? 'text-slate-900' : 'text-white'
+                    {/* Top Row: Avatar + Courier Name + Clean Status Dot (Online) + Subtitle (Vehicle • Platforms) */}
+                    <div className="flex items-center justify-between gap-3 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div
+                          className={`relative h-12 w-12 rounded-full overflow-hidden border-2 shrink-0 flex items-center justify-center ${
+                            isSelf
+                              ? 'border-[#00E5FF] bg-slate-900'
+                              : 'border-zinc-700 bg-zinc-950'
                           }`}
                         >
-                          {isSelf
-                            ? `Meu Perfil Online no Mapa (${courier.callsign})`
-                            : courier.callsign}
-                        </span>
-
-                        {/* Line 2: Vehicle • Distance • Zone */}
-                        <span className="text-[11px] font-medium text-zinc-400 block truncate">
-                          {courier.vehicle} •{' '}
-                          {isSelf
-                            ? 'GPS Ativo'
-                            : `${courier.distanceKm.toFixed(1)} km`}{' '}
-                          • {courier.zoneName}
-                        </span>
-
-                        {/* Line 3: Connection Badge + Active Platforms + Cross-Stats / Tenure */}
-                        <div className="flex items-center gap-1.5 text-[10px]">
+                          {courier.avatarPhotoUrl ? (
+                            <img
+                              src={courier.avatarPhotoUrl}
+                              alt={courier.callsign}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-xs font-extrabold text-white">
+                              {courier.avatarInitials ||
+                                courier.callsign.slice(0, 2).toUpperCase()}
+                            </span>
+                          )}
                           <span
-                            className={`rounded px-1.5 py-0.5 shrink-0 ${
-                              isSelf
-                                ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold'
-                                : 'bg-zinc-950 border border-zinc-800 text-zinc-300'
+                            className={`absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border border-zinc-950 ${
+                              isOffline
+                                ? 'bg-zinc-500'
+                                : isCourierAvailable
+                                  ? 'bg-emerald-500'
+                                  : 'bg-amber-500'
                             }`}
-                          >
-                            {isSelf
-                              ? '● Online'
-                              : getConnectionStateLabel(courier)}
-                          </span>
-                          <span className="rounded bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 text-zinc-300 shrink-0">
-                            {courierPlatforms
-                              .map((p) =>
-                                p === 'Uber Eats'
-                                  ? 'Uber'
-                                  : p === 'Bolt Food'
-                                    ? 'Bolt'
-                                    : 'Glovo'
-                              )
-                              .join('+')}
-                          </span>
-                          <span className="text-zinc-400 truncate">
-                            {isFriend && courier.crossStats
-                              ? `Hoje: ${courier.crossStats.deliveriesToday} ent. (${courier.crossStats.avgEurPerKm.toFixed(2)}€/km)`
-                              : courier.buddyTenureText ||
-                                'Fundador • Out 2026'}
+                          />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              style={{
+                                color: isDaylight ? '#0f172a' : '#ffffff',
+                              }}
+                              className="text-base font-extrabold leading-tight truncate"
+                            >
+                              {isSelf
+                                ? `${courier.callsign} (Meu Perfil)`
+                                : courier.callsign}
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-extrabold text-emerald-400 shrink-0">
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${
+                                  isOffline ? 'bg-zinc-400' : 'bg-emerald-400'
+                                }`}
+                              />
+                              <span>{isOffline ? 'Offline' : 'Online'}</span>
+                            </span>
+                          </div>
+
+                          <span className="text-xs font-semibold text-zinc-400 block truncate mt-0.5">
+                            {courier.vehicle} • {courierPlatforms.join(' + ')} •{' '}
+                            {courier.zoneName}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Right: Quick Action Button + Direct Voice Dictation */}
+                    {/* Bottom Row: Two Clean, Side-by-Side Full-Width Buttons */}
                     <div
-                      className="shrink-0 flex flex-col items-end gap-1"
+                      className="grid grid-cols-2 gap-2"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBuddyPopupSizeMode('45VH');
+                          setActiveBuddyPopupCourierId(courier.id);
+                        }}
+                        className="w-full rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-[#00E5FF]/50 text-[#00E5FF] py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">📊 Ver Estatísticas</span>
+                      </button>
+
                       {isFriend ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBuddyPopupSizeMode('45VH');
-                              setActiveBuddyPopupCourierId(courier.id);
-                            }}
-                            className="rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 px-2.5 py-1.5 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                          >
-                            <MessageSquare className="h-3 w-3" />
-                            <span>Perfil &amp; Stats</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              startLiveVoiceDictation({
-                                targetType: 'BUDDY_DIRETO',
-                                recipientId: courier.id,
-                                recipientName: courier.callsign,
-                                initialPhrase: `Boas ${courier.callsign}, estás perto de ${courier.zoneName}?`,
-                              })
-                            }
-                            title={`Ditar mensagem por voz ao vivo para ${courier.callsign}`}
-                            className="rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 px-2 py-1 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                          >
-                            <Mic className="h-2.5 w-2.5" />
-                            <span>Ditar Voz</span>
-                          </button>
-                        </>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            startLiveVoiceDictation({
+                              targetType: 'BUDDY_DIRETO',
+                              recipientId: courier.id,
+                              recipientName: courier.callsign,
+                              initialPhrase: `Boas ${courier.callsign}, estás perto de ${courier.zoneName}?`,
+                            })
+                          }
+                          title={`Ditar mensagem por voz ao vivo para ${courier.callsign}`}
+                          className="w-full rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
+                        >
+                          <Mic className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">🎙️ Mensagem de Voz</span>
+                        </button>
                       ) : courier.contactPermission === 'PENDENTE' ? (
-                        <span className="rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 px-2.5 py-1.5 text-[10px] font-semibold">
-                          Pendente
+                        <span className="w-full rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 py-2 px-3 text-xs font-bold flex items-center justify-center">
+                          ◌ Pedido Pendente
                         </span>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => {
-                            setBuddyPopupSizeMode('45VH');
-                            setActiveBuddyPopupCourierId(courier.id);
-                          }}
-                          className="rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 px-2.5 py-1.5 text-[10px] font-semibold flex items-center gap-1 cursor-pointer"
+                          onClick={() =>
+                            requestCourierContactPermission(courier.id)
+                          }
+                          className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
                         >
-                          <UserPlus className="h-3 w-3" />
-                          <span>Ver Perfil</span>
+                          <UserPlus className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">Adicionar Buddy</span>
                         </button>
                       )}
                     </div>

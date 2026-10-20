@@ -1438,24 +1438,6 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
 
   return (
     <>
-      {/* 1-Tap Immediate Stop / Cancel Speech Floating Pill Whenever Buddy is Speaking */}
-      {isSpeakingTts && (
-        <button
-          type="button"
-          onClick={cancelSpeechNow}
-          style={{
-            backgroundColor: '#dc2626',
-            color: '#ffffff',
-            pointerEvents: 'auto',
-          }}
-          className="fixed top-14 left-1/2 -translate-x-1/2 z-[1400] rounded-full border-2 border-white px-4 py-2 text-xs font-black shadow-[0_6px_24px_rgba(220,38,38,0.65)] flex items-center gap-2 cursor-pointer active:scale-95 transition"
-          aria-label="Parar Fala do Buddy"
-        >
-          <VolumeX className="h-4 w-4 shrink-0" />
-          <span>🔇 Parar Fala</span>
-        </button>
-      )}
-
       {/* ±45% Screen Ephemeral Alert Pop-up */}
       {renderEphemeralVoiceOverlayCard()}
       {/* Freely Draggable Floating Bubbles */}
@@ -1718,9 +1700,6 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                   </h3>
                   <p className="text-base font-medium text-slate-300 mt-0.5">
                     Atualizado às {amaranteLiveWeather.updatedAt} • Raio 35 km
-                  </p>
-                  <p className="text-base text-emerald-300 mt-1 font-bold">
-                    🔇 Toque em qualquer parte do quadro para calar a fala
                   </p>
                 </div>
                 <button

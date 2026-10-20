@@ -783,13 +783,6 @@ export const ScannerAndSplitModule: React.FC = () => {
               <h2 className="text-xl font-bold text-zinc-100">
                 Estatística Diária
               </h2>
-              <button
-                type="button"
-                onClick={() => setIsEarningsModalOpen(true)}
-                className="text-base font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
-              >
-                Ver por App →
-              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
@@ -884,9 +877,6 @@ export const ScannerAndSplitModule: React.FC = () => {
                   <h3 className="text-2xl font-extrabold text-white mt-1.5 leading-snug">
                     Resumo de Ganhos
                   </h3>
-                  <p className="text-base font-medium text-slate-300 mt-0.5">
-                    🔇 Toque em qualquer parte do quadro para calar a fala
-                  </p>
                 </div>
                 <button
                   type="button"

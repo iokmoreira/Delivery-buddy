@@ -489,7 +489,7 @@ const AppCockpitShell: React.FC = () => {
                     }}
                     className="rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:border-[#00E5FF]"
                   >
-                    <span>📘 Manual</span>
+                    <span>📘 Manual &amp; Dossiê Legal</span>
                   </button>
                   <button
                     type="button"

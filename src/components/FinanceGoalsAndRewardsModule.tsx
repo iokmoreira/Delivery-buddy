@@ -630,15 +630,24 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                   {scopedStats.netPerKmEur.toFixed(2)}{'\u00A0'}€/km
                 </span>
               </div>
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
-                <span className="text-base font-medium text-zinc-400 block">
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 min-w-0">
+                <span className="text-base font-medium text-zinc-400 block truncate">
                   Quanto Falta p/ Meta
                 </span>
-                <span className="text-xl font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
-                  {scopedStats.remainingDailyEur > 0
-                    ? `${scopedStats.remainingDailyEur.toFixed(2)}\u00A0€ (${scopedStats.remainingOrders} ped.)`
-                    : 'Concluída!'}
-                </span>
+                {scopedStats.remainingDailyEur > 0 ? (
+                  <div className="mt-0.5 leading-tight">
+                    <span className="text-xl font-extrabold text-zinc-100 block whitespace-nowrap">
+                      {scopedStats.remainingDailyEur.toFixed(2)}{'\u00A0'}€
+                    </span>
+                    <span className="text-xs font-bold text-emerald-400 block mt-0.5">
+                      ({scopedStats.remainingOrders} pedidos)
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-xl font-extrabold text-emerald-400 whitespace-nowrap mt-0.5 block">
+                    Concluída!
+                  </span>
+                )}
               </div>
             </div>
 
@@ -897,19 +906,19 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
             <>
               {/* GLOBAL CARD 1: Total Combined Net Profit (€ Líquido Global) */}
               <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
+                <div className="space-y-1.5 border-b border-zinc-800/80 pb-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <h3 className="text-xl font-bold text-zinc-100">
                       1. Lucro Real Combinado (€ Líquido Global)
                     </h3>
-                    <p className="text-base font-medium text-zinc-400">
-                      Soma cruzada de {enabledPlatforms.join(' + ')} após frotas,
-                      impostos e desgaste
-                    </p>
+                    <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1 text-2xl font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
+                      +{crossRefMetrics.globalNetDayEur.toFixed(2)}{'\u00A0'}€
+                    </span>
                   </div>
-                  <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-3xl font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
-                    +{crossRefMetrics.globalNetDayEur.toFixed(2)}{'\u00A0'}€
-                  </span>
+                  <p className="text-sm sm:text-base font-medium text-zinc-400 w-full leading-snug">
+                    Soma cruzada de {enabledPlatforms.join(' + ')} após frotas,
+                    impostos e desgaste
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1060,19 +1069,19 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
               const ledger = m.ledger;
               return (
                 <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3.5">
-                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5 gap-2">
-                    <div className="min-w-0">
-                      <h3 className="text-xl font-bold text-zinc-100">
+                  <div className="space-y-2 border-b border-zinc-800/80 pb-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <h3 className="text-lg sm:text-xl font-bold text-zinc-100">
                         Perfil &amp; Conta Individual: {selectedPlat}
                       </h3>
-                      <p className="text-base font-medium text-zinc-400">
-                        Taxas, comissão de frota e metodologia de repasse
-                        específicas desta app
-                      </p>
+                      <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1 text-lg sm:text-xl font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
+                        Líq. Hoje: +{m.netDayEur.toFixed(2)}{'\u00A0'}€
+                      </span>
                     </div>
-                    <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-2xl font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
-                      Líq. Hoje: +{m.netDayEur.toFixed(2)}{'\u00A0'}€
-                    </span>
+                    <p className="text-sm sm:text-base font-medium text-zinc-400 w-full leading-relaxed">
+                      Taxas, comissão de frota e metodologia de repasse
+                      específicas desta app
+                    </p>
                   </div>
 
                   {/* Platform Specific Editable Inputs */}
