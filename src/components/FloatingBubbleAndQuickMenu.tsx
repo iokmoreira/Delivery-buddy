@@ -171,6 +171,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
     currentMascotState,
     currentMascotImageUrl,
     bubbleRestingPreset,
+    toggleVoiceMicListening,
   } = useEstafetas();
 
   const [bubblePositions, setBubblePositions] = useState<BubblePositionsMap>(
@@ -178,30 +179,35 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
   );
   const [isSavingVoiceSkill, setIsSavingVoiceSkill] = useState<boolean>(false);
 
-  // Snap to configured resting preset when minimized or when preset changes
-  useEffect(() => {
-    if (bubbleRestingPreset === 'CUSTOM_DRAG') return;
+  const computeRestingLogoCoords = React.useCallback((): BubbleXY => {
     const w = typeof window !== 'undefined' ? window.innerWidth : 400;
     const h = typeof window !== 'undefined' ? window.innerHeight : 760;
     const rightX = clampBubbleX(w - 72);
     const leftX = clampBubbleX(12);
-    const bottomY = clampBubbleY(h - 180);
+    const bottomY = clampBubbleY(h - 150);
     const midY = clampBubbleY(Math.round(h * 0.48));
 
-    let nextLogo: BubbleXY = { x: rightX, y: bottomY };
     if (bubbleRestingPreset === 'BOTTOM_LEFT') {
-      nextLogo = { x: leftX, y: bottomY };
-    } else if (bubbleRestingPreset === 'MIDDLE_RIGHT') {
-      nextLogo = { x: rightX, y: midY };
-    } else if (bubbleRestingPreset === 'MIDDLE_LEFT') {
-      nextLogo = { x: leftX, y: midY };
+      return { x: leftX, y: bottomY };
     }
+    if (bubbleRestingPreset === 'MIDDLE_RIGHT') {
+      return { x: rightX, y: midY };
+    }
+    if (bubbleRestingPreset === 'MIDDLE_LEFT') {
+      return { x: leftX, y: midY };
+    }
+    return { x: rightX, y: bottomY };
+  }, [bubbleRestingPreset]);
 
+  // Snap to configured resting preset when minimized or when preset changes
+  useEffect(() => {
+    if (bubbleRestingPreset === 'CUSTOM_DRAG') return;
+    const nextLogo = computeRestingLogoCoords();
     setBubblePositions((prev) => ({
       ...prev,
       logo: nextLogo,
     }));
-  }, [bubbleRestingPreset, isBubbleMinimized]);
+  }, [bubbleRestingPreset, isBubbleMinimized, computeRestingLogoCoords]);
 
   const activeDragRef = useRef<{
     id: DraggableBubbleId;
@@ -326,6 +332,12 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
     if (!wasDrag) {
       lastPointerTapAtRef.current[id] = Date.now();
       onTapAction();
+    } else if (id === 'logo' && bubbleRestingPreset !== 'CUSTOM_DRAG') {
+      const snapTarget = computeRestingLogoCoords();
+      setBubblePositions((prev) => ({
+        ...prev,
+        logo: snapTarget,
+      }));
     }
   };
 
@@ -465,6 +477,66 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
 
     return (
       <>
+        {/* Foreground Buddy Floating Voice Bubble (Resting at Configured Spot, 1-Tap Triggers Voice Recognition) */}
+        <button
+          type="button"
+          style={{
+            left: `${bubblePositions.logo.x}px`,
+            top: `${bubblePositions.logo.y}px`,
+            width: '58px',
+            height: '58px',
+            pointerEvents: 'auto',
+          }}
+          onPointerDown={(e) => handleBubblePointerDown('logo', e)}
+          onPointerMove={(e) => handleBubblePointerMove('logo', e)}
+          onPointerUp={(e) =>
+            handleBubblePointerUp('logo', e, toggleVoiceMicListening)
+          }
+          onPointerCancel={(e) => handleBubblePointerCancel('logo', e)}
+          onClick={(e) =>
+            handleBubbleFallbackClick('logo', e, toggleVoiceMicListening)
+          }
+          title="Toque 1x na bolinha Buddy para Falar (Reconhecimento de Voz) • Arraste livremente"
+          aria-label="Falar com Delivery Buddy (Bolinha de Voz)"
+          className={`fixed z-40 rounded-full flex flex-col items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing transition-all duration-200 ${
+            isListeningSpeechRecognition
+              ? 'bg-[#10b981] text-slate-950 border-[3px] border-white shadow-[0_0_28px_rgba(16,185,129,0.9)]'
+              : currentMascotState === 'DELIVERY'
+                ? 'bg-[#0f172a] text-white border-[3px] border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.85)]'
+                : currentMascotState === 'INACTIVE'
+                  ? 'bg-[#0f172a] text-white border-[3px] border-slate-500 shadow-[0_0_18px_rgba(15,23,42,0.85)]'
+                  : 'bg-[#0f172a] text-white border-[3px] border-emerald-400 shadow-[0_0_22px_rgba(16,185,129,0.65)]'
+          }`}
+        >
+          {(isListeningSpeechRecognition || currentMascotState === 'DELIVERY') && (
+            <span
+              className={`absolute inset-0 rounded-full animate-ping pointer-events-none ${
+                isListeningSpeechRecognition
+                  ? 'bg-emerald-400/55'
+                  : 'bg-amber-400/40'
+              }`}
+            />
+          )}
+          <div className="h-full w-full rounded-full overflow-hidden pointer-events-none relative z-10">
+            <img
+              src={currentMascotImageUrl}
+              alt="Buddy Mascote Voz"
+              className="h-full w-full object-cover rounded-full"
+            />
+          </div>
+          <span
+            className={`absolute -bottom-1.5 rounded-full px-1.5 py-0.5 text-[8px] font-mono font-extrabold leading-none shadow-md pointer-events-none z-20 border whitespace-nowrap ${
+              isListeningSpeechRecognition
+                ? 'bg-emerald-500 text-slate-950 border-white'
+                : currentMascotState === 'DELIVERY'
+                  ? 'bg-amber-500 text-slate-950 border-white/80'
+                  : 'bg-slate-950 text-emerald-400 border-emerald-500/80'
+            }`}
+          >
+            {isListeningSpeechRecognition ? '🎙️ Ouvindo...' : '🎙️ Falar'}
+          </span>
+        </button>
+
         {/* Minimized Buddy Avatar Bubble ("Bolinha com Foto do Perfil" - Freely Draggable) */}
         {minimizedBuddyCourier && (
           <div

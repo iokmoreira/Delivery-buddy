@@ -13,8 +13,6 @@ import {
   CheckSquare,
   Square,
   Mic,
-  Clock,
-  Navigation,
   AlertTriangle,
   MapPin,
   Camera,
@@ -23,13 +21,6 @@ import { CargoChecklistItemId } from '../types/models';
 import { HEAVY_ITEMS_DB, SCANNER_OFFER_PRESETS } from '../data/seedData';
 import { useEstafetas } from '../context/EstafetasContext';
 import { buildSurgicalOfferStreetTts } from '../services/voiceEngine';
-
-function formatWaitTimerMmSs(totalSeconds: number): string {
-  const safeSecs = Math.max(0, Math.floor(totalSeconds));
-  const mins = Math.floor(safeSecs / 60);
-  const secs = safeSecs % 60;
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
 
 export const ScannerAndSplitModule: React.FC = () => {
   const {
@@ -56,40 +47,39 @@ export const ScannerAndSplitModule: React.FC = () => {
     setActiveWalkieChannel,
     userPrefs,
     evaluateOfferAgainstPreferences,
-    activeDeliveryLifecycle,
-    startActiveDeliveryFromOffer,
-    startDeliveryTransitStage,
     completeActiveDeliveryStage,
-    executeVoiceCommandPt,
     activeSupportSplitMacro,
     triggerSupportSplitOrderMacro,
     isOfferAccepted,
     setIsOfferAccepted,
     aiAgentConfig,
     hasRealActiveDelivery,
-    addLocationRouteNote,
-    locationRouteNotes,
     realCompletedDeliveries,
     platformLedgers,
     amaranteLiveWeather,
     openAndFetchAmaranteWeather,
     themeMode,
     roadHazards,
+    personalGoals,
+    addManualDeliveryRecord,
   } = useEstafetas();
 
   const isDaylight = themeMode === 'DAYLIGHT';
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [decisionFeedback, setDecisionFeedback] = useState<string | null>(null);
   const [overweightProofCopied, setOverweightProofCopied] =
     useState<boolean>(false);
   const [includeEmptyReturnDeadZone, setIncludeEmptyReturnDeadZone] =
     useState<boolean>(false);
-  const [last50mFeedback, setLast50mFeedback] = useState<string | null>(null);
   const [showWeightEditor, setShowWeightEditor] = useState<boolean>(false);
+  const [isEarningsModalOpen, setIsEarningsModalOpen] =
+    useState<boolean>(false);
 
-  // Only show ride values when a real order has entered (auto-detected, voice-calculated, or screenshot uploaded)
-  const hasActiveOrder = !activeScannedOffer.id.startsWith('PRESET-');
+  // Mode B when a real order is active; Mode A when idle (no active order)
+  const hasActiveOrder =
+    !activeScannedOffer.id.startsWith('PRESET-') ||
+    hasRealActiveDelivery ||
+    isOfferAccepted;
 
   useEffect(() => {
     if (
@@ -106,13 +96,7 @@ export const ScannerAndSplitModule: React.FC = () => {
     setIsOfferAccepted,
   ]);
 
-  useEffect(() => {
-    if (activeDeliveryLifecycle.stage === 'CONCLUIDA') {
-      setDecisionFeedback(null);
-    }
-  }, [activeDeliveryLifecycle.stage]);
-
-  // 1. Earnings Breakdown by App (Uber Eats, Glovo, Bolt Food) + Total Today
+  // 1. Earnings Breakdown by App (Uber Eats, Glovo, Bolt Food) + Daily Statistics Summary
   const earningsTodayByApp = useMemo(() => {
     const sumForPlatform = (plat: 'Uber Eats' | 'Glovo' | 'Bolt Food') => {
       const fromReal = realCompletedDeliveries
@@ -125,13 +109,48 @@ export const ScannerAndSplitModule: React.FC = () => {
     const glovo = sumForPlatform('Glovo');
     const bolt = sumForPlatform('Bolt Food');
     const total = uber + glovo + bolt;
+
+    const totalKm = realCompletedDeliveries.reduce(
+      (acc, d) => acc + (d.realKm || 0),
+      0
+    );
+    const totalGross = realCompletedDeliveries.reduce(
+      (acc, d) => acc + (d.grossEur || d.netProfitEur || 0),
+      0
+    );
+    const safeCostPerKm = Math.min(0.35, Math.max(0.05, totalCostPerKm));
+    const fuelCostDeducted = Number((totalKm * safeCostPerKm).toFixed(2));
+    const avgNetPerKm =
+      totalKm > 0 ? Number((total / totalKm).toFixed(2)) : 0;
+    const estimatedTotalHours =
+      realCompletedDeliveries.length > 0
+        ? Math.max(0.25, (realCompletedDeliveries.length * 18) / 60)
+        : 0;
+    const avgHourlyEur =
+      estimatedTotalHours > 0
+        ? Number((total / estimatedTotalHours).toFixed(2))
+        : 0;
+    const goalTargetEur = Math.max(10, personalGoals?.dailyNetGoalEur || 85);
+    const goalProgressPct = Math.min(
+      100,
+      Math.round((total / goalTargetEur) * 100)
+    );
+
     return {
       uber,
       glovo,
       bolt,
       total,
+      totalKm,
+      totalGross: Math.max(total, totalGross),
+      fuelCostDeducted,
+      avgNetPerKm,
+      avgHourlyEur,
+      goalTargetEur,
+      goalProgressPct,
+      lastDelivery: realCompletedDeliveries[0] || null,
     };
-  }, [realCompletedDeliveries, platformLedgers]);
+  }, [realCompletedDeliveries, platformLedgers, totalCostPerKm, personalGoals]);
 
   const formatEurPt = (val: number): string =>
     `€${val.toFixed(2).replace('.', ',')}`;
@@ -518,22 +537,35 @@ export const ScannerAndSplitModule: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleRecordDecision = (verdict: 'ACEITE' | 'RECUSADA') => {
+  const handleCompleteActiveRide = () => {
+    addManualDeliveryRecord({
+      platform: activeScannedOffer.platform,
+      grossEur: auditMetrics.grossEur,
+      realKm: auditMetrics.activeTotalKm,
+      restaurantName: `${activeScannedOffer.originName} → ${activeScannedOffer.destinationName}`,
+    });
     recordOfferDecision(
       activeScannedOffer,
       auditMetrics.activeTotalKm,
       auditMetrics.realNetProfitEur,
       auditMetrics.effectiveAuditedEurPerKm,
-      verdict
+      'ACEITE'
     );
-    if (verdict === 'RECUSADA') {
-      selectOfferPreset(SCANNER_OFFER_PRESETS[0]);
-      setDecisionFeedback(null);
-      return;
-    }
-    setDecisionFeedback(
-      `Corrida aceite (+${auditMetrics.realNetProfitEur.toFixed(2)} € líq.) • Em curso.`
+    completeActiveDeliveryStage();
+    setIsOfferAccepted(false);
+    selectOfferPreset(SCANNER_OFFER_PRESETS[0]);
+  };
+
+  const handleCloseOrDeclineActiveRide = () => {
+    recordOfferDecision(
+      activeScannedOffer,
+      auditMetrics.activeTotalKm,
+      auditMetrics.realNetProfitEur,
+      auditMetrics.effectiveAuditedEurPerKm,
+      'RECUSADA'
     );
+    setIsOfferAccepted(false);
+    selectOfferPreset(SCANNER_OFFER_PRESETS[0]);
   };
 
   const handleGenerateOverweightComplaint = async () => {
@@ -577,7 +609,7 @@ export const ScannerAndSplitModule: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {/* Hidden Screenshot File Input for "📷 Mostrar Pedido / Print" */}
+      {/* Hidden Screenshot File Input for "📷 Ler Pedido / Print" */}
       <input
         ref={fileInputRef}
         type="file"
@@ -587,199 +619,338 @@ export const ScannerAndSplitModule: React.FC = () => {
       />
 
       {/* =====================================================================
-          TOP ROW: 2 CARDS ONLY (GANHOS HOJE & CLIMA AMARANTE)
+          MODE A: WHEN NO RIDE IS ACTIVE (!hasActiveOrder)
+          1. Top Row: 2 Ultra-Compact Pill Cards (No Titles, No Bottom Lines)
+          2. Main Panel: ÚLTIMA ENTREGA (Top) & RESUMO DA ESTATÍSTICA DIÁRIA (Bottom)
           ===================================================================== */}
-      <div className="grid grid-cols-2 gap-2.5">
-        {/* CARD 1: GANHOS HOJE (Total + Breakdown by Uber Eats, Glovo, Bolt Food) */}
-        <div
-          className={`rounded-2xl border p-3 flex flex-col justify-between shadow-xs ${
-            isDaylight
-              ? 'bg-white border-slate-200 text-slate-900'
-              : 'bg-slate-800/95 border-slate-700 text-slate-100'
-          }`}
-        >
-          <div>
-            <div className="flex items-center justify-between gap-1">
-              <span
-                className={`text-[10px] font-extrabold uppercase tracking-wider ${
-                  isDaylight ? 'text-slate-500' : 'text-slate-400'
-                }`}
-              >
-                GANHOS HOJE
+      {!hasActiveOrder && (
+        <>
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* LEFT COMPACT CARD (GANHOS): ONLY €0,00 and 0 ent. badge — Click opens Detailed Earnings Modal */}
+            <button
+              type="button"
+              onClick={() => setIsEarningsModalOpen(true)}
+              title="Toque para abrir Resumo de Ganhos & Estatísticas de Hoje"
+              className={`rounded-2xl border px-3.5 py-3 flex items-center justify-between cursor-pointer transition shadow-xs ${
+                isDaylight
+                  ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900'
+                  : 'bg-slate-800/95 hover:bg-slate-800 border-slate-700 text-slate-100'
+              }`}
+            >
+              <span className="text-xl font-black text-emerald-500 tracking-tight font-mono leading-none">
+                {formatEurPt(earningsTodayByApp.total)}
               </span>
               <span
-                className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                className={`text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-lg shrink-0 ${
                   isDaylight
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'bg-emerald-950/70 text-emerald-300'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/30'
                 }`}
               >
                 {realCompletedDeliveries.length} ent.
               </span>
-            </div>
-            <div className="text-xl font-black text-emerald-500 tracking-tight mt-0.5 font-mono">
-              {formatEurPt(earningsTodayByApp.total)}
-            </div>
-          </div>
+            </button>
 
-          <div
-            className={`mt-2 pt-2 border-t space-y-1 text-[10px] font-semibold ${
-              isDaylight ? 'border-slate-100' : 'border-slate-700/80'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className={isDaylight ? 'text-slate-600' : 'text-slate-300'}>
-                Uber Eats
-              </span>
-              <span
-                className={`font-mono font-bold ${
-                  isDaylight ? 'text-slate-900' : 'text-white'
-                }`}
-              >
-                {formatEurPt(earningsTodayByApp.uber)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className={isDaylight ? 'text-slate-600' : 'text-slate-300'}>
-                Glovo
-              </span>
-              <span
-                className={`font-mono font-bold ${
-                  isDaylight ? 'text-slate-900' : 'text-white'
-                }`}
-              >
-                {formatEurPt(earningsTodayByApp.glovo)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className={isDaylight ? 'text-slate-600' : 'text-slate-300'}>
-                Bolt Food
-              </span>
-              <span
-                className={`font-mono font-bold ${
-                  isDaylight ? 'text-slate-900' : 'text-white'
-                }`}
-              >
-                {formatEurPt(earningsTodayByApp.bolt)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* CARD 2: CLIMA AMARANTE (High-Contrast Dark/Light Text, Click to Open Modal & Speak) */}
-        <button
-          type="button"
-          onClick={() => void openAndFetchAmaranteWeather(true)}
-          title="Toque para abrir detalhes do Clima em Amarante e ouvir previsão em voz alta"
-          className={`rounded-2xl border p-3 flex flex-col justify-between text-left cursor-pointer transition shadow-xs ${
-            isDaylight
-              ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900'
-              : 'bg-slate-800/95 hover:bg-slate-800 border-slate-700 text-slate-100'
-          }`}
-        >
-          <div className="w-full">
-            <div className="flex items-center justify-between gap-1">
-              <span
-                className={`text-[10px] font-extrabold uppercase tracking-wider ${
-                  isDaylight ? 'text-slate-500' : 'text-slate-400'
-                }`}
-              >
-                CLIMA AMARANTE
-              </span>
-              <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400">
-                Ver →
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-2xl leading-none select-none">
-                {amaranteLiveWeather.conditionEmoji}
-              </span>
-              <div>
-                <div
+            {/* RIGHT COMPACT CARD (CLIMA): ONLY weather icon + temperature + city — Click opens Weather Modal */}
+            <button
+              type="button"
+              onClick={() => void openAndFetchAmaranteWeather(true)}
+              title="Toque para abrir Clima Atual em Amarante e ouvir previsão"
+              className={`rounded-2xl border px-3.5 py-3 flex items-center justify-between cursor-pointer transition shadow-xs ${
+                isDaylight
+                  ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900'
+                  : 'bg-slate-800/95 hover:bg-slate-800 border-slate-700 text-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xl leading-none select-none shrink-0">
+                  {amaranteLiveWeather.conditionEmoji}
+                </span>
+                <span
                   style={{ color: isDaylight ? '#0f172a' : '#f8fafc' }}
-                  className="text-lg font-black tracking-tight leading-none font-mono"
+                  className="text-base font-black tracking-tight font-mono leading-none whitespace-nowrap"
                 >
                   {amaranteLiveWeather.temperatureC.toFixed(1)} °C
+                </span>
+              </div>
+              <span
+                style={{ color: isDaylight ? '#334155' : '#cbd5e1' }}
+                className="text-[11px] font-extrabold truncate ml-1"
+              >
+                Amarante
+              </span>
+            </button>
+          </div>
+
+          {/* TOP SECTION: ÚLTIMA ENTREGA */}
+          <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800 p-3.5 space-y-2.5 shadow-sm">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+                <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-100">
+                  ÚLTIMA ENTREGA
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 text-[10px] font-bold text-zinc-100 flex items-center gap-1 cursor-pointer transition whitespace-nowrap"
+              >
+                <Camera className="h-3 w-3 text-emerald-400 shrink-0" />
+                <span>📷 Ler Pedido</span>
+              </button>
+            </div>
+
+            {earningsTodayByApp.lastDelivery ? (
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-extrabold text-emerald-300">
+                    {earningsTodayByApp.lastDelivery.platform}
+                  </span>
+                  <span className="text-sm font-mono font-black text-emerald-400">
+                    +{formatEurPt(earningsTodayByApp.lastDelivery.netProfitEur)}
+                  </span>
                 </div>
+                <div className="text-xs font-bold text-zinc-100 truncate">
+                  {earningsTodayByApp.lastDelivery.segment}
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-900 font-mono">
+                  <span>
+                    Distância:{' '}
+                    <strong className="text-zinc-200">
+                      {earningsTodayByApp.lastDelivery.realKm.toFixed(1)} km
+                    </strong>
+                  </span>
+                  <span>
+                    Rentabilidade:{' '}
+                    <strong className="text-emerald-400">
+                      {earningsTodayByApp.lastDelivery.netEurPerKm.toFixed(2)} €/km
+                    </strong>
+                  </span>
+                  <span>~18 min</span>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3.5 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold text-zinc-200">
+                    Nenhuma entrega registada hoje
+                  </p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Assim que aceitar ou ler um pedido, entrará automaticamente em modo de entrega.
+                  </p>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* BOTTOM SECTION: RESUMO DA ESTATÍSTICA DIÁRIA */}
+          <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800 p-3.5 space-y-3 shadow-sm">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2">
+              <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-100">
+                RESUMO DA ESTATÍSTICA DIÁRIA
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsEarningsModalOpen(true)}
+                className="text-[10px] font-extrabold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+              >
+                Ver por App →
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+                <span className="text-[10px] font-bold uppercase text-zinc-400 block">
+                  ENTREGAS CONCLUÍDAS
+                </span>
+                <span className="text-sm font-mono font-extrabold text-zinc-100 mt-0.5 block">
+                  {realCompletedDeliveries.length} entregas
+                </span>
+              </div>
+
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+                <span className="text-[10px] font-bold uppercase text-zinc-400 block">
+                  KM RODADOS HOJE
+                </span>
+                <span className="text-sm font-mono font-extrabold text-zinc-100 mt-0.5 block">
+                  {earningsTodayByApp.totalKm.toFixed(1)} km
+                </span>
+              </div>
+
+              <div className="rounded-xl bg-zinc-950 border border-emerald-500/30 p-2.5">
+                <span className="text-[10px] font-extrabold uppercase text-emerald-400 block">
+                  MÉDIA LÍQUIDA € / KM
+                </span>
+                <span className="text-sm font-mono font-black text-emerald-400 mt-0.5 block">
+                  {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')} €/km
+                </span>
+              </div>
+
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+                <span className="text-[10px] font-bold uppercase text-zinc-400 block">
+                  MÉDIA € / HORA
+                </span>
+                <span className="text-sm font-mono font-extrabold text-amber-400 mt-0.5 block">
+                  {earningsTodayByApp.avgHourlyEur.toFixed(2).replace('.', ',')} €/h
+                </span>
+              </div>
+            </div>
+
+            {/* Progresso da Meta Diária */}
+            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-zinc-300">
+                  Progresso da Meta Diária
+                </span>
+                <span className="font-mono font-extrabold text-emerald-400">
+                  {formatEurPt(earningsTodayByApp.total)} /{' '}
+                  {formatEurPt(earningsTodayByApp.goalTargetEur)} (
+                  {earningsTodayByApp.goalProgressPct}%)
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
                 <div
-                  style={{ color: isDaylight ? '#334155' : '#cbd5e1' }}
-                  className="text-[10px] font-extrabold mt-0.5 truncate"
-                >
-                  Amarante
+                  style={{ width: `${earningsTodayByApp.goalProgressPct}%` }}
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                />
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* =====================================================================
+          DETAILED EARNINGS MODAL (Opened by tapping the Compact Ganhos Card)
+          ===================================================================== */}
+      {isEarningsModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setIsEarningsModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-slate-950 border border-emerald-500/40 p-5 text-white shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                  💰 Contabilidade Diária em Tempo Real
+                </span>
+                <h3 className="text-base font-extrabold text-white mt-1.5">
+                  Resumo de Ganhos &amp; Estatísticas de Hoje
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEarningsModalOpen(false)}
+                className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 px-2.5 py-1 text-xs font-bold text-slate-300 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-extrabold uppercase text-slate-400 block">
+                  Lucro Líquido Total Hoje
+                </span>
+                <span className="text-2xl font-black text-emerald-400 font-mono">
+                  {formatEurPt(earningsTodayByApp.total)}
+                </span>
+              </div>
+              <div className="text-right font-mono text-xs space-y-0.5">
+                <div className="text-slate-300">
+                  Bruto: <strong>{formatEurPt(earningsTodayByApp.totalGross)}</strong>
+                </div>
+                <div className="text-rose-400">
+                  Combustível/Desgaste:{' '}
+                  <strong>-{formatEurPt(earningsTodayByApp.fuelCostDeducted)}</strong>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div
-            className={`mt-2 pt-2 border-t w-full space-y-1 text-[10px] ${
-              isDaylight ? 'border-slate-100' : 'border-slate-700/80'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span
-                style={{ color: isDaylight ? '#475569' : '#94a3b8' }}
-                className="font-semibold truncate"
-              >
-                Estado:
-              </span>
-              <span
-                style={{ color: isDaylight ? '#0f172a' : '#f8fafc' }}
-                className="font-bold truncate ml-1"
-              >
-                {amaranteLiveWeather.conditionLabel}
-              </span>
+            <div className="rounded-xl bg-slate-900/75 border border-slate-800 p-3.5 space-y-2 text-xs">
+              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                Ganhos Separados por Plataforma
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-slate-800">
+                <span className="font-bold text-slate-200">Uber Eats</span>
+                <span className="font-mono font-extrabold text-white">
+                  {formatEurPt(earningsTodayByApp.uber)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-slate-800">
+                <span className="font-bold text-slate-200">Glovo</span>
+                <span className="font-mono font-extrabold text-white">
+                  {formatEurPt(earningsTodayByApp.glovo)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1">
+                <span className="font-bold text-slate-200">Bolt Food</span>
+                <span className="font-mono font-extrabold text-white">
+                  {formatEurPt(earningsTodayByApp.bolt)}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span
-                style={{ color: isDaylight ? '#475569' : '#94a3b8' }}
-                className="font-semibold"
-              >
-                Chuva / Vento:
-              </span>
-              <span
-                style={{ color: isDaylight ? '#0f172a' : '#f8fafc' }}
-                className="font-mono font-bold"
-              >
-                {amaranteLiveWeather.rainMm.toFixed(1)}mm •{' '}
-                {amaranteLiveWeather.windSpeedKmh.toFixed(0)}km/h
-              </span>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl bg-slate-900 border border-slate-800 p-2.5">
+                <span className="text-[9px] font-bold uppercase text-slate-400 block">
+                  Entregas
+                </span>
+                <span className="text-sm font-mono font-black text-white mt-0.5 block">
+                  {realCompletedDeliveries.length}
+                </span>
+              </div>
+              <div className="rounded-xl bg-slate-900 border border-slate-800 p-2.5">
+                <span className="text-[9px] font-bold uppercase text-slate-400 block">
+                  Média €/km
+                </span>
+                <span className="text-sm font-mono font-black text-emerald-400 mt-0.5 block">
+                  {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')} €
+                </span>
+              </div>
+              <div className="rounded-xl bg-slate-900 border border-slate-800 p-2.5">
+                <span className="text-[9px] font-bold uppercase text-slate-400 block">
+                  Ritmo €/hora
+                </span>
+                <span className="text-sm font-mono font-black text-amber-400 mt-0.5 block">
+                  {earningsTodayByApp.avgHourlyEur.toFixed(2).replace('.', ',')} €
+                </span>
+              </div>
             </div>
-          </div>
-        </button>
-      </div>
 
-      {/* =====================================================================
-          MAIN PANEL: DADOS DA CORRIDA ATUAL (CLEAN LABELS WITH — UNTIL ORDER ENTERS)
-          ===================================================================== */}
-      <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800 p-3.5 space-y-3 shadow-sm">
-        {/* Panel Top Header: Full Title + Discreet "📷 Mostrar Pedido / Print" Button */}
-        <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span
-              className={`h-2 w-2 rounded-full shrink-0 ${
-                hasActiveOrder ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'
-              }`}
-            />
-            <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-100">
-              DADOS DA CORRIDA ATUAL
-            </h2>
-          </div>
-
-          <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 text-[10px] font-bold text-zinc-100 flex items-center gap-1 cursor-pointer transition whitespace-nowrap"
+              onClick={() => setIsEarningsModalOpen(false)}
+              className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs py-2.5 cursor-pointer transition"
             >
-              <Camera className="h-3 w-3 text-emerald-400 shrink-0" />
-              <span>📷 Mostrar Pedido / Print</span>
+              Fechar Resumo
             </button>
+          </div>
+        </div>
+      )}
 
-            {hasActiveOrder && (
+      {/* =====================================================================
+          MODE B: WHEN AN ORDER IS ACTIVE (hasActiveOrder)
+          Hides Ganhos, Clima, Última Entrega & Estatística Diária.
+          Shows ONLY DADOS DA CORRIDA ATUAL (Full Screen Focus).
+          ===================================================================== */}
+      {hasActiveOrder && (
+        <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800 p-3.5 space-y-3 shadow-sm">
+          {/* Panel Top Header: Full Title + Verdict Badge */}
+          <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+              <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-100">
+                DADOS DA CORRIDA ATUAL
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-1.5">
               <span
-                className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-extrabold ${
+                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-extrabold ${
                   auditMetrics.verdictCode === 'ACEITAR'
                     ? 'bg-emerald-500 text-slate-950'
                     : 'bg-rose-600 text-white'
@@ -792,112 +963,101 @@ export const ScannerAndSplitModule: React.FC = () => {
                 )}
                 <span>{auditMetrics.verdictLabel}</span>
               </span>
-            )}
+            </div>
           </div>
-        </div>
 
-        {/* 1. ROTA / PARA ONDE É */}
-        <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-              <MapPin className="h-3 w-3 text-emerald-400 shrink-0" />
-              <span>1. ROTA / PARA ONDE É</span>
+          {/* 1. ROTA / PARA ONDE É */}
+          <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+                <MapPin className="h-3 w-3 text-emerald-400 shrink-0" />
+                <span>1. ROTA / PARA ONDE É</span>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-1 text-xs pt-0.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-zinc-400 font-semibold">Plataforma:</span>
+                <span className="font-bold text-zinc-100">
+                  {activeScannedOffer.platform}
+                  {activeScannedOffer.orderId
+                    ? ` • ${activeScannedOffer.orderId}`
+                    : ''}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-zinc-400 font-semibold">Recolha:</span>
+                <span className="font-bold text-zinc-100 text-right">
+                  {activeScannedOffer.originName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-zinc-400 font-semibold">Destino:</span>
+                <span className="font-extrabold text-emerald-500 text-right">
+                  {activeScannedOffer.destinationName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-900">
+                <span className="text-zinc-400 font-semibold">
+                  Tempo Estimado:
+                </span>
+                <span className="font-mono font-bold text-zinc-100">
+                  ~{auditMetrics.realTotalMinutes} min
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. VALORES & CÁLCULOS (2x2 GRID SO LABELS NEVER TRUNCATE) */}
+          <div className="space-y-1.5">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block px-0.5">
+              2. VALORES &amp; CÁLCULOS
             </span>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+                <span className="text-[10px] font-bold uppercase text-zinc-400 block">
+                  VALOR BRUTO
+                </span>
+                <span className="text-sm font-mono font-bold text-zinc-100 mt-0.5 block">
+                  {auditMetrics.grossEur.toFixed(2)} €
+                </span>
+              </div>
+
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+                <span className="text-[10px] font-bold uppercase text-zinc-400 block">
+                  CUSTO DA ROTA
+                </span>
+                <span className="text-sm font-mono font-bold text-rose-500 mt-0.5 block">
+                  -{auditMetrics.realTripCostEur.toFixed(2)} €
+                </span>
+              </div>
+
+              <div className="rounded-xl bg-zinc-950 border border-emerald-500/40 p-2.5">
+                <span className="text-[10px] font-extrabold uppercase text-emerald-500 block">
+                  LUCRO LÍQUIDO
+                </span>
+                <span className="text-sm font-mono font-black text-emerald-500 mt-0.5 block">
+                  +{auditMetrics.realNetProfitEur.toFixed(2)} €
+                </span>
+              </div>
+
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+                <span className="text-[10px] font-bold uppercase text-zinc-400 block">
+                  PROJEÇÃO €/HORA
+                </span>
+                <span className="text-sm font-mono font-bold text-amber-500 mt-0.5 block">
+                  {auditMetrics.projectedHourlyNetEur.toFixed(2)} €/h
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-1 text-xs pt-0.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-zinc-400 font-semibold">Plataforma:</span>
-              <span className="font-bold text-zinc-100">
-                {hasActiveOrder
-                  ? `${activeScannedOffer.platform}${
-                      activeScannedOffer.orderId
-                        ? ` • ${activeScannedOffer.orderId}`
-                        : ''
-                    }`
-                  : '—'}
+          {/* 3. DISTÂNCIA & RENTABILIDADE (€ / KM) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2 px-0.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">
+                3. DISTÂNCIA &amp; RENTABILIDADE (€ / KM)
               </span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-zinc-400 font-semibold">Recolha:</span>
-              <span className="font-bold text-zinc-100 text-right">
-                {hasActiveOrder ? activeScannedOffer.originName : '—'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-zinc-400 font-semibold">Destino:</span>
-              <span className="font-extrabold text-emerald-500 text-right">
-                {hasActiveOrder ? activeScannedOffer.destinationName : '—'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-900">
-              <span className="text-zinc-400 font-semibold">
-                Tempo Estimado:
-              </span>
-              <span className="font-mono font-bold text-zinc-100">
-                {hasActiveOrder ? `~${auditMetrics.realTotalMinutes} min` : '—'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. VALORES & CÁLCULOS (2x2 GRID SO LABELS NEVER TRUNCATE) */}
-        <div className="space-y-1.5">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block px-0.5">
-            2. VALORES &amp; CÁLCULOS
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
-              <span className="text-[10px] font-bold uppercase text-zinc-400 block">
-                VALOR BRUTO
-              </span>
-              <span className="text-sm font-mono font-bold text-zinc-100 mt-0.5 block">
-                {hasActiveOrder ? `${auditMetrics.grossEur.toFixed(2)} €` : '—'}
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
-              <span className="text-[10px] font-bold uppercase text-zinc-400 block">
-                CUSTO DA ROTA
-              </span>
-              <span className="text-sm font-mono font-bold text-rose-500 mt-0.5 block">
-                {hasActiveOrder
-                  ? `-${auditMetrics.realTripCostEur.toFixed(2)} €`
-                  : '—'}
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-zinc-950 border border-emerald-500/40 p-2.5">
-              <span className="text-[10px] font-extrabold uppercase text-emerald-500 block">
-                LUCRO LÍQUIDO
-              </span>
-              <span className="text-sm font-mono font-black text-emerald-500 mt-0.5 block">
-                {hasActiveOrder
-                  ? `+${auditMetrics.realNetProfitEur.toFixed(2)} €`
-                  : '—'}
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
-              <span className="text-[10px] font-bold uppercase text-zinc-400 block">
-                PROJEÇÃO €/HORA
-              </span>
-              <span className="text-sm font-mono font-bold text-amber-500 mt-0.5 block">
-                {hasActiveOrder
-                  ? `${auditMetrics.projectedHourlyNetEur.toFixed(2)} €/h`
-                  : '—'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. DISTÂNCIA & RENTABILIDADE (€ / KM) */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between gap-2 px-0.5">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">
-              3. DISTÂNCIA &amp; RENTABILIDADE (€ / KM)
-            </span>
-            {hasActiveOrder && (
               <button
                 type="button"
                 onClick={() => setIncludeEmptyReturnDeadZone((prev) => !prev)}
@@ -911,73 +1071,61 @@ export const ScannerAndSplitModule: React.FC = () => {
                   ? '🔄 Retorno +40% ON'
                   : '+ Retorno Vazio (40%)'}
               </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
-              <span className="text-[9px] font-bold uppercase text-zinc-400 block leading-tight">
-                DISTÂNCIA TOTAL
-              </span>
-              <span className="text-sm font-mono font-extrabold text-zinc-100 mt-1 block">
-                {hasActiveOrder
-                  ? `${auditMetrics.activeTotalKm.toFixed(1)} km`
-                  : '—'}
-              </span>
             </div>
 
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
-              <span className="text-[9px] font-bold uppercase text-zinc-400 block leading-tight">
-                € / KM BRUTO
-              </span>
-              <span className="text-sm font-mono font-bold text-zinc-100 mt-1 block">
-                {hasActiveOrder
-                  ? `${auditMetrics.grossEurPerKm.toFixed(2)} €/km`
-                  : '—'}
-              </span>
-            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+                <span className="text-[9px] font-bold uppercase text-zinc-400 block leading-tight">
+                  DISTÂNCIA TOTAL
+                </span>
+                <span className="text-sm font-mono font-extrabold text-zinc-100 mt-1 block">
+                  {auditMetrics.activeTotalKm.toFixed(1)} km
+                </span>
+              </div>
 
-            <div className="rounded-xl bg-zinc-950 border border-emerald-500/40 p-2.5">
-              <span className="text-[9px] font-extrabold uppercase text-emerald-500 block leading-tight">
-                € / KM LÍQUIDO
-              </span>
-              <span className="text-sm font-mono font-black text-emerald-500 mt-1 block">
-                {hasActiveOrder
-                  ? `${auditMetrics.effectiveAuditedEurPerKm.toFixed(2)} €/km`
-                  : '—'}
-              </span>
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
+                <span className="text-[9px] font-bold uppercase text-zinc-400 block leading-tight">
+                  € / KM BRUTO
+                </span>
+                <span className="text-sm font-mono font-bold text-zinc-100 mt-1 block">
+                  {auditMetrics.grossEurPerKm.toFixed(2)} €/km
+                </span>
+              </div>
+
+              <div className="rounded-xl bg-zinc-950 border border-emerald-500/40 p-2.5">
+                <span className="text-[9px] font-extrabold uppercase text-emerald-500 block leading-tight">
+                  € / KM LÍQUIDO
+                </span>
+                <span className="text-sm font-mono font-black text-emerald-500 mt-1 block">
+                  {auditMetrics.effectiveAuditedEurPerKm.toFixed(2)} €/km
+                </span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* 4. PROBLEMAS NA ROTA & ALERTAS (+ DIVISÃO DE PESO ONLY IF > 12 KG) */}
-        <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
-              <span>4. PROBLEMAS NA ROTA &amp; ALERTAS</span>
-            </span>
-            {hasActiveOrder && matchedRouteTrap && (
-              <button
-                type="button"
-                onClick={() =>
-                  openRouteTrapModalFromOffer(
-                    activeScannedOffer,
-                    auditMetrics.forcedDetourKm || 1.5
-                  )
-                }
-                className="rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2 py-0.5 text-[10px] font-bold text-zinc-200 cursor-pointer"
-              >
-                Gerar Prova Desvio
-              </button>
-            )}
-          </div>
+          {/* 4. PROBLEMAS NA ROTA & ALERTAS (+ DIVISÃO DE PESO ONLY IF > 12 KG) */}
+          <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
+                <span>4. PROBLEMAS NA ROTA &amp; ALERTAS</span>
+              </span>
+              {matchedRouteTrap && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    openRouteTrapModalFromOffer(
+                      activeScannedOffer,
+                      auditMetrics.forcedDetourKm || 1.5
+                    )
+                  }
+                  className="rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2 py-0.5 text-[10px] font-bold text-zinc-200 cursor-pointer"
+                >
+                  Gerar Prova Desvio
+                </button>
+              )}
+            </div>
 
-          {!hasActiveOrder ? (
-            <p className="text-xs text-zinc-400 py-0.5">
-              Sem alertas ativos (aguardando pedido)
-            </p>
-          ) : (
             <div className="space-y-1.5">
               {routeProblemsAndAlerts.map((alert) => (
                 <div
@@ -997,200 +1145,198 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </div>
               ))}
             </div>
-          )}
 
-          {/* WEIGHT DIVISION ALERT & CONTROLS — SHOWN ONLY WHEN ACTIVE ORDER EXCEEDS 12 KG */}
-          {isOverweight && (
-            <div className="mt-2 pt-2.5 border-t border-rose-500/40 space-y-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <Scale className="h-4 w-4 text-rose-400 shrink-0" />
-                  <div className="min-w-0">
-                    <span className="text-xs font-extrabold text-rose-400 block">
-                      ⚠️ Excesso de Peso Detetado ({displayedWeightKg.toFixed(1)} kg &gt;{' '}
-                      {backpackWeightLimitKg.toFixed(0)} kg)
-                    </span>
-                    <span className="text-[10px] text-zinc-300 block">
-                      {activeItemsSummaryText}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowWeightEditor((prev) => !prev)}
-                  className="rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2 py-1 text-[10px] font-bold text-zinc-200 cursor-pointer shrink-0"
-                >
-                  {showWeightEditor ? 'Ocultar Itens' : 'Ajustar Peso'}
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    triggerSupportSplitOrderMacro(activeScannedOffer.platform)
-                  }
-                  className="rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-[11px] py-2 px-2.5 flex items-center justify-center gap-1.5 cursor-pointer transition"
-                >
-                  <Mic className="h-3.5 w-3.5" />
-                  <span>Dividir Pedido no Suporte</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleGenerateOverweightComplaint}
-                  className="rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-100 font-bold text-[11px] py-2 px-2.5 flex items-center justify-center gap-1.5 cursor-pointer transition"
-                >
-                  {overweightProofCopied ? (
-                    <>
-                      <ClipboardCheck className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>Prova Copiada ({requiredCouriersCount} Est.)</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5" />
-                      <span>Copiar Prova ({requiredCouriersCount} Estafetas)</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {activeSupportSplitMacro.triggeredAtTimestamp !== null && (
-                <div className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-[10px] text-zinc-300 space-y-1">
-                  <div className="flex items-center justify-between font-bold text-zinc-100">
-                    <span>
-                      Macro Suporte {activeSupportSplitMacro.platform} (Pronta)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setAuditedOrderItemsPreset('NORMAL_2_4KG')}
-                      className="text-[10px] text-zinc-400 hover:text-zinc-200 cursor-pointer"
-                    >
-                      Repor &le;12kg
-                    </button>
-                  </div>
-                  <p className="line-clamp-2 text-zinc-300">
-                    {activeSupportSplitMacro.autoPastedMessage}
-                  </p>
-                </div>
-              )}
-
-              {showWeightEditor && (
-                <div className="space-y-1.5 pt-1">
-                  {HEAVY_ITEMS_DB.map((item) => {
-                    const currentEntry = auditedOrderItems.find(
-                      (e) => e.itemId === item.id
-                    );
-                    const qty = currentEntry?.quantity ?? 0;
-                    return (
-                      <div
-                        key={item.id}
-                        className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 flex items-center justify-between gap-2"
-                      >
-                        <div className="min-w-0">
-                          <span className="text-[11px] font-medium text-zinc-100 block">
-                            {item.name} ({item.unitWeightKg.toFixed(1)} kg)
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => updateAuditedItemQuantity(item.id, -1)}
-                            className="h-6 w-6 rounded bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-300 cursor-pointer"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <span className="w-5 text-center font-mono text-xs font-semibold text-zinc-100">
-                            {qty}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => updateAuditedItemQuantity(item.id, 1)}
-                            className="h-6 w-6 rounded bg-white text-zinc-950 flex items-center justify-center font-semibold cursor-pointer"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <div className="rounded-lg bg-zinc-900 border border-zinc-800 p-2 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-zinc-100 flex items-center gap-1.5">
-                        <Users className="h-3.5 w-3.5 text-emerald-400" />
-                        <span>
-                          2.º Estafeta Parceiro:{' '}
-                          {simulateSecondCourierPaired
-                            ? 'Conectado'
-                            : 'A aguardar...'}
-                        </span>
+            {/* WEIGHT DIVISION ALERT & CONTROLS — SHOWN ONLY WHEN ACTIVE ORDER EXCEEDS 12 KG */}
+            {isOverweight && (
+              <div className="mt-2 pt-2.5 border-t border-rose-500/40 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Scale className="h-4 w-4 text-rose-400 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-xs font-extrabold text-rose-400 block">
+                        ⚠️ Excesso de Peso Detetado ({displayedWeightKg.toFixed(1)} kg &gt;{' '}
+                        {backpackWeightLimitKg.toFixed(0)} kg)
                       </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={toggleSimulateSecondCourier}
-                          className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-zinc-200 cursor-pointer"
-                        >
-                          {simulateSecondCourierPaired ? 'Ativo' : 'Simular'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveWalkieChannel('PARCEIRO_PEDIDO_DIVIDIDO');
-                            setActiveTab('walkietalkie');
-                          }}
-                          className="rounded bg-emerald-500 text-slate-950 px-2 py-0.5 text-[10px] font-extrabold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Radio className="h-2.5 w-2.5" />
-                          <span>Rádio</span>
-                        </button>
-                      </div>
+                      <span className="text-[10px] text-zinc-300 block">
+                        {activeItemsSummaryText}
+                      </span>
                     </div>
-                    {cargoChecklistRows.map((row) => {
-                      const checked = cargoSplitChecklist[row.id];
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowWeightEditor((prev) => !prev)}
+                    className="rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2 py-1 text-[10px] font-bold text-zinc-200 cursor-pointer shrink-0"
+                  >
+                    {showWeightEditor ? 'Ocultar Itens' : 'Ajustar Peso'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      triggerSupportSplitOrderMacro(activeScannedOffer.platform)
+                    }
+                    className="rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-[11px] py-2 px-2.5 flex items-center justify-center gap-1.5 cursor-pointer transition"
+                  >
+                    <Mic className="h-3.5 w-3.5" />
+                    <span>Dividir Pedido no Suporte</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleGenerateOverweightComplaint}
+                    className="rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-100 font-bold text-[11px] py-2 px-2.5 flex items-center justify-center gap-1.5 cursor-pointer transition"
+                  >
+                    {overweightProofCopied ? (
+                      <>
+                        <ClipboardCheck className="h-3.5 w-3.5 text-emerald-400" />
+                        <span>Prova Copiada ({requiredCouriersCount} Est.)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>Copiar Prova ({requiredCouriersCount} Estafetas)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {activeSupportSplitMacro.triggeredAtTimestamp !== null && (
+                  <div className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-[10px] text-zinc-300 space-y-1">
+                    <div className="flex items-center justify-between font-bold text-zinc-100">
+                      <span>
+                        Macro Suporte {activeSupportSplitMacro.platform} (Pronta)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAuditedOrderItemsPreset('NORMAL_2_4KG')}
+                        className="text-[10px] text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                      >
+                        Repor &le;12kg
+                      </button>
+                    </div>
+                    <p className="line-clamp-2 text-zinc-300">
+                      {activeSupportSplitMacro.autoPastedMessage}
+                    </p>
+                  </div>
+                )}
+
+                {showWeightEditor && (
+                  <div className="space-y-1.5 pt-1">
+                    {HEAVY_ITEMS_DB.map((item) => {
+                      const currentEntry = auditedOrderItems.find(
+                        (e) => e.itemId === item.id
+                      );
+                      const qty = currentEntry?.quantity ?? 0;
                       return (
-                        <button
-                          key={row.id}
-                          type="button"
-                          onClick={() => toggleCargoChecklistItem(row.id)}
-                          className="w-full rounded px-2 py-1 bg-zinc-950 border border-zinc-800 text-left flex items-center gap-1.5 text-[10px] text-zinc-200 cursor-pointer"
+                        <div
+                          key={item.id}
+                          className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 flex items-center justify-between gap-2"
                         >
-                          {checked ? (
-                            <CheckSquare className="h-3 w-3 text-emerald-400 shrink-0" />
-                          ) : (
-                            <Square className="h-3 w-3 text-zinc-500 shrink-0" />
-                          )}
-                          <span>{row.label}</span>
-                        </button>
+                          <div className="min-w-0">
+                            <span className="text-[11px] font-medium text-zinc-100 block">
+                              {item.name} ({item.unitWeightKg.toFixed(1)} kg)
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => updateAuditedItemQuantity(item.id, -1)}
+                              className="h-6 w-6 rounded bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-300 cursor-pointer"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="w-5 text-center font-mono text-xs font-semibold text-zinc-100">
+                              {qty}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateAuditedItemQuantity(item.id, 1)}
+                              className="h-6 w-6 rounded bg-white text-zinc-950 flex items-center justify-center font-semibold cursor-pointer"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
                       );
                     })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
-        {/* RIDE DECISION ACTIONS OR ACTIVE LIFECYCLE (ONLY SHOWN WHEN AN ORDER HAS ENTERED) */}
-        {hasActiveOrder && !isOfferAccepted && (
+                    <div className="rounded-lg bg-zinc-900 border border-zinc-800 p-2 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-zinc-100 flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>
+                            2.º Estafeta Parceiro:{' '}
+                            {simulateSecondCourierPaired
+                              ? 'Conectado'
+                              : 'A aguardar...'}
+                          </span>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={toggleSimulateSecondCourier}
+                            className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-zinc-200 cursor-pointer"
+                          >
+                            {simulateSecondCourierPaired ? 'Ativo' : 'Simular'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveWalkieChannel('PARCEIRO_PEDIDO_DIVIDIDO');
+                              setActiveTab('walkietalkie');
+                            }}
+                            className="rounded bg-emerald-500 text-slate-950 px-2 py-0.5 text-[10px] font-extrabold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Radio className="h-2.5 w-2.5" />
+                            <span>Rádio</span>
+                          </button>
+                        </div>
+                      </div>
+                      {cargoChecklistRows.map((row) => {
+                        const checked = cargoSplitChecklist[row.id];
+                        return (
+                          <button
+                            key={row.id}
+                            type="button"
+                            onClick={() => toggleCargoChecklistItem(row.id)}
+                            className="w-full rounded px-2 py-1 bg-zinc-950 border border-zinc-800 text-left flex items-center gap-1.5 text-[10px] text-zinc-200 cursor-pointer"
+                          >
+                            {checked ? (
+                              <CheckSquare className="h-3 w-3 text-emerald-400 shrink-0" />
+                            ) : (
+                              <Square className="h-3 w-3 text-zinc-500 shrink-0" />
+                            )}
+                            <span>{row.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ACTION BUTTONS: ✅ CONCLUIR CORRIDA & ✕ ENCERRAR / RECUSAR */}
           <div className="flex items-center gap-2 pt-0.5">
             <button
               type="button"
-              onClick={() => handleRecordDecision('ACEITE')}
-              className="flex-1 rounded-xl py-2.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition"
+              onClick={handleCompleteActiveRide}
+              className="flex-1 rounded-xl py-2.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm"
             >
-              <CheckCircle2 className="h-4 w-4" />
-              <span>Aceitar Corrida</span>
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>✅ Concluir Corrida</span>
             </button>
 
             <button
               type="button"
-              onClick={() => handleRecordDecision('RECUSADA')}
-              className="flex-1 rounded-xl py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition"
+              onClick={handleCloseOrDeclineActiveRide}
+              className="flex-1 rounded-xl py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm"
             >
-              <XCircle className="h-4 w-4" />
-              <span>Recusar</span>
+              <XCircle className="h-4 w-4 shrink-0" />
+              <span>✕ Encerrar / Recusar</span>
             </button>
 
             <button
@@ -1203,199 +1349,8 @@ export const ScannerAndSplitModule: React.FC = () => {
               <Volume2 className="h-4 w-4" />
             </button>
           </div>
-        )}
-
-        {hasActiveOrder && isOfferAccepted && (
-          <div className="rounded-xl bg-zinc-950 border border-emerald-500/40 p-3 space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <Navigation className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                <span className="text-xs font-extrabold text-zinc-100">
-                  Entrega em Curso ({activeDeliveryLifecycle.orderId})
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsOfferAccepted(false)}
-                className="rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-zinc-300 cursor-pointer shrink-0"
-              >
-                Voltar aos Dados
-              </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 text-[10px]">
-              <button
-                type="button"
-                onClick={() =>
-                  startActiveDeliveryFromOffer(
-                    activeScannedOffer,
-                    auditMetrics.activeTotalKm,
-                    auditMetrics.realNetProfitEur
-                  )
-                }
-                className={`rounded py-1 px-1.5 text-center transition cursor-pointer ${
-                  activeDeliveryLifecycle.stage === 'AGUARDAR_RECOLHA'
-                    ? 'bg-white text-zinc-950 font-semibold'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                1. Na Recolha
-              </button>
-              <button
-                type="button"
-                onClick={() => startDeliveryTransitStage()}
-                className={`rounded py-1 px-1.5 text-center transition cursor-pointer ${
-                  activeDeliveryLifecycle.stage === 'EM_TRANSITO'
-                    ? 'bg-white text-zinc-950 font-semibold'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                2. Em Trânsito
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDecisionFeedback(null);
-                  completeActiveDeliveryStage();
-                }}
-                className={`rounded py-1 px-1.5 text-center transition cursor-pointer ${
-                  activeDeliveryLifecycle.stage === 'CONCLUIDA'
-                    ? 'bg-white text-zinc-950 font-semibold'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                3. Concluir
-              </button>
-            </div>
-
-            {activeDeliveryLifecycle.stage === 'AGUARDAR_RECOLHA' && (
-              <div className="flex items-center justify-between gap-2 pt-1">
-                <span className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-200">
-                  <Clock className="h-3.5 w-3.5 text-amber-400" />
-                  <span>
-                    Espera:{' '}
-                    {formatWaitTimerMmSs(
-                      activeDeliveryLifecycle.waitSecondsAtStore
-                    )}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => startDeliveryTransitStage()}
-                  className="rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-1.5 px-3 text-xs font-extrabold cursor-pointer transition"
-                >
-                  Iniciar Trânsito →
-                </button>
-              </div>
-            )}
-
-            {activeDeliveryLifecycle.stage === 'EM_TRANSITO' && (
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-1">
-                  {[
-                    {
-                      label: '🚪 Porta Lateral',
-                      tag: 'Morada difícil de encontrar (Sem número / Entrada oculta)' as const,
-                      note: 'Entrada pela porta lateral / traseira do edifício.',
-                    },
-                    {
-                      label: '🪜 3.º s/ Elevador',
-                      tag: 'Rota proibida / Pilaretes / Escadaria' as const,
-                      note: 'Prédio sem elevador (escadas íngremes).',
-                    },
-                    {
-                      label: '🐕 Cão Solto',
-                      tag: 'Animais soltos no local' as const,
-                      note: 'Atenção: Cão solto no portão / entrada.',
-                    },
-                    {
-                      label: '🔕 Campainha Off',
-                      tag: 'Morada difícil de encontrar (Sem número / Entrada oculta)' as const,
-                      note: 'Campainha avariada — ligar ou bater à porta.',
-                    },
-                  ].map((item) => (
-                    <button
-                      key={item.label}
-                      type="button"
-                      onClick={() => {
-                        addLocationRouteNote({
-                          streetOrZone:
-                            activeDeliveryLifecycle.destinationName ||
-                            'Centro de Amarante',
-                          orderCodeRef: activeDeliveryLifecycle.orderId,
-                          category: item.tag,
-                          noteText: `${activeDeliveryLifecycle.destinationName}: ${item.note}`,
-                        });
-                        speakTextPt(`Nota gravada: ${item.label}.`);
-                        setLast50mFeedback(`Guardado: ${item.label}`);
-                        setTimeout(() => setLast50mFeedback(null), 3000);
-                      }}
-                      className="rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2 py-1 text-[10px] font-semibold text-zinc-200 text-left cursor-pointer"
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-                {last50mFeedback && (
-                  <p className="text-[10px] font-bold text-emerald-400">
-                    ✅ {last50mFeedback}
-                  </p>
-                )}
-                {locationRouteNotes.length > 0 && (
-                  <p className="text-[10px] text-zinc-400">
-                    Nota na zona: {locationRouteNotes[0].noteText}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDecisionFeedback(null);
-                    completeActiveDeliveryStage();
-                  }}
-                  className="w-full rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-2 px-3 text-xs font-extrabold cursor-pointer transition"
-                >
-                  ✓ Finalizar Entrega (+
-                  {activeDeliveryLifecycle.netProfitEur.toFixed(2)} €)
-                </button>
-              </div>
-            )}
-
-            {activeDeliveryLifecycle.stage === 'CONCLUIDA' && (
-              <div className="flex items-center justify-between gap-2 pt-1">
-                <span className="text-xs font-bold text-emerald-400">
-                  ✓ Entrega Concluída (+
-                  {activeDeliveryLifecycle.netProfitEur.toFixed(2)} €)
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDecisionFeedback(null);
-                    setIsOfferAccepted(false);
-                    selectOfferPreset(SCANNER_OFFER_PRESETS[0]);
-                    executeVoiceCommandPt('Finalizar entrega');
-                  }}
-                  className="rounded-lg bg-white text-zinc-950 py-1.5 px-3 text-xs font-bold cursor-pointer"
-                >
-                  Pronto p/ Nova Corrida
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {decisionFeedback && (
-          <div className="text-[11px] text-zinc-200 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 flex items-center justify-between gap-2">
-            <span>{decisionFeedback}</span>
-            <button
-              type="button"
-              onClick={() => setDecisionFeedback(null)}
-              className="text-zinc-400 hover:text-zinc-100 text-[10px] font-bold cursor-pointer"
-            >
-              OK
-            </button>
-          </div>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 };

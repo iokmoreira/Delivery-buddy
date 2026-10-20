@@ -6276,6 +6276,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       return 'INACTIVE';
     }
     if (
+      !activeScannedOffer.id.startsWith('PRESET-') ||
       hasRealActiveDelivery ||
       isOfferAccepted ||
       state.userOrderAvailabilityStatus === 'OCUPADO_COM_PEDIDO'
@@ -6285,6 +6286,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     return 'ACTIVE';
   }, [
     state.isAppPaused,
+    activeScannedOffer.id,
     hasRealActiveDelivery,
     isOfferAccepted,
     state.userOrderAvailabilityStatus,

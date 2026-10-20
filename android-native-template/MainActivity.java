@@ -963,6 +963,12 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        minimizeToFloatingBubbleNow();
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         isInForeground = true;

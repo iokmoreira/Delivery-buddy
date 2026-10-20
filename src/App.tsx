@@ -84,6 +84,7 @@ const AppCockpitShell: React.FC = () => {
     setViewMode,
     isAuthenticated,
     isBubbleMinimized,
+    setIsBubbleMinimized,
     themeMode,
     setIsOfficialManualModalOpen,
     rainLockActive,
@@ -98,6 +99,21 @@ const AppCockpitShell: React.FC = () => {
     isBatteryCharging,
     toggleBatterySurvivalMode,
   } = useEstafetas();
+
+  // Bind Android Hardware / Gesture Back button (popstate) to minimize into floating bubble
+  React.useEffect(() => {
+    if (!isAuthenticated || isBubbleMinimized) return;
+    try {
+      window.history.pushState({ buddyCockpitOpen: true }, '');
+    } catch {
+      // ignore
+    }
+    const handlePopState = () => {
+      setIsBubbleMinimized(true);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isAuthenticated, isBubbleMinimized, setIsBubbleMinimized]);
 
   const [batteryBannerDismissed, setBatteryBannerDismissed] =
     React.useState<boolean>(false);
