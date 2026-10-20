@@ -397,7 +397,7 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    private float activeNativeSpeechRate = 1.30f;
+    private float activeNativeSpeechRate = 1.15f;
 
     private void applyMalePtBrVoiceAndRate() {
         if (nativeTts == null) return;

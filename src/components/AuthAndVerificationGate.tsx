@@ -5,12 +5,9 @@ import {
   ArrowLeft,
   CheckCircle2,
   ShieldCheck,
-  Sparkles,
   UserPlus,
   LogIn,
   HelpCircle,
-  Volume2,
-  VolumeX,
 } from 'lucide-react';
 import { useEstafetas } from '../context/EstafetasContext';
 import {
@@ -22,12 +19,15 @@ import { findExistingCourierByNameInSupabaseRest } from '../services/geminiAgent
 import {
   cancelBuddySpeechNow,
   DEFAULT_BUDDY_VOICE_PITCH,
+  getSavedBuddyVoiceRate,
   playBuddyConfirmationChime,
   selectBestGeminiLikePtVoice,
 } from '../services/voiceEngine';
 
+export const LOGIN_INTRO_VOICE_RATE = 1.05;
+
 export const BUDDY_LOGIN_INTRO_SENTENCES: string[] = [
-  'Olá, Buddy! Eu sou o teu copiloto inteligente de rua, criado para organizar a tua rotina, proteger-te no trânsito e aumentar os teus ganhos reais.',
+  'Olá! Sou o Buddy, o seu robozinho e copiloto inteligente de rua, criado para organizar a tua rotina, proteger-te no trânsito e aumentar os teus ganhos reais.',
   'Enquanto trabalhas na Glovo, Uber ou Bolt, eu fico flutuando na tua tela. Tocou pedido? Eu leio na hora e desconto combustível, desgaste do veículo e impostos. Faço toda a tua gestão financeira automática, acompanhando as tuas metas e projeções diárias, semanais e mensais para saberes ao cêntimo o teu lucro por quilómetro e por hora.',
   'Comigo tens acesso a um banco de dados completo da tua região: vês o clima em tempo real, acordos de piso mínimo, alertas de perigos na via e todo o registo de rotas proibidas, problemas e reclamações para evitares atrasos e ciladas.',
   'Além disso, comunicas com outros Buddys pelo chat, walkie-talkie e blog informativo, comandas tudo por voz sem tirar a mão da direção e contas com deteção automática de queda e alerta SOS de emergência. Faz login ou cria a tua conta aqui embaixo e vamos trabalhar. Boas entregas e conduza com segurança!',
@@ -438,10 +438,12 @@ export const AuthAndVerificationGate: React.FC = () => {
             BuddyNativeOverlay?: {
               stopSpeaking?: () => void;
               stopNativeTts?: () => void;
+              setSpeechRate?: (rateVal: number) => void;
             };
           };
           winAny.BuddyNativeOverlay?.stopSpeaking?.();
           winAny.BuddyNativeOverlay?.stopNativeTts?.();
+          winAny.BuddyNativeOverlay?.setSpeechRate?.(getSavedBuddyVoiceRate());
         } catch {
           // ignore
         }
@@ -463,6 +465,16 @@ export const AuthAndVerificationGate: React.FC = () => {
         clearIntroTimers();
         setIsIntroSpeaking(false);
         setActiveSentenceIdx(0);
+        try {
+          const winAny = window as unknown as {
+            BuddyNativeOverlay?: {
+              setSpeechRate?: (rateVal: number) => void;
+            };
+          };
+          winAny.BuddyNativeOverlay?.setSpeechRate?.(getSavedBuddyVoiceRate());
+        } catch {
+          // ignore
+        }
         return;
       }
 
@@ -483,18 +495,18 @@ export const AuthAndVerificationGate: React.FC = () => {
         winAny.BuddyNativeOverlay?.speakText ||
         winAny.BuddyNativeOverlay?.speakNativeTts;
 
-      // Engine 1: Native Android APK TextToSpeech Bridge (pt-BR Male @ 1.30x)
+      // Engine 1: Native Android APK TextToSpeech Bridge (pt-BR Male @ 1.05x for Login Intro)
       if (typeof nativeSpeakFn === 'function') {
         try {
-          winAny.BuddyNativeOverlay?.setSpeechRate?.(1.3);
+          winAny.BuddyNativeOverlay?.setSpeechRate?.(LOGIN_INTRO_VOICE_RATE);
         } catch {
           // ignore
         }
         try {
           nativeSpeakFn.call(winAny.BuddyNativeOverlay, sentence);
           const estimatedDurationMs = Math.max(
-            4200,
-            Math.round(sentence.length * 54) + 550
+            5200,
+            Math.round(sentence.length * 66) + 750
           );
           sentenceTimerRef.current = window.setTimeout(() => {
             if (introSessionIdRef.current !== sessionId) return;
@@ -506,7 +518,7 @@ export const AuthAndVerificationGate: React.FC = () => {
         }
       }
 
-      // Engine 2: Web SpeechSynthesis (strictly pt-BR Male @ 1.30x, pitch 0.95)
+      // Engine 2: Web SpeechSynthesis (strictly pt-BR Male @ 1.05x, pitch 0.95)
       if ('speechSynthesis' in window) {
         try {
           if (idx === 0) {
@@ -516,7 +528,7 @@ export const AuthAndVerificationGate: React.FC = () => {
 
           const utterance = new SpeechSynthesisUtterance(sentence);
           utterance.lang = 'pt-BR';
-          utterance.rate = 1.3;
+          utterance.rate = LOGIN_INTRO_VOICE_RATE;
           utterance.pitch = DEFAULT_BUDDY_VOICE_PITCH;
           utterance.volume = 1.0;
 
@@ -560,8 +572,8 @@ export const AuthAndVerificationGate: React.FC = () => {
 
           // Safety timer in case mobile WebView/browser skips onend
           const fallbackMs = Math.max(
-            4800,
-            Math.round(sentence.length * 60) + 900
+            6000,
+            Math.round(sentence.length * 72) + 1200
           );
           sentenceTimerRef.current = window.setTimeout(() => {
             advanceNext();
@@ -578,7 +590,7 @@ export const AuthAndVerificationGate: React.FC = () => {
       sentenceTimerRef.current = window.setTimeout(() => {
         if (introSessionIdRef.current !== sessionId) return;
         speakSentenceAtIndex(idx + 1, sessionId);
-      }, Math.max(4000, Math.round(sentence.length * 50)));
+      }, Math.max(4800, Math.round(sentence.length * 60)));
     },
     [clearIntroTimers]
   );
@@ -760,29 +772,30 @@ export const AuthAndVerificationGate: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen flex flex-col justify-center px-4 py-6 ${
+      className={`min-h-screen flex flex-col justify-center px-3.5 py-2.5 ${
         isDay ? 'bg-slate-100 text-slate-950' : 'bg-zinc-950 text-zinc-100'
       }`}
     >
       <div
-        className={`max-w-md w-full mx-auto rounded-3xl border p-5 sm:p-6 shadow-2xl space-y-5 ${
+        className={`max-w-md w-full mx-auto rounded-3xl border px-4 py-3.5 sm:p-5 shadow-2xl space-y-3 ${
           isDay
             ? 'bg-white border-slate-300 shadow-slate-300/50'
             : 'bg-zinc-900 border-zinc-800 shadow-black/70'
         }`}
       >
-        {/* Top: Large Interactive 3D Mascot Hero (136px, object-contain, no overlaid badges) + Voice Intro + Live Subtitles */}
-        <div className="flex flex-col items-center text-center space-y-3 pt-1">
+        {/* Top: Large Transparent 3D Buddy Hero (176px, no dark background circle) + Compact 36x36 Speaker Button at Foot + Delivery Buddy Title */}
+        <div className="flex flex-col items-center text-center space-y-1.5">
           <div className="relative flex items-center justify-center">
             {isIntroSpeaking && (
               <>
-                <span className="absolute -inset-3 rounded-full border-2 border-emerald-400/55 animate-ping pointer-events-none" />
-                <span className="absolute -inset-2 rounded-full bg-emerald-500/35 blur-lg animate-pulse pointer-events-none" />
+                <span className="absolute -inset-2 rounded-full border-2 border-[#00E5FF]/60 animate-ping pointer-events-none" />
+                <span className="absolute -inset-1 rounded-full bg-[#00E5FF]/25 blur-xl animate-pulse pointer-events-none" />
               </>
             )}
             {!isIntroSpeaking && (
-              <span className="absolute -inset-1.5 rounded-full bg-emerald-500/20 blur-md pointer-events-none" />
+              <span className="absolute -inset-1 rounded-full bg-[#00E5FF]/15 blur-md pointer-events-none" />
             )}
+
             <div
               onClick={() => {
                 if (isIntroSpeaking) {
@@ -796,10 +809,10 @@ export const AuthAndVerificationGate: React.FC = () => {
                   ? 'Toca para parar a apresentação de voz'
                   : 'Toca para ouvir a apresentação do Buddy'
               }
-              className={`relative h-[138px] w-[138px] rounded-full border-[3px] bg-transparent flex items-center justify-center p-1 cursor-pointer transition-transform duration-300 ${
+              className={`relative h-[176px] w-[176px] bg-transparent flex items-center justify-center cursor-pointer transition-transform duration-300 ${
                 isIntroSpeaking
-                  ? 'border-[#00E5FF] shadow-[0_0_36px_rgba(0,229,255,0.85)] scale-[1.04]'
-                  : 'border-[#00E5FF]/80 shadow-[0_0_22px_rgba(0,229,255,0.45)] hover:scale-[1.02]'
+                  ? 'scale-[1.03] drop-shadow-[0_0_24px_rgba(0,229,255,0.75)]'
+                  : 'hover:scale-[1.02] drop-shadow-[0_0_14px_rgba(0,229,255,0.38)]'
               }`}
             >
               <img
@@ -807,62 +820,56 @@ export const AuthAndVerificationGate: React.FC = () => {
                 alt="Mascote 3D Delivery Buddy"
                 className="h-full w-full object-contain select-none pointer-events-none"
               />
+
+              {/* Compact 36x36 Circular Speaker Icon Button Tucked Right at Buddy's Foot */}
+              <button
+                type="button"
+                data-buddy-audio-pill="true"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isIntroSpeaking) {
+                    stopBuddyIntroPresentation(true);
+                  } else {
+                    startBuddyIntroPresentation(0);
+                  }
+                }}
+                aria-label={
+                  isIntroSpeaking
+                    ? 'Calar apresentação de voz do Buddy'
+                    : 'Ouvir apresentação de voz do Buddy'
+                }
+                title={
+                  isIntroSpeaking
+                    ? 'Parar voz do Buddy'
+                    : 'Ouvir apresentação do Buddy'
+                }
+                className={`absolute bottom-1 right-1 h-9 w-9 rounded-full flex items-center justify-center text-base border-2 transition-all cursor-pointer z-10 ${
+                  isIntroSpeaking
+                    ? 'bg-[#00E5FF]/25 border-[#00E5FF] text-[#00E5FF] shadow-[0_0_16px_rgba(0,229,255,0.9)] animate-pulse'
+                    : 'bg-zinc-950/90 hover:bg-zinc-900 border-[#00E5FF]/80 text-[#00E5FF] shadow-md'
+                }`}
+              >
+                <span className="leading-none select-none">
+                  {isIntroSpeaking ? '🔇' : '🔊'}
+                </span>
+              </button>
             </div>
           </div>
-
-          {/* 1-Tap Audio Control Pill Directly Below the Mascot */}
-          <button
-            type="button"
-            data-buddy-audio-pill="true"
-            onClick={() => {
-              if (isIntroSpeaking) {
-                stopBuddyIntroPresentation(true);
-              } else {
-                startBuddyIntroPresentation(0);
-              }
-            }}
-            className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-xs font-extrabold tracking-wide border shadow-md transition-all cursor-pointer ${
-              isIntroSpeaking
-                ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-400 text-amber-300 shadow-amber-500/15'
-                : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400/70 text-emerald-300 shadow-emerald-500/15'
-            }`}
-          >
-            {isIntroSpeaking ? (
-              <>
-                <VolumeX className="h-4 w-4 text-amber-400 shrink-0" />
-                <span>🔇 Parar Apresentação</span>
-                <span
-                  className="inline-flex items-end gap-0.5 h-3.5 ml-0.5"
-                  aria-hidden="true"
-                >
-                  <span className="w-0.5 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                  <span className="w-0.5 h-3.5 bg-emerald-400 rounded-full animate-bounce" />
-                  <span className="w-0.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
-                  <span className="w-0.5 h-3 bg-emerald-400 rounded-full animate-bounce" />
-                </span>
-              </>
-            ) : (
-              <>
-                <Volume2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                <span>🔊 Ouvir quem é o Buddy (Resumo Rápido)</span>
-              </>
-            )}
-          </button>
 
           {/* Synchronized Live Subtitles (Legendas) while speaking */}
           {isIntroSpeaking && (
             <div
               onClick={() => stopBuddyIntroPresentation(true)}
               data-buddy-stop-intro="true"
-              className={`w-full rounded-2xl border px-3.5 py-2.5 text-left transition-all cursor-pointer ${
+              className={`w-full rounded-2xl border px-3 py-2 text-left transition-all cursor-pointer ${
                 isDay
                   ? 'bg-emerald-50/90 border-emerald-400 text-slate-900 shadow-sm'
-                  : 'bg-emerald-950/40 border-emerald-500/50 text-emerald-100 shadow-[0_0_20px_rgba(0,229,255,0.22)]'
+                  : 'bg-emerald-950/40 border-[#00E5FF]/50 text-emerald-100 shadow-[0_0_20px_rgba(0,229,255,0.22)]'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-400">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-[#00E5FF]">
+                  <span className="h-2 w-2 rounded-full bg-[#00E5FF] animate-ping" />
                   Legenda ao Vivo • Parte {activeSentenceIdx + 1}/
                   {BUDDY_LOGIN_INTRO_SENTENCES.length}
                 </span>
@@ -872,9 +879,9 @@ export const AuthAndVerificationGate: React.FC = () => {
                       key={idx}
                       className={`h-1.5 rounded-full transition-all ${
                         idx === activeSentenceIdx
-                          ? 'w-4 bg-emerald-400'
+                          ? 'w-4 bg-[#00E5FF]'
                           : idx < activeSentenceIdx
-                            ? 'w-1.5 bg-emerald-500/60'
+                            ? 'w-1.5 bg-[#00E5FF]/60'
                             : 'w-1.5 bg-zinc-700'
                       }`}
                     />
@@ -882,7 +889,7 @@ export const AuthAndVerificationGate: React.FC = () => {
                 </div>
               </div>
               <p
-                className={`text-xs sm:text-[13px] font-bold leading-snug ${
+                className={`text-xs font-bold leading-snug ${
                   isDay ? 'text-slate-900' : 'text-zinc-100'
                 }`}
               >
@@ -891,16 +898,12 @@ export const AuthAndVerificationGate: React.FC = () => {
             </div>
           )}
 
-          <div>
-            <div className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 mb-1">
-              <Sparkles className="h-3 w-3" />
-              <span>Copiloto Oficial de Estafetas • Amarante</span>
-            </div>
-            <h1 className="text-2xl font-black tracking-tight">
+          <div className="pt-0.5">
+            <h1 className="text-3xl sm:text-[32px] font-extrabold tracking-tight leading-tight">
               Delivery Buddy
             </h1>
             <p
-              className={`text-xs font-semibold ${
+              className={`text-xs font-semibold mt-0.5 ${
                 isDay ? 'text-slate-600' : 'text-zinc-400'
               }`}
             >
@@ -981,7 +984,7 @@ export const AuthAndVerificationGate: React.FC = () => {
           />
         ) : (
           /* OPTION 1 (LOGIN) & OPTION 2 (CRIAR CONTA) FORM */
-          <form onSubmit={handleAuthSubmit} className="space-y-3.5">
+          <form onSubmit={handleAuthSubmit} className="space-y-2.5">
             <div>
               <label
                 className={`block text-[11px] font-black uppercase tracking-wider mb-1 ${
@@ -1006,7 +1009,7 @@ export const AuthAndVerificationGate: React.FC = () => {
                     : 'Ex: Caio Moreira'
                 }
                 autoComplete="username"
-                className={`w-full rounded-xl border px-3.5 py-2.5 text-sm font-bold focus:outline-none ${
+                className={`w-full rounded-xl border px-3.5 py-2 text-sm font-bold focus:outline-none ${
                   isDay
                     ? 'bg-slate-50 border-slate-300 text-slate-950 focus:border-emerald-600'
                     : 'bg-zinc-950 border-zinc-700 text-white focus:border-emerald-500'
@@ -1033,7 +1036,7 @@ export const AuthAndVerificationGate: React.FC = () => {
                   }}
                   placeholder="Ex: 912 345 678 ou estafeta@email.pt"
                   autoComplete="email"
-                  className={`w-full rounded-xl border px-3.5 py-2.5 text-sm font-bold focus:outline-none ${
+                  className={`w-full rounded-xl border px-3.5 py-2 text-sm font-bold focus:outline-none ${
                     isDay
                       ? 'bg-slate-50 border-slate-300 text-slate-950 focus:border-emerald-600'
                       : 'bg-zinc-950 border-zinc-700 text-white focus:border-emerald-500'
@@ -1062,7 +1065,7 @@ export const AuthAndVerificationGate: React.FC = () => {
                 autoComplete={
                   authMode === 'ENTRAR' ? 'current-password' : 'new-password'
                 }
-                className={`w-full rounded-xl border px-3.5 py-2.5 text-sm font-bold focus:outline-none ${
+                className={`w-full rounded-xl border px-3.5 py-2 text-sm font-bold focus:outline-none ${
                   isDay
                     ? 'bg-slate-50 border-slate-300 text-slate-950 focus:border-emerald-600'
                     : 'bg-zinc-950 border-zinc-700 text-white focus:border-emerald-500'
@@ -1180,7 +1183,7 @@ export const AuthAndVerificationGate: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-black text-sm uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-black text-sm uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <CheckCircle2 className="h-4 w-4" />
               <span>
@@ -1193,7 +1196,7 @@ export const AuthAndVerificationGate: React.FC = () => {
             </button>
 
             {/* Prominent Option 3 Button at the bottom of Login/Register */}
-            <div className="pt-2 border-t border-zinc-800/70">
+            <div className="pt-1.5 border-t border-zinc-800/70">
               <button
                 type="button"
                 onClick={() => {
@@ -1201,7 +1204,7 @@ export const AuthAndVerificationGate: React.FC = () => {
                   setAuthMode('SUPORTE');
                   setErrorMsg(null);
                 }}
-                className={`w-full py-3 px-4 rounded-2xl border font-extrabold text-xs flex items-center justify-center gap-2 transition cursor-pointer ${
+                className={`w-full py-2.5 px-4 rounded-2xl border font-extrabold text-xs flex items-center justify-center gap-2 transition cursor-pointer ${
                   isDay
                     ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
                     : 'bg-zinc-950 hover:bg-zinc-800 border-emerald-500/40 text-emerald-300'

@@ -1922,13 +1922,13 @@ export const MenuMaisHubView: React.FC = () => {
                   className="flex-1 accent-indigo-500 cursor-pointer"
                 />
                 <span className="text-xs text-zinc-400">1.50x</span>
-                {Math.abs(buddyVoiceRate - 1.3) >= 0.01 && (
+                {Math.abs(buddyVoiceRate - 1.15) >= 0.01 && (
                   <button
                     type="button"
-                    onClick={() => setBuddyVoiceRate(1.3)}
+                    onClick={() => setBuddyVoiceRate(1.15)}
                     className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 px-2 py-0.5 text-xs font-bold cursor-pointer"
                   >
-                    Repor 1.30x
+                    Repor 1.15x
                   </button>
                 )}
               </div>
@@ -1939,18 +1939,18 @@ export const MenuMaisHubView: React.FC = () => {
               <div
                 className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
                   currentMascotState === 'ACTIVE'
-                    ? 'bg-emerald-950/60 border-emerald-400'
+                    ? 'bg-emerald-950/60 border-[#00E5FF]'
                     : 'bg-zinc-900 border-zinc-800'
                 }`}
               >
-                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-emerald-400 bg-[#090E13] p-1 mb-1">
+                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF] bg-transparent p-0.5 mb-1">
                   <img
                     src={buddyMascotImages.mascotActive}
                     alt="Pose 1 Ativo"
                     className="h-full w-full object-contain"
                   />
                 </div>
-                <span className="text-xs font-extrabold text-emerald-300">
+                <span className="text-xs font-extrabold text-[#00E5FF]">
                   1. Online
                 </span>
               </div>
@@ -1958,11 +1958,11 @@ export const MenuMaisHubView: React.FC = () => {
               <div
                 className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
                   currentMascotState === 'INACTIVE'
-                    ? 'bg-slate-900 border-slate-400'
+                    ? 'bg-slate-900 border-[#00E5FF]/80'
                     : 'bg-zinc-900 border-zinc-800'
                 }`}
               >
-                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-slate-400 bg-[#090E13] p-1 mb-1">
+                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF]/70 bg-transparent p-0.5 mb-1">
                   <img
                     src={buddyMascotImages.mascotInactive}
                     alt="Pose 2 Pausa"
@@ -1977,18 +1977,18 @@ export const MenuMaisHubView: React.FC = () => {
               <div
                 className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
                   currentMascotState === 'DELIVERY'
-                    ? 'bg-amber-950/60 border-amber-400'
+                    ? 'bg-emerald-950/60 border-[#00E5FF]'
                     : 'bg-zinc-900 border-zinc-800'
                 }`}
               >
-                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-amber-400 bg-[#090E13] p-1 mb-1">
+                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF] bg-transparent p-0.5 mb-1">
                   <img
                     src={buddyMascotImages.mascotDelivery}
                     alt="Pose 3 Entrega"
                     className="h-full w-full object-contain"
                   />
                 </div>
-                <span className="text-xs font-extrabold text-amber-300">
+                <span className="text-xs font-extrabold text-[#00E5FF]">
                   3. Entrega 🚀
                 </span>
               </div>

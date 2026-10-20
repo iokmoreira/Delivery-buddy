@@ -9,7 +9,7 @@ import { AppTabId } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
 import { playBuddyOpenChime } from '../services/voiceEngine';
 
-const CURRENT_OTA_BUILD_VERSION = 'v3.1.0-neon-blue-mascot';
+const CURRENT_OTA_BUILD_VERSION = 'v3.2.0-voice-105-115-login-hero';
 const LAST_SEEN_OTA_BUILD_KEY = 'buddy_last_seen_ota_build_v1';
 const PENDING_OTA_TOAST_KEY = 'buddy_pending_ota_toast_v1';
 

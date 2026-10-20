@@ -1,7 +1,8 @@
 import { PlatformName } from '../types/models';
 
-export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate_v2_130';
-export const DEFAULT_BUDDY_VOICE_RATE = 1.3;
+export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate_v3_115';
+export const BUDDY_VOICE_RATE_MIGRATED_KEY = 'buddyVoiceRate_migrated_v3_115';
+export const DEFAULT_BUDDY_VOICE_RATE = 1.15;
 export const DEFAULT_BUDDY_VOICE_PITCH = 0.95;
 
 let activeHtml5TtsAudio: HTMLAudioElement | null = null;
@@ -11,6 +12,32 @@ let activeOnEndCallback: (() => void) | null = null;
 export function getSavedBuddyVoiceRate(): number {
   if (typeof window === 'undefined') return DEFAULT_BUDDY_VOICE_RATE;
   try {
+    // One-time migration: reset any previously cached 1.3 or 1.5 voice speed to 1.15
+    const migrated = localStorage.getItem(BUDDY_VOICE_RATE_MIGRATED_KEY);
+    if (migrated !== '1') {
+      const legacyVal =
+        localStorage.getItem(BUDDY_VOICE_RATE_STORAGE_KEY) ||
+        localStorage.getItem('buddyVoiceRate_v2_130') ||
+        localStorage.getItem('buddyVoiceRate');
+      const legacyNum = legacyVal ? Number(legacyVal) : NaN;
+      if (
+        !Number.isFinite(legacyNum) ||
+        Math.abs(legacyNum - 1.3) < 0.02 ||
+        Math.abs(legacyNum - 1.5) < 0.02
+      ) {
+        localStorage.setItem(
+          BUDDY_VOICE_RATE_STORAGE_KEY,
+          String(DEFAULT_BUDDY_VOICE_RATE)
+        );
+      } else {
+        localStorage.setItem(
+          BUDDY_VOICE_RATE_STORAGE_KEY,
+          String(Number(legacyNum.toFixed(2)))
+        );
+      }
+      localStorage.setItem(BUDDY_VOICE_RATE_MIGRATED_KEY, '1');
+    }
+
     const raw = localStorage.getItem(BUDDY_VOICE_RATE_STORAGE_KEY);
     if (!raw) {
       localStorage.setItem(
@@ -277,7 +304,7 @@ function playHtml5StreamTtsFallback(
     const audio = new Audio(ttsUrl);
     audio.setAttribute('referrerpolicy', 'no-referrer');
     audio.volume = 1.0;
-    audio.playbackRate = Math.max(1.0, Math.min(1.5, rate || 1.3));
+    audio.playbackRate = Math.max(1.0, Math.min(1.5, rate || 1.15));
     activeHtml5TtsAudio = audio;
     audio.onplay = () => onStart?.();
     audio.onended = () => {
@@ -356,7 +383,7 @@ export function speakWithBuddyVoiceEngine(
     };
   };
 
-  // Engine 1 (Priority): Native Android APK TextToSpeech Bridge (pt-BR Male @ 1.30x)
+  // Engine 1 (Priority): Native Android APK TextToSpeech Bridge (pt-BR Male @ 1.15x)
   try {
     const nativeSpeakFn =
       winAny.BuddyNativeOverlay?.speakText ||
@@ -369,7 +396,7 @@ export function speakWithBuddyVoiceEngine(
       }
       onStart?.();
       nativeSpeakFn.call(winAny.BuddyNativeOverlay, text.trim());
-      onVoiceResolved?.('Voz Masculina PT-BR (Android 1.30x)');
+      onVoiceResolved?.(`Voz Masculina PT-BR (Android ${activeRate.toFixed(2)}x)`);
       activeNativeSpeechEndTimer = window.setTimeout(() => {
         activeNativeSpeechEndTimer = null;
         if (activeOnEndCallback) {
@@ -377,14 +404,14 @@ export function speakWithBuddyVoiceEngine(
           activeOnEndCallback = null;
           cb();
         }
-      }, Math.min(26000, Math.max(1300, Math.round(text.length * 52))));
+      }, Math.min(26000, Math.max(1300, Math.round(text.length * 58))));
       return;
     }
   } catch {
     // continue to Web SpeechSynthesis fallback
   }
 
-  // Engine 2: Web SpeechSynthesis (strictly pt-BR Male at 1.30x rate, 0.95 pitch)
+  // Engine 2: Web SpeechSynthesis (strictly pt-BR Male at 1.15x rate, 0.95 pitch)
   if ('speechSynthesis' in window) {
     try {
       window.speechSynthesis.cancel();
@@ -435,7 +462,7 @@ export function speakWithBuddyVoiceEngine(
     onEnd
   );
   if (startedStream) {
-    onVoiceResolved?.('Voz PT-BR (1.30x)');
+    onVoiceResolved?.(`Voz PT-BR (${activeRate.toFixed(2)}x)`);
   } else {
     onError?.();
   }
