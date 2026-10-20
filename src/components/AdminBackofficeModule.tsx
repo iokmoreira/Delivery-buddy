@@ -747,14 +747,6 @@ export const AdminBackofficeModule: React.FC = () => {
                   <Mic className="h-3.5 w-3.5" />
                   <span>Ensinar Caminho por Voz</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => simulateNewAiSkillLearning()}
-                  className="rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 px-3 py-1.5 text-xs font-extrabold flex items-center gap-1 cursor-pointer transition shrink-0 shadow-xs"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>+ Simular Nova Aprendizagem da IA</span>
-                </button>
               </div>
             </div>
 
@@ -778,8 +770,8 @@ export const AdminBackofficeModule: React.FC = () => {
               </div>
               <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-extrabold text-emerald-300">
                 {aiAgentConfig.continuousLearningEnabled
-                  ? 'Modo A (Passivo Automático): ATIVO'
-                  : 'Modo A (Passivo Automático): PAUSADO'}
+                  ? 'Aprendizagem Contínua: ATIVA'
+                  : 'Aprendizagem Contínua: PAUSADA'}
               </span>
             </div>
 

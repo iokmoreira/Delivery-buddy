@@ -76,6 +76,9 @@ export const ScannerAndSplitModule: React.FC = () => {
     hasRealActiveDelivery,
     addLocationRouteNote,
     locationRouteNotes,
+    realCompletedDeliveries,
+    amaranteLiveWeather,
+    openAndFetchAmaranteWeather,
   } = useEstafetas();
 
   const [activeView, setActiveView] = useState<'OFERTA_ATUAL' | 'DIVIDIDO_PESO'>(
@@ -468,37 +471,73 @@ export const ScannerAndSplitModule: React.FC = () => {
           ===================================================================== */}
       {activeView === 'OFERTA_ATUAL' && (
         <div className="space-y-2.5">
-          {/* 1. Compact Offer Decision Card (Shown ONLY before order is accepted) */}
+          {/* 1. Clean Offer Analyzer & Today's Real Shift Summary */}
           {!isOfferAccepted &&
             aiAgentConfig.productionModeRealOnly &&
             activeScannedOffer.id.startsWith('PRESET-') && (
-              <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3 text-center">
-                <span className="inline-block rounded-md bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-bold text-emerald-300">
-                  ● Modo Produção Real Ativo • {activePlatforms.join(' + ')}
-                </span>
-                <p className="text-xs font-bold text-zinc-100">
-                  Scanner Pronto — Sem Entregas Fictícias Ativas
-                </p>
-                <p className="text-[11px] text-zinc-400 leading-snug">
-                  Importa um print de oferta ({activePlatforms.join(' ou ')}) ou digita o valor e KM abaixo para calcular o lucro líquido real e o retorno vazio.
-                </p>
+              <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3">
+                {/* Today's Quick Shift Summary + 1-Tap Live Amarante Weather */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 flex items-center justify-between">
+                    <div>
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                        Ganhos Hoje ({realCompletedDeliveries.length} ent.)
+                      </span>
+                      <span className="text-lg font-black text-emerald-400">
+                        €
+                        {realCompletedDeliveries
+                          .reduce((acc, d) => acc + (d.netProfitEur || 0), 0)
+                          .toFixed(2)
+                          .replace('.', ',')}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void openAndFetchAmaranteWeather(true)}
+                    className="rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 p-3 flex items-center justify-between text-left cursor-pointer transition"
+                  >
+                    <div>
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                        Clima Amarante
+                      </span>
+                      <span className="text-sm font-black text-white">
+                        {amaranteLiveWeather.conditionEmoji}{' '}
+                        {amaranteLiveWeather.temperatureC.toFixed(1)} °C
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-400">
+                      Ver →
+                    </span>
+                  </button>
+                </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs px-3.5 py-2 flex items-center gap-1.5 cursor-pointer transition"
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    <span>📸 Ler Print de Oferta</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickManualOfferOpen((prev) => !prev)}
-                    className="rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-100 font-semibold text-xs px-3 py-2 cursor-pointer transition"
-                  >
-                    ⚡ Avaliar Oferta Manual (€ / KM)
-                  </button>
+                {/* Real Offer Analyzer Controls */}
+                <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-2.5 text-center">
+                  <p className="text-xs font-extrabold text-zinc-100">
+                    Analisar Oferta ({activePlatforms.join(' • ')})
+                  </p>
+                  <p className="text-[11px] text-zinc-400 leading-snug">
+                    Importa um print da oferta ou insere o valor e distância para ver se compensa aceitar.
+                  </p>
+
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-extrabold text-xs px-3.5 py-2.5 flex items-center gap-1.5 cursor-pointer transition"
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      <span>📸 Ler Print de Oferta</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickManualOfferOpen((prev) => !prev)}
+                      className="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-100 font-bold text-xs px-3.5 py-2.5 cursor-pointer transition"
+                    >
+                      ⚡ Avaliar Oferta Manual (€ / KM)
+                    </button>
+                  </div>
                 </div>
 
                 {quickManualOfferOpen && (

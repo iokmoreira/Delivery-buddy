@@ -90,7 +90,16 @@ export function selectBestGeminiLikePtVoice(
 }
 
 export function cancelBuddySpeechNow(): void {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  if (typeof window === 'undefined') return;
+  try {
+    const winAny = window as unknown as {
+      BuddyNativeOverlay?: { stopNativeTts?: () => void };
+    };
+    winAny.BuddyNativeOverlay?.stopNativeTts?.();
+  } catch {
+    // ignore
+  }
+  if (!('speechSynthesis' in window)) return;
   try {
     window.speechSynthesis.cancel();
   } catch {
@@ -111,7 +120,7 @@ export interface SpeakBuddyVoiceOptions {
 
 /**
  * Centralized Gemini-Style Natural Voice Engine (+15% Faster 1.15x Default).
- * Cancels any stale queued speech immediately so urgent street alerts are delivered with zero delay.
+ * Uses Native Android TextToSpeech inside the .APK and Web SpeechSynthesis in browsers.
  */
 export function speakWithBuddyVoiceEngine(
   options: SpeakBuddyVoiceOptions
@@ -127,12 +136,31 @@ export function speakWithBuddyVoiceEngine(
     onVoiceResolved,
   } = options;
 
-  if (
-    isPaused ||
-    !text.trim() ||
-    typeof window === 'undefined' ||
-    !('speechSynthesis' in window)
-  ) {
+  if (isPaused || !text.trim() || typeof window === 'undefined') {
+    return;
+  }
+
+  // 1. Native Android APK TextToSpeech Bridge (works 100% reliably inside Capacitor WebView)
+  try {
+    const winAny = window as unknown as {
+      BuddyNativeOverlay?: {
+        speakNativeTts?: (spokenText: string) => void;
+      };
+    };
+    if (typeof winAny.BuddyNativeOverlay?.speakNativeTts === 'function') {
+      onStart?.();
+      winAny.BuddyNativeOverlay.speakNativeTts(text);
+      onVoiceResolved?.('Voz Nativa Android PT');
+      window.setTimeout(() => {
+        onEnd?.();
+      }, Math.min(8000, Math.max(1500, text.length * 60)));
+      return;
+    }
+  } catch {
+    // fallback to speechSynthesis
+  }
+
+  if (!('speechSynthesis' in window)) {
     return;
   }
 

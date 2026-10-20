@@ -159,6 +159,13 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
     lastHeardLiveTranscript,
     toggleVoiceMicListening,
     speakTextPt,
+    isAmaranteWeatherModalOpen,
+    setIsAmaranteWeatherModalOpen,
+    amaranteLiveWeather,
+    isLoadingAmaranteWeather,
+    rainBonusFinanceActive,
+    toggleRainBonusFinanceActive,
+    openAndFetchAmaranteWeather,
   } = useEstafetas();
 
   const [bubblePositions, setBubblePositions] = useState<BubblePositionsMap>(
@@ -558,21 +565,40 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
           </span>
         </button>
 
-        {/* Live Transcript Feedback Pill near the Floating Bubble */}
-        {lastHeardLiveTranscript && (
+        {/* Prominent Real-Time Live Voice Transcription HUD Card */}
+        {(lastHeardLiveTranscript || isListeningSpeechRecognition) && (
           <div
-            style={{
-              top: `${Math.max(12, bubblePositions.logo.y - 42)}px`,
-              right: '14px',
-            }}
             role="status"
             aria-live="polite"
-            className="fixed z-50 max-w-[300px] rounded-full bg-emerald-950/95 border border-emerald-400 px-3 py-1.5 text-[11px] font-bold text-emerald-100 shadow-[0_0_22px_rgba(16,185,129,0.55)] flex items-center gap-1.5 pointer-events-none"
+            className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-[390px] rounded-2xl px-4 py-3 shadow-[0_12px_34px_rgba(0,0,0,0.65)] border backdrop-blur-md transition-all pointer-events-none ${
+              lastHeardLiveTranscript?.startsWith('✅')
+                ? 'bg-emerald-950/95 border-emerald-400 text-emerald-50'
+                : lastHeardLiveTranscript?.startsWith('⚠️')
+                  ? 'bg-amber-950/95 border-amber-400 text-amber-50'
+                  : 'bg-slate-950/95 border-emerald-400/90 text-white'
+            }`}
           >
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
-            <span className="truncate">
-              🎙️ Ouvido: &ldquo;{lastHeardLiveTranscript}&rdquo;
-            </span>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                    isListeningSpeechRecognition
+                      ? 'bg-emerald-400 animate-ping'
+                      : 'bg-emerald-400'
+                  }`}
+                />
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-300">
+                  {isListeningSpeechRecognition
+                    ? 'Microfone Ativo • Transcrição em Tempo Real'
+                    : 'Comando de Voz Delivery Buddy'}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-zinc-400">PT-PT</span>
+            </div>
+            <div className="text-sm font-extrabold leading-snug break-words text-white">
+              {lastHeardLiveTranscript ||
+                '🗣️ Ouvindo: fale agora (ex: "Buddy clima", "Buddy minimizar")...'}
+            </div>
           </div>
         )}
 
@@ -1555,6 +1581,118 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
               <span>Abrir Social Buddys &amp; SOS</span>
             </button>
           </section>
+        </div>
+      )}
+
+      {/* LIVE OPEN-METEO AMARANTE WEATHER MODAL ("Buddy clima" / "Clima" / "Tempo") */}
+      {isAmaranteWeatherModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setIsAmaranteWeatherModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-slate-950 border border-emerald-500/40 p-5 text-white shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                  🌦️ Open-Meteo Tempo Real • Amarante
+                </span>
+                <h3 className="text-lg font-extrabold text-white mt-1.5">
+                  Clima Atual em Amarante
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Atualizado às {amaranteLiveWeather.updatedAt} • Lat 41.2704, Lng -8.0818
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAmaranteWeatherModalOpen(false)}
+                className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 text-slate-300 cursor-pointer"
+                aria-label="Fechar Clima de Amarante"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Primary Weather Metrics */}
+            <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-4xl select-none">
+                  {amaranteLiveWeather.conditionEmoji}
+                </span>
+                <div>
+                  <div className="text-3xl font-black text-white">
+                    {isLoadingAmaranteWeather
+                      ? '...'
+                      : `${amaranteLiveWeather.temperatureC.toFixed(1)} °C`}
+                  </div>
+                  <div className="text-xs font-bold text-emerald-300">
+                    {amaranteLiveWeather.conditionLabel}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right space-y-1">
+                <div className="rounded-lg bg-slate-950 border border-slate-800 px-2.5 py-1 text-xs font-semibold text-sky-300">
+                  💧 Chuva: {amaranteLiveWeather.rainMm.toFixed(1)} mm
+                </div>
+                <div className="rounded-lg bg-slate-950 border border-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-300">
+                  💨 Vento: {amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h
+                </div>
+              </div>
+            </div>
+
+            {/* 1-Tap Rain Bonus Toggle in Finanças */}
+            <div className="rounded-xl bg-slate-900/70 border border-slate-800 p-3.5 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-extrabold text-white">
+                  ☔ Modo Chuva / Bónus de Chuva (Finanças)
+                </div>
+                <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
+                  Ativa o suplemento de piso molhado nas metas e cálculos de lucro €/km.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleRainBonusFinanceActive}
+                className={`shrink-0 rounded-xl px-3.5 py-2 text-xs font-extrabold transition cursor-pointer border ${
+                  rainBonusFinanceActive
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                }`}
+              >
+                {rainBonusFinanceActive ? 'ATIVO (ON)' : 'ATIVAR'}
+              </button>
+            </div>
+
+            {/* Actions */}
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const rainNote =
+                    amaranteLiveWeather.rainMm > 0
+                      ? `, com ${amaranteLiveWeather.rainMm.toFixed(1).replace('.', ' vírgula ')} milímetros de chuva`
+                      : ', sem chuva neste momento';
+                  speakTextPt(
+                    `Clima em Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}${rainNote}. Vento a ${Math.round(amaranteLiveWeather.windSpeedKmh)} quilómetros por hora.`
+                  );
+                }}
+                className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2.5 px-3 text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Volume2 className="h-4 w-4 text-emerald-400" />
+                <span>Ouvir em Voz Alta</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void openAndFetchAmaranteWeather(true)}
+                className="rounded-xl bg-emerald-500 hover:bg-emerald-400 py-2.5 px-3 text-xs font-extrabold text-slate-950 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>🔄 Atualizar Agora</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

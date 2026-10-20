@@ -31,7 +31,9 @@ public class BuddyOverlayService extends Service {
     public static final String ACTION_SHOW_BUBBLE = "com.pbg.deliverybuddy.ACTION_SHOW_BUBBLE";
     public static final String ACTION_HIDE_BUBBLE = "com.pbg.deliverybuddy.ACTION_HIDE_BUBBLE";
     public static final String ACTION_UPDATE_LISTENING = "com.pbg.deliverybuddy.ACTION_UPDATE_LISTENING";
+    public static final String ACTION_WAKE_AND_MAXIMIZE = "com.pbg.deliverybuddy.ACTION_WAKE_AND_MAXIMIZE";
     public static final String EXTRA_IS_LISTENING = "extra_is_listening";
+    public static final String EXTRA_LIVE_CAPTION = "extra_live_caption";
     private static final String CHANNEL_ID = "delivery_buddy_overlay_channel";
     private static final int NOTIFICATION_ID = 4401;
 
@@ -40,6 +42,7 @@ public class BuddyOverlayService extends Service {
     private TextView bubbleView;
     private WindowManager.LayoutParams layoutParams;
     private boolean isListeningState = false;
+    private String liveCaptionText = "";
 
     public static void showBubble(Context context, boolean isListening) {
         if (context == null) return;
@@ -70,10 +73,25 @@ public class BuddyOverlayService extends Service {
     }
 
     public static void updateListeningState(Context context, boolean isListening) {
+        updateListeningStateWithCaption(context, isListening, "");
+    }
+
+    public static void updateListeningStateWithCaption(Context context, boolean isListening, String caption) {
         if (context == null) return;
         Intent svcIntent = new Intent(context, BuddyOverlayService.class);
         svcIntent.setAction(ACTION_UPDATE_LISTENING);
         svcIntent.putExtra(EXTRA_IS_LISTENING, isListening);
+        svcIntent.putExtra(EXTRA_LIVE_CAPTION, caption != null ? caption : "");
+        try {
+            context.startService(svcIntent);
+        } catch (Exception ignored) {
+        }
+    }
+
+    public static void wakeAndMaximizeActivity(Context context) {
+        if (context == null) return;
+        Intent svcIntent = new Intent(context, BuddyOverlayService.class);
+        svcIntent.setAction(ACTION_WAKE_AND_MAXIMIZE);
         try {
             context.startService(svcIntent);
         } catch (Exception ignored) {
@@ -93,12 +111,17 @@ public class BuddyOverlayService extends Service {
             String action = intent.getAction();
             if (ACTION_SHOW_BUBBLE.equals(action)) {
                 isListeningState = intent.getBooleanExtra(EXTRA_IS_LISTENING, false);
+                liveCaptionText = "";
                 showFloatingBubble();
             } else if (ACTION_HIDE_BUBBLE.equals(action)) {
                 removeFloatingBubble();
             } else if (ACTION_UPDATE_LISTENING.equals(action)) {
                 isListeningState = intent.getBooleanExtra(EXTRA_IS_LISTENING, false);
+                liveCaptionText = intent.getStringExtra(EXTRA_LIVE_CAPTION);
+                if (liveCaptionText == null) liveCaptionText = "";
                 updateBubbleVisualStyle();
+            } else if (ACTION_WAKE_AND_MAXIMIZE.equals(action)) {
+                restoreMainActivityToForeground();
             }
         }
         return START_STICKY;
@@ -122,7 +145,7 @@ public class BuddyOverlayService extends Service {
             return;
         }
 
-        int sizePx = dpToPx(62f);
+        int sizePx = dpToPx(64f);
         int overlayType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             : WindowManager.LayoutParams.TYPE_PHONE;
@@ -137,11 +160,11 @@ public class BuddyOverlayService extends Service {
         );
         layoutParams.gravity = Gravity.TOP | Gravity.START;
         layoutParams.x = getResources().getDisplayMetrics().widthPixels - sizePx - dpToPx(12f);
-        layoutParams.y = (int) (getResources().getDisplayMetrics().heightPixels * 0.58f);
+        layoutParams.y = (int) (getResources().getDisplayMetrics().heightPixels * 0.56f);
 
         final TextView tv = new TextView(this);
         tv.setGravity(Gravity.CENTER);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
         tv.setTypeface(Typeface.DEFAULT_BOLD);
         tv.setIncludeFontPadding(false);
         tv.setLineSpacing(0f, 0.95f);
@@ -166,6 +189,7 @@ public class BuddyOverlayService extends Service {
                     } catch (Exception ignored) {
                     }
                     isListeningState = true;
+                    liveCaptionText = "Ouvindo...";
                     updateBubbleVisualStyle();
                     MainActivity activeInstance = MainActivity.getInstance();
                     if (activeInstance != null) {
@@ -185,7 +209,7 @@ public class BuddyOverlayService extends Service {
                         touchStartTime = SystemClock.uptimeMillis();
                         longPressTriggered = false;
                         uiHandler.removeCallbacks(longPressRunnable);
-                        uiHandler.postDelayed(longPressRunnable, 400L);
+                        uiHandler.postDelayed(longPressRunnable, 380L);
                         return true;
 
                     case MotionEvent.ACTION_MOVE:
@@ -193,7 +217,7 @@ public class BuddyOverlayService extends Service {
                             event.getRawX() - initialTouchX,
                             event.getRawY() - initialTouchY
                         );
-                        if (moveDist > 12.0) {
+                        if (moveDist > 14.0) {
                             uiHandler.removeCallbacks(longPressRunnable);
                             layoutParams.x = initialX + (int) (event.getRawX() - initialTouchX);
                             layoutParams.y = initialY + (int) (event.getRawY() - initialTouchY);
@@ -214,8 +238,8 @@ public class BuddyOverlayService extends Service {
                             event.getRawY() - initialTouchY
                         );
                         long elapsed = SystemClock.uptimeMillis() - touchStartTime;
-                        // Short tap (< 350ms, movement < 18px) -> 1-Tap Maximize!
-                        if (!longPressTriggered && upDist < 18.0 && elapsed < 350L) {
+                        // Short tap (< 380ms, movement < 18px) -> 1-Tap Maximize!
+                        if (!longPressTriggered && upDist < 18.0 && elapsed < 380L) {
                             restoreMainActivityToForeground();
                         }
                         return true;
@@ -235,7 +259,9 @@ public class BuddyOverlayService extends Service {
     }
 
     private void restoreMainActivityToForeground() {
-        removeFloatingBubble();
+        // CRITICAL ANDROID 10-16 RULE: Launch MainActivity BEFORE removing bubbleView!
+        // While bubbleView (TYPE_APPLICATION_OVERLAY) is attached to WindowManager,
+        // BuddyOverlayService has OS exemption to bring MainActivity to the foreground from background.
 
         // 1. ActivityManager.moveTaskToFront
         try {
@@ -271,11 +297,19 @@ public class BuddyOverlayService extends Service {
         } catch (Exception ignored) {
         }
 
-        // 3. Direct startActivity fallback
+        // 3. Direct startActivity while overlay window is still visible
         try {
             startActivity(restoreIntent);
         } catch (Exception ignored) {
         }
+
+        // 4. Remove the floating bubble after activity transition starts (220ms)
+        uiHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                removeFloatingBubble();
+            }
+        }, 220L);
     }
 
     private void updateBubbleVisualStyle() {
@@ -283,16 +317,25 @@ public class BuddyOverlayService extends Service {
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.OVAL);
         if (isListeningState) {
-            // Single-shot listening active: Vibrant Emerald Green #10b981
             bg.setColor(Color.parseColor("#10B981"));
             bg.setStroke(dpToPx(3f), Color.WHITE);
             bubbleView.setTextColor(Color.WHITE);
-            bubbleView.setText("DB\n🎙️");
+            if (liveCaptionText != null && !liveCaptionText.trim().isEmpty()) {
+                String shortCap = liveCaptionText.trim();
+                if (shortCap.length() > 10) {
+                    shortCap = shortCap.substring(Math.max(0, shortCap.length() - 10));
+                }
+                bubbleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f);
+                bubbleView.setText("🎙️\n" + shortCap);
+            } else {
+                bubbleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+                bubbleView.setText("DB\n🎙️");
+            }
         } else {
-            // Idle: Dark slate #0f172a with 2dp emerald border
             bg.setColor(Color.parseColor("#0F172A"));
             bg.setStroke(dpToPx(2f), Color.parseColor("#10B981"));
             bubbleView.setTextColor(Color.WHITE);
+            bubbleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
             bubbleView.setText("DB\n↗️");
         }
         bubbleView.setBackground(bg);

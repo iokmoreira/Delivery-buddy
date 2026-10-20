@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Required on Android 11-16 (API 30+) so SpeechRecognizer can bind to system speech recognition service -->
+    <!-- Required on Android 11-16 (API 30+) so SpeechRecognizer and TextToSpeech can bind to system services -->
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
     </queries>
 
@@ -19,7 +22,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.REORDER_TASKS" />
 
-    <!-- Continuous Hands-Free Microphone & Native SpeechRecognizer ("Buddy...") -->
+    <!-- On-Demand Microphone & Native SpeechRecognizer ("Buddy...") -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
@@ -62,7 +65,7 @@
             android:name=".BuddyOverlayService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="location" />
+            android:foregroundServiceType="location|microphone" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

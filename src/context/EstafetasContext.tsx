@@ -875,6 +875,51 @@ interface EstafetasContextValue {
   toggleVoiceMicListening: () => void;
   startContinuousVoiceMic: () => void;
   stopContinuousVoiceMic: () => void;
+  // Live Open-Meteo Amarante Weather Modal & Rain Bonus Toggle
+  isAmaranteWeatherModalOpen: boolean;
+  setIsAmaranteWeatherModalOpen: (open: boolean) => void;
+  amaranteLiveWeather: AmaranteLiveWeatherState;
+  isLoadingAmaranteWeather: boolean;
+  rainBonusFinanceActive: boolean;
+  toggleRainBonusFinanceActive: () => void;
+  openAndFetchAmaranteWeather: (speakNow?: boolean) => Promise<void>;
+}
+
+export interface AmaranteLiveWeatherState {
+  temperatureC: number;
+  precipitationMm: number;
+  rainMm: number;
+  windSpeedKmh: number;
+  weatherCode: number;
+  conditionLabel: string;
+  conditionEmoji: string;
+  isRainingNow: boolean;
+  updatedAt: string;
+}
+
+function describeWmoWeatherCodePt(
+  code: number,
+  rainMm: number
+): { label: string; emoji: string } {
+  if (rainMm > 2.5 || code >= 80) {
+    return { label: 'Chuva Moderada a Forte', emoji: '🌧️' };
+  }
+  if (rainMm > 0 || (code >= 51 && code <= 67)) {
+    return { label: 'Chuva Fraca / Piso Molhado', emoji: '🌦️' };
+  }
+  if (code === 0) {
+    return { label: 'Céu Limpo', emoji: '☀️' };
+  }
+  if (code === 1 || code === 2) {
+    return { label: 'Parcialmente Nublado', emoji: '⛅' };
+  }
+  if (code === 3) {
+    return { label: 'Céu Nublado', emoji: '☁️' };
+  }
+  if (code === 45 || code === 48) {
+    return { label: 'Nevoeiro Matinal', emoji: '🌫️' };
+  }
+  return { label: 'Tempo Estável', emoji: '🌤️' };
 }
 
 const DEFAULT_CARGO_CHECKLIST: CargoSplitChecklistState = {
@@ -6483,6 +6528,204 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     };
   }, [speakTextPt]);
 
+  // =========================================================================
+  // LIVE OPEN-METEO AMARANTE WEATHER ENGINE & RAIN BONUS TOGGLE
+  // =========================================================================
+  const [isAmaranteWeatherModalOpen, setIsAmaranteWeatherModalOpen] =
+    useState<boolean>(false);
+  const [isLoadingAmaranteWeather, setIsLoadingAmaranteWeather] =
+    useState<boolean>(false);
+  const [rainBonusFinanceActive, setRainBonusFinanceActive] = useState<boolean>(
+    () => {
+      try {
+        return (
+          localStorage.getItem('buddy_rain_bonus_finance_active_v1') === 'true'
+        );
+      } catch {
+        return false;
+      }
+    }
+  );
+  const [amaranteLiveWeather, setAmaranteLiveWeather] =
+    useState<AmaranteLiveWeatherState>(() => ({
+      temperatureC: 16.5,
+      precipitationMm: 0.0,
+      rainMm: 0.0,
+      windSpeedKmh: 9.0,
+      weatherCode: 1,
+      conditionLabel: 'Parcialmente Nublado',
+      conditionEmoji: '⛅',
+      isRainingNow: false,
+      updatedAt: new Date().toLocaleTimeString('pt-PT', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    }));
+
+  const toggleRainBonusFinanceActive = useCallback(() => {
+    setRainBonusFinanceActive((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(
+          'buddy_rain_bonus_finance_active_v1',
+          String(next)
+        );
+      } catch {
+        // ignore
+      }
+      speakTextPt(
+        next
+          ? 'Bónus de Chuva ativado nas Finanças. Tarifas ajustadas para piso molhado.'
+          : 'Bónus de Chuva desativado nas Finanças.'
+      );
+      return next;
+    });
+  }, [speakTextPt]);
+
+  const openAndFetchAmaranteWeather = useCallback(
+    async (speakNow = true) => {
+      setIsBubbleMinimized(false);
+      setIsAmaranteWeatherModalOpen(true);
+      setIsLoadingAmaranteWeather(true);
+      try {
+        const res = await fetch(
+          'https://api.open-meteo.com/v1/forecast?latitude=41.2704&longitude=-8.0818&current=temperature_2m,precipitation,rain,weather_code,wind_speed_10m&timezone=Europe%2FLisbon'
+        );
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const data = (await res.json()) as {
+          current?: {
+            temperature_2m?: number;
+            precipitation?: number;
+            rain?: number;
+            weather_code?: number;
+            wind_speed_10m?: number;
+          };
+        };
+        const cur = data?.current || {};
+        const temp =
+          typeof cur.temperature_2m === 'number'
+            ? Number(cur.temperature_2m.toFixed(1))
+            : 16.5;
+        const precip =
+          typeof cur.precipitation === 'number'
+            ? Number(cur.precipitation.toFixed(1))
+            : 0.0;
+        const rain =
+          typeof cur.rain === 'number'
+            ? Number(cur.rain.toFixed(1))
+            : precip;
+        const wind =
+          typeof cur.wind_speed_10m === 'number'
+            ? Number(cur.wind_speed_10m.toFixed(1))
+            : 9.0;
+        const code =
+          typeof cur.weather_code === 'number' ? cur.weather_code : 1;
+        const desc = describeWmoWeatherCodePt(code, Math.max(rain, precip));
+        const raining = rain > 0 || precip > 0 || code >= 51;
+        const nowTime = new Date().toLocaleTimeString('pt-PT', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        const nextWeather: AmaranteLiveWeatherState = {
+          temperatureC: temp,
+          precipitationMm: precip,
+          rainMm: rain,
+          windSpeedKmh: wind,
+          weatherCode: code,
+          conditionLabel: desc.label,
+          conditionEmoji: desc.emoji,
+          isRainingNow: raining,
+          updatedAt: nowTime,
+        };
+        setAmaranteLiveWeather(nextWeather);
+        setIsLoadingAmaranteWeather(false);
+
+        if (speakNow) {
+          const tempSpoken = String(Math.round(temp));
+          const rainNote =
+            rain > 0
+              ? `, com ${rain.toFixed(1).replace('.', ' vírgula ')} milímetros de chuva`
+              : ', sem chuva neste momento';
+          speakTextPt(
+            `Clima em Amarante: ${tempSpoken} graus, ${desc.label.toLowerCase()}${rainNote}. Vento a ${Math.round(wind)} quilómetros por hora.`
+          );
+        }
+      } catch {
+        setIsLoadingAmaranteWeather(false);
+        if (speakNow) {
+          speakTextPt(
+            `Clima em Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}.`
+          );
+        }
+      }
+    },
+    [
+      amaranteLiveWeather.conditionLabel,
+      amaranteLiveWeather.temperatureC,
+      setIsBubbleMinimized,
+      speakTextPt,
+    ]
+  );
+
+  // Fetch initial Amarante weather silently on mount so the header/modal always has real live data
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(
+          'https://api.open-meteo.com/v1/forecast?latitude=41.2704&longitude=-8.0818&current=temperature_2m,precipitation,rain,weather_code,wind_speed_10m&timezone=Europe%2FLisbon'
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          current?: {
+            temperature_2m?: number;
+            precipitation?: number;
+            rain?: number;
+            weather_code?: number;
+            wind_speed_10m?: number;
+          };
+        };
+        const cur = data?.current;
+        if (!cur) return;
+        const temp =
+          typeof cur.temperature_2m === 'number'
+            ? Number(cur.temperature_2m.toFixed(1))
+            : 16.5;
+        const precip =
+          typeof cur.precipitation === 'number'
+            ? Number(cur.precipitation.toFixed(1))
+            : 0.0;
+        const rain =
+          typeof cur.rain === 'number' ? Number(cur.rain.toFixed(1)) : precip;
+        const wind =
+          typeof cur.wind_speed_10m === 'number'
+            ? Number(cur.wind_speed_10m.toFixed(1))
+            : 9.0;
+        const code =
+          typeof cur.weather_code === 'number' ? cur.weather_code : 1;
+        const desc = describeWmoWeatherCodePt(code, Math.max(rain, precip));
+        setAmaranteLiveWeather({
+          temperatureC: temp,
+          precipitationMm: precip,
+          rainMm: rain,
+          windSpeedKmh: wind,
+          weatherCode: code,
+          conditionLabel: desc.label,
+          conditionEmoji: desc.emoji,
+          isRainingNow: rain > 0 || precip > 0 || code >= 51,
+          updatedAt: new Date().toLocaleTimeString('pt-PT', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        });
+      } catch {
+        // ignore offline
+      }
+    })();
+  }, []);
+
   const switchOrCreateNewCourierProfileOnDevice = useCallback(() => {
     const freshDeviceId = resetAndGenerateNewCourierUuid();
     const blankProfile: RealCourierMapProfile = {
@@ -6948,6 +7191,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         lower.includes('chat') ||
         lower.includes('social') ||
         lower.includes('radio') ||
+        lower.includes('buddys') ||
+        lower.includes('ajustes') ||
+        lower.includes('inicio') ||
+        lower.includes('início') ||
+        lower.includes('clima') ||
+        lower.includes('tempo') ||
+        lower.includes('meteorologia') ||
+        lower.includes('chuva') ||
         lower.includes('acordo') ||
         lower.includes('prova') ||
         lower.includes('dossie') ||
@@ -6980,6 +7231,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         }
         commandMatched = '"Buddy maximizar" (Tela Aberta)';
         actionSummary = 'Tela aberta.';
+        showLiveMicTranscriptFeedback(
+          `✅ Comando: "${clean}" → A abrir Delivery Buddy`
+        );
         speakTextPt('Tela aberta.');
         const resultObj = {
           phrase: clean,
@@ -7003,6 +7257,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         stopAllLiveVoiceTimersAndRec();
         setEphemeralVoiceOverlay(null);
         setLiveVoiceTranscription(null);
+        showLiveMicTranscriptFeedback(
+          `✅ Comando: "${clean}" → A minimizar para Bolha DB`
+        );
         setIsBubbleMinimized(true);
         commandMatched = '"Buddy minimizar" (Modo Minimizado Ativo)';
         actionSummary = 'Modo minimizado.';
@@ -7425,29 +7682,19 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         actionSummary = tts;
       } else if (
         lower.includes('clima') ||
-        lower.includes('tempo hoje') ||
+        lower.includes('tempo') ||
+        lower.includes('meteorologia') ||
+        lower.includes('como está o tempo') ||
+        lower.includes('como esta o tempo') ||
+        lower.includes('vai chover') ||
         lower.includes('chuva')
       ) {
-        commandMatched = '"O clima para a localização"';
-        const dataset =
-          SEED_REGIONAL_EXPLORER_DATA.find(
-            (r) => r.regionName === state.selectedRegionName
-          ) || SEED_REGIONAL_EXPLORER_DATA[0];
-        const tts = `Clima atual em ${dataset.regionName}: ${dataset.weatherSummary}. Vento fraco a moderado. Recomendado manter distância de segurança em calçada e carris.`;
-        triggerEphemeralOverlayCard({
-          cardCategory: 'CLIMA',
-          commandSpoken: '"O clima para a localização"',
-          title: `Previsão de Clima & Piso • ${dataset.regionName}`,
-          subtitle: 'Meteorologia tática para 2 rodas',
-          primaryMetricLabel: 'Condição Atual',
-          primaryMetricValue: dataset.weatherSummary,
-          secondaryDetails: [
-            'Vento: 14 km/h NO • Visibilidade boa',
-            'Atenção a travagens em calçada portuguesa e faixas pintadas',
-          ],
-          spokenTextPtBr: tts,
-        });
-        actionSummary = tts;
+        commandMatched = '"Buddy clima" (Clima Atual em Amarante)';
+        showLiveMicTranscriptFeedback(
+          `✅ Comando: "${clean}" → A abrir Clima de Amarante`
+        );
+        void openAndFetchAmaranteWeather(true);
+        actionSummary = `Clima Atual em Amarante: ${amaranteLiveWeather.temperatureC.toFixed(1)} °C, ${amaranteLiveWeather.conditionLabel}, chuva ${amaranteLiveWeather.rainMm.toFixed(1)} mm e vento ${amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h.`;
       } else if (
         lower.includes('enviar mensagem para') ||
         lower.includes('mandar mensagem para')
@@ -7801,35 +8048,49 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         lower.includes('calculadora') ||
         lower.includes('predefini') ||
         lower.includes('config') ||
-        lower.includes('seguran')
+        lower.includes('seguran') ||
+        lower.includes('ajustes') ||
+        lower.includes('definicoes') ||
+        lower.includes('definições')
       ) {
-        commandMatched = '"Abrir Predefinições Privadas"';
-        actionSummary =
-          'Página de Predefinições Privadas, Enquadramento Fiscal e Veículo aberta.';
+        commandMatched = '"Buddy ajustes" (Abrir Ajustes)';
+        actionSummary = 'A abrir Ajustes e Predefinições.';
         setIsBubbleMinimized(false);
-        setCourierWorkspaceSection('AREA_PRIVADA');
-        setActiveTab('calculadora');
-        speakTextPt('Abrindo suas Predefinições Privadas.');
-      } else if (lower.includes('scanner')) {
-        commandMatched = '"Abrir Scanner"';
-        actionSummary =
-          'Página do Scanner de Ofertas aberta na sua Área Privada.';
+        setActiveTab('menu_mais');
+        speakTextPt('Abrindo Ajustes.');
+      } else if (
+        lower.includes('scanner') ||
+        lower.includes('inicio') ||
+        lower.includes('início')
+      ) {
+        commandMatched = '"Buddy início" (Abrir Início)';
+        actionSummary = 'A abrir Início e Scanner de Ofertas.';
         setIsBubbleMinimized(false);
         setCourierWorkspaceSection('AREA_PRIVADA');
         setActiveTab('scanner');
-        speakTextPt('Abrindo Scanner de ofertas.');
+        speakTextPt('Abrindo Início.');
+      } else if (
+        lower.includes('buddys') ||
+        lower.includes('amigos') ||
+        lower.includes('comunidade')
+      ) {
+        commandMatched = '"Buddy buddys" (Abrir Social Buddys)';
+        actionSummary = 'A abrir Comunidade Buddys e Rádio.';
+        setIsBubbleMinimized(false);
+        setCourierWorkspaceSection('AREA_PUBLICA_SOCIAL');
+        setActiveTab('walkietalkie');
+        speakTextPt('Abrindo Social Buddys.');
       } else if (
         lower.includes('finan') ||
         lower.includes('carteira') ||
         lower.includes('recompensa')
       ) {
-        commandMatched = '"Abrir Finanças Privadas"';
-        actionSummary =
-          'Página de Finanças Privadas, Carteira Glovo e Metas aberta.';
+        commandMatched = '"Buddy finanças" (Abrir Finanças)';
+        actionSummary = 'A abrir Finanças e Metas.';
         setIsBubbleMinimized(false);
         setCourierWorkspaceSection('AREA_PRIVADA');
         setActiveTab('financas');
-        speakTextPt('Abrindo Finanças Privadas e Metas.');
+        speakTextPt('Abrindo Finanças e Metas.');
       } else if (lower.includes('pausar') || lower.includes('retomar')) {
         commandMatched = '"Pausar Aplicativo"';
         const nextPaused = !state.isAppPaused;
@@ -8171,9 +8432,29 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         setLiveVoiceTranscription(null);
         commandMatched = `Comando não reconhecido: "${clean}"`;
         actionSummary =
-          "Comando não reconhecido — tente 'Aceitar', 'Minimizar', 'Maximizar' ou 'Mapa'";
-        showLiveMicTranscriptFeedback(actionSummary);
+          "Comando não reconhecido — tente 'Buddy clima', 'Aceitar', 'Minimizar', 'Maximizar' ou 'Mapa'";
+        showLiveMicTranscriptFeedback(`⚠️ ${actionSummary}`);
         speakTextPt('Não entendi, repita o comando.');
+      }
+
+      if (!commandMatched.startsWith('Comando não reconhecido')) {
+        const shortLabel = lower.includes('clima') ||
+          lower.includes('tempo') ||
+          lower.includes('meteorologia') ||
+          lower.includes('chuva')
+          ? 'A abrir Clima de Amarante'
+          : lower.includes('mapa')
+            ? 'A abrir Mapa de Amarante'
+            : lower.includes('finan')
+              ? 'A abrir Finanças'
+              : lower.includes('inicio') || lower.includes('início') || lower.includes('scanner')
+                ? 'A abrir Início'
+                : lower.includes('buddys') || lower.includes('chat')
+                  ? 'A abrir Social Buddys'
+                  : lower.includes('ajustes')
+                    ? 'A abrir Ajustes'
+                    : commandMatched.replace(/^["“]|["”]$/g, '');
+        showLiveMicTranscriptFeedback(`✅ Comando: "${clean}" → ${shortLabel}`);
       }
 
       const resultObj = {
@@ -8223,6 +8504,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       deviceScreenProfile.screenAspectRatio,
       recordMarketTelemetrySnapshot,
       marketTelemetry,
+      openAndFetchAmaranteWeather,
+      amaranteLiveWeather.temperatureC,
+      amaranteLiveWeather.conditionLabel,
+      amaranteLiveWeather.rainMm,
+      amaranteLiveWeather.windSpeedKmh,
     ]
   );
 
@@ -8255,8 +8541,10 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       const latestRaw = (rawTranscript || '').trim();
       if (!latestRaw) return false;
 
-      // 1. Show the Live Transcript Feedback Pill near the green bubble
-      showLiveMicTranscriptFeedback(latestRaw);
+      // 1. Show real-time partial words inside the floating transcription HUD
+      showLiveMicTranscriptFeedback(
+        isFinal ? `🗣️ Ouvido: "${latestRaw}"` : `🗣️ Ouvindo: "${latestRaw}..."`
+      );
 
       // Also update the 45% live voice transcription drawer if open
       setLiveVoiceTranscription((prev) =>
@@ -8322,6 +8610,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         'tela inteira',
         'esconder',
         'ocultar',
+        'clima',
+        'tempo',
+        'meteorologia',
+        'como esta o tempo',
+        'vai chover',
+        'chuva',
         'aceitar',
         'recusar',
         'rejeitar',
@@ -8338,6 +8632,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         'finanças',
         'inicio',
         'início',
+        'buddys',
+        'ajustes',
         'quantos estafetas',
         'estafetas online',
         'quanto ta pagando',
@@ -8587,7 +8883,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     hasUnlockedMicOnFirstTouchRef.current = true;
     keepVoiceListeningRef.current = true;
     setIsListeningSpeechRecognition(true);
-    showLiveMicTranscriptFeedback('🟢 Ouvindo comando...');
+    showLiveMicTranscriptFeedback('🗣️ Ouvindo: fale agora (ex: "Buddy clima", "Buddy minimizar")...');
     startContinuousRecognitionInstance();
   }, [showLiveMicTranscriptFeedback, startContinuousRecognitionInstance]);
 
@@ -11454,6 +11750,13 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         toggleVoiceMicListening,
         startContinuousVoiceMic,
         stopContinuousVoiceMic,
+        isAmaranteWeatherModalOpen,
+        setIsAmaranteWeatherModalOpen,
+        amaranteLiveWeather,
+        isLoadingAmaranteWeather,
+        rainBonusFinanceActive,
+        toggleRainBonusFinanceActive,
+        openAndFetchAmaranteWeather,
       }}
     >
       {children}

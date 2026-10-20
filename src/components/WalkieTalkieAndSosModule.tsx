@@ -381,32 +381,14 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                       className="flex-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-2.5 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
                     >
                       <UserPlus className="h-4 w-4" />
-                      <span>Enviar Request de Amizade</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        simulateCourierAcceptContactPermission(popupCourier.id)
-                      }
-                      className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 py-2.5 px-3 text-[11px] font-semibold cursor-pointer transition shrink-0"
-                    >
-                      Simular Aceitação
+                      <span>Enviar Pedido de Amizade</span>
                     </button>
                   </div>
                 ) : (
                   <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-3 flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-zinc-300">
-                      ◌ Request de Amizade Enviado (Aguardando...)
+                      ◌ Pedido de Amizade Enviado (Aguardando aceitação...)
                     </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        simulateCourierAcceptContactPermission(popupCourier.id)
-                      }
-                      className="rounded-xl bg-white text-zinc-950 px-3 py-1.5 text-xs font-bold cursor-pointer"
-                    >
-                      Simular Aceitação
-                    </button>
                   </div>
                 )}
               </div>
@@ -871,10 +853,10 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
                   <p className="text-xs font-bold text-zinc-100">
-                    Modo Produção Real Ativo • 0 estafetas conectados no momento em Amarante
+                    Nenhum colega online neste momento em Amarante
                   </p>
                   <p className="text-[11px] text-zinc-400 max-w-xs leading-snug">
-                    Todos os estafetas fictícios de demonstração foram ocultados. Registe o seu perfil para aparecer imediatamente online em Amarante (25 km).
+                    Configura o teu perfil para ficares visível para outros estafetas na região de Amarante.
                   </p>
                   <button
                     type="button"
@@ -882,7 +864,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                     className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition"
                   >
                     <UserCheck className="h-4 w-4" />
-                    <span>Entrar Online no Mapa &amp; Guardar no Supabase</span>
+                    <span>Configurar Meu Perfil</span>
                   </button>
                 </div>
               )
@@ -1047,15 +1029,9 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                           </button>
                         </>
                       ) : courier.contactPermission === 'PENDENTE' ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            simulateCourierAcceptContactPermission(courier.id)
-                          }
-                          className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1.5 text-[10px] font-semibold cursor-pointer"
-                        >
-                          Simular Aceite
-                        </button>
+                        <span className="rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 px-2.5 py-1.5 text-[10px] font-semibold">
+                          Pendente
+                        </span>
                       ) : (
                         <button
                           type="button"
@@ -1294,12 +1270,10 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                   {channelMessages.length === 0 ? (
                     <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-4 text-center space-y-1">
                       <p className="text-xs font-bold text-zinc-100">
-                        {counts.total > 0
-                          ? `Modo Produção Real Ativo • ${counts.total} estafeta${counts.total === 1 ? ' conectado (Tu)' : 's conectados'} em Amarante`
-                          : 'Modo Produção Real Ativo • 0 estafetas conectados no momento em Amarante'}
+                        Sem transmissões recentes no Rádio de Amarante
                       </p>
                       <p className="text-[11px] text-zinc-400">
-                        0 transmissões no turno atual. Prime &quot;Premir para Falar&quot; acima para transmitir à rede.
+                        Usa o botão de voz ou envia uma mensagem rápida acima para comunicar com os colegas da zona.
                       </p>
                     </div>
                   ) : (
@@ -1403,12 +1377,10 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
             {socialBuddyPosts.length === 0 ? (
               <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-4 text-center space-y-1">
                 <p className="text-xs font-bold text-zinc-100">
-                  {counts.total > 0
-                    ? `Modo Produção Real Ativo • ${counts.total} estafeta${counts.total === 1 ? ' conectado (Tu)' : 's conectados'} em Amarante`
-                    : 'Modo Produção Real Ativo • 0 estafetas conectados no momento em Amarante'}
+                  Sem publicações hoje em Amarante
                 </p>
                 <p className="text-[11px] text-zinc-400">
-                  Nenhuma publicação real no Blog de Amarante ainda. Seja o primeiro a publicar uma dica de rua!
+                  Partilha uma dica de rua ou alerta de trânsito com os colegas da zona!
                 </p>
               </div>
             ) : (

@@ -225,12 +225,12 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
           </div>
           <div className="min-w-0">
             <span className="block text-[11px] font-extrabold text-zinc-100 truncate">
-              Foto de Perfil no Mapa &amp; Buddys
+              Foto de Perfil (Opcional)
             </span>
             <span className="block text-[10px] text-zinc-400">
               {compressedPreviewUrl
-                ? `Auto-comprimida 120x120px (${compressedSizeKb || 'WebP/JPEG'} • 0 Custo IA)`
-                : 'Recorte circular HTML5 Canvas (120x120px • 0 API Cost)'}
+                ? 'Foto pronta para o teu perfil'
+                : 'Aparece no teu ícone em Amarante'}
             </span>
           </div>
         </div>
@@ -239,10 +239,10 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow-sm"
+            className="rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-3 py-1.5 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow-sm"
           >
-            <Camera className="h-3.5 w-3.5 shrink-0" />
-            <span>📷 Importar / Escolher Foto de Perfil</span>
+            <Camera className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+            <span>📷 Escolher Foto (Opcional)</span>
           </button>
           {compressedPreviewUrl && (
             <button
@@ -270,14 +270,14 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
         <div className="rounded-lg bg-zinc-900/90 border border-emerald-500/30 p-2.5 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-extrabold text-emerald-300">
-              ✂️ Ajustar Rosto no Círculo (Print Uber/Glovo ou Galeria • 0 Tokens IA)
+              ✂️ Ajustar Foto no Círculo
             </span>
             <button
               type="button"
               onClick={() => setIsCropping(false)}
               className="rounded bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-0.5 text-[10px] font-extrabold cursor-pointer"
             >
-              ✓ Concluir Recorte
+              ✓ Concluir
             </button>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -344,18 +344,17 @@ export const ActivePlatformsSelectorGroup: React.FC<{
   titleOverride?: string;
 }> = ({ selectedPlatforms, onTogglePlatform, titleOverride }) => {
   return (
-    <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 space-y-2">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="text-[11px] font-extrabold text-zinc-100">
-          {titleOverride ||
-            'Plataformas em que Trabalhas (Oculta as restantes da tela):'}
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-extrabold text-zinc-200">
+          {titleOverride || 'Em que aplicações fazes entregas?'}
         </span>
-        <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[9px] font-mono font-bold text-emerald-300">
-          {selectedPlatforms.length}/3 Ativas
+        <span className="text-[10px] font-semibold text-emerald-400">
+          {selectedPlatforms.length} selecionada(s)
         </span>
       </div>
 
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-3 gap-2">
         {ALL_PLATFORM_OPTIONS.map((platform) => {
           const isChecked = selectedPlatforms.includes(platform);
           const isLastRemaining = isChecked && selectedPlatforms.length === 1;
@@ -366,35 +365,21 @@ export const ActivePlatformsSelectorGroup: React.FC<{
               onClick={() => onTogglePlatform(platform)}
               title={
                 isLastRemaining
-                  ? 'Mantém pelo menos 1 plataforma ativa'
-                  : `Alternar ${platform}`
+                  ? 'Mantém pelo menos 1 aplicação selecionada'
+                  : `Selecionar ${platform}`
               }
-              className={`rounded-xl py-2 px-1.5 text-[11px] font-extrabold flex items-center justify-center gap-1 border transition cursor-pointer whitespace-nowrap ${
+              className={`rounded-xl py-2.5 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 border transition cursor-pointer whitespace-nowrap ${
                 isChecked
-                  ? 'bg-emerald-600/25 border-emerald-500 text-white shadow-sm'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                  ? 'bg-emerald-600 text-white border-emerald-400 shadow-sm'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
               }`}
             >
-              <span className="font-mono text-[10px]">
-                {isChecked ? '[✓]' : '[ ]'}
-              </span>
+              <span>{isChecked ? '✓' : '+'}</span>
               <span>{platform}</span>
             </button>
           );
         })}
       </div>
-
-      <p className="text-[10px] text-zinc-400 leading-snug">
-        {selectedPlatforms.length === 1 ? (
-          <>
-            Modo <strong className="text-emerald-400">Plataforma Única ({selectedPlatforms[0]})</strong>: Aba &ldquo;Global (Cruzado)&rdquo; e matriz comparativa ocultadas para maximizar o espaço no ecrã.
-          </>
-        ) : (
-          <>
-            Ativas: <strong className="text-zinc-200">{selectedPlatforms.join(' + ')}</strong>. Plataformas desmarcadas são ocultadas em Finanças, Início, Mapa e Buddys para ganhar espaço.
-          </>
-        )}
-      </p>
     </div>
   );
 };
@@ -516,94 +501,68 @@ export const InteractiveManualAndHelpDrawer: React.FC = () => {
   return (
     <>
       {isCourierRegistrationModalOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+        <div className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <form
             onSubmit={handleSaveCourierRegistration}
-            className="rounded-2xl bg-zinc-900 border border-emerald-500/40 max-w-[430px] w-full p-4 shadow-2xl space-y-3 text-zinc-100 my-auto max-h-[94vh] overflow-y-auto"
+            className="rounded-2xl bg-zinc-900 border border-emerald-500/40 max-w-[420px] w-full p-5 shadow-2xl space-y-4 text-zinc-100 my-auto"
           >
-            <div className="flex items-start justify-between gap-2 border-b border-zinc-800 pb-2.5">
+            <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
               <div>
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <h2 className="text-sm font-extrabold text-white">
-                    {realCourierProfile?.isRegistered
-                      ? 'Editar Meu Perfil / Registo'
-                      : 'Bem-vindo ao Delivery Buddy — Registe o Seu Perfil no Mapa'}
-                  </h2>
-                </div>
-                <p className="text-[11px] text-zinc-400 mt-0.5">
-                  Sessão isolada neste telemóvel sincronizada em tempo real com{' '}
-                  <code className="text-emerald-300 font-mono">
-                    public.couriers
-                  </code>{' '}
-                  (Mapa &amp; Buddys).
+                <h2 className="text-base font-extrabold text-white">
+                  Boas-vindas ao Delivery Buddy
+                </h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  O teu copiloto de entregas em Amarante
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsCourierRegistrationModalOpen(false)}
-                className="p-1 rounded-lg bg-zinc-950 text-zinc-400 hover:text-zinc-100 cursor-pointer shrink-0"
+                className="p-1.5 rounded-xl bg-zinc-950 text-zinc-400 hover:text-zinc-100 cursor-pointer shrink-0"
+                aria-label="Fechar"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Quick Account Switch / Fresh Device Profile Reset + Ghost Pin Cleanup */}
-            <div className="grid grid-cols-1 gap-1.5">
-              <button
-                type="button"
-                onClick={handleResetToFreshDeviceProfile}
-                style={{ backgroundColor: '#d97706', color: '#ffffff' }}
-                className="w-full rounded-xl bg-amber-600 hover:bg-amber-500 border border-amber-400 text-white py-2 px-3 text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
-              >
-                <span>🔄 Não és tu? Criar Novo Perfil neste Telemóvel</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => void cleanupGhostDuplicatePinsNow()}
-                style={{ backgroundColor: '#1e293b', color: '#f8fafc' }}
-                className="w-full rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-100 py-1.5 px-3 text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition"
-              >
-                <span>🧹 Limpar Pinos Fantasmas Antigos (Ex: Caio M.)</span>
-              </button>
-            </div>
+            <div className="space-y-4">
+              {/* 1. Como queres ser chamado? + Foto Opcional */}
+              <div className="space-y-2.5">
+                <div>
+                  <label className="block text-xs font-extrabold text-zinc-200 mb-1.5">
+                    Como queres ser chamado?
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    placeholder="Ex: Caio"
+                    className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 text-sm font-bold text-white focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
 
-            <div className="space-y-2.5">
-              {/* Zero-AI Profile Photo Uploader & Circle Cropper (0 API Cost) */}
-              <ZeroAiProfilePhotoUploader
-                avatarUrl={regAvatarUrl}
-                courierName={regName || 'Novo Estafeta'}
-                onAvatarCompressedChange={(dataUrl) => setRegAvatarUrl(dataUrl)}
-                compact
-              />
-
-              {/* Active Platforms Selector (Uber Eats, Glovo, Bolt Food) */}
-              <ActivePlatformsSelectorGroup
-                selectedPlatforms={regPlatforms}
-                onTogglePlatform={handleToggleRegPlatform}
-              />
-
-              {/* 1. Nome / Apelido no Mapa */}
-              <div>
-                <label className="block text-[11px] font-bold text-zinc-300 mb-1">
-                  1. Nome / Apelido no Mapa
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={regName}
-                  onChange={(e) => setRegName(e.target.value)}
-                  placeholder="Ex: João S. / Pedro M. (O teu nome)"
-                  className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs font-bold text-white focus:border-emerald-500 focus:outline-none"
+                <ZeroAiProfilePhotoUploader
+                  avatarUrl={regAvatarUrl}
+                  courierName={regName || 'Estafeta'}
+                  onAvatarCompressedChange={(dataUrl) => setRegAvatarUrl(dataUrl)}
+                  compact
                 />
               </div>
 
-              {/* 2. Veículo */}
+              {/* 2. Em que aplicações fazes entregas? */}
+              <ActivePlatformsSelectorGroup
+                selectedPlatforms={regPlatforms}
+                onTogglePlatform={handleToggleRegPlatform}
+                titleOverride="Em que aplicações fazes entregas?"
+              />
+
+              {/* 3. Qual é o teu veículo principal? */}
               <div>
-                <label className="block text-[11px] font-bold text-zinc-300 mb-1">
-                  2. Veículo Operacional
+                <label className="block text-xs font-extrabold text-zinc-200 mb-1.5">
+                  Qual é o teu veículo principal?
                 </label>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 gap-2">
                   {VEHICLE_OPTIONS.map((v) => {
                     const active = regVehicle === v;
                     return (
@@ -611,9 +570,9 @@ export const InteractiveManualAndHelpDrawer: React.FC = () => {
                         key={v}
                         type="button"
                         onClick={() => setRegVehicle(v)}
-                        className={`rounded-xl py-2 px-2.5 text-xs font-bold text-left border transition cursor-pointer ${
+                        className={`rounded-xl py-2.5 px-3 text-xs font-extrabold text-left border transition cursor-pointer ${
                           active
-                            ? 'bg-emerald-600 text-white border-emerald-400'
+                            ? 'bg-emerald-600 text-white border-emerald-400 shadow-sm'
                             : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
                         }`}
                       >
@@ -623,61 +582,15 @@ export const InteractiveManualAndHelpDrawer: React.FC = () => {
                   })}
                 </div>
               </div>
-
-              {/* 3. Zona Base (Amarante 25km) */}
-              <div>
-                <label className="block text-[11px] font-bold text-zinc-300 mb-1">
-                  3. Zona Base (Amarante 25km)
-                </label>
-                <select
-                  value={regZone}
-                  onChange={(e) =>
-                    setRegZone(e.target.value as AmaranteBaseZoneOption)
-                  }
-                  className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs font-bold text-white focus:border-emerald-500 focus:outline-none"
-                >
-                  {AMARANTE_ZONE_OPTIONS.map((z) => (
-                    <option key={z} value={z}>
-                      {z}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 4. Auto-Detected Device Signature (Read-Only Badge) */}
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Smartphone className="h-4 w-4 text-indigo-400 shrink-0" />
-                  <div className="min-w-0">
-                    <span className="block text-[10px] font-semibold text-zinc-400">
-                      4. Assinatura Auto-Detetada do Dispositivo
-                    </span>
-                    <span className="block text-xs font-extrabold text-emerald-300 truncate">
-                      {detectedOsBadge} • Tela{' '}
-                      {deviceScreenProfile.screenAspectRatio} (
-                      {deviceScreenProfile.deviceModel})
-                    </span>
-                  </div>
-                </div>
-                <span className="rounded bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-300 shrink-0">
-                  ID:{' '}
-                  {(
-                    realCourierProfile?.id || getOrCreatePersistentCourierUuid()
-                  ).slice(0, 8)}
-                </span>
-              </div>
             </div>
 
             <button
               type="submit"
               disabled={isSavingReg || !regName.trim()}
-              className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white py-2.5 px-4 text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg cursor-pointer transition"
+              className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 py-3 px-4 text-sm font-black flex items-center justify-center gap-2 shadow-lg cursor-pointer transition"
             >
-              <UserCheck className="h-4 w-4 shrink-0" />
               <span>
-                {isSavingReg
-                  ? 'A Sincronizar GPS & Supabase...'
-                  : 'Entrar Online no Mapa & Guardar no Supabase'}
+                {isSavingReg ? 'A guardar...' : 'Começar a Trabalhar →'}
               </span>
             </button>
           </form>
