@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Navigation,
-  Compass,
   MapPin,
   AlertTriangle,
   Users,
@@ -669,6 +668,7 @@ export const ShiftRadarModule: React.FC = () => {
   const [mapStyleMode, setMapStyleMode] = useState<
     'MAPA_NEON' | 'TRANSITO_GOOGLE' | 'SATELITE'
   >('MAPA_NEON');
+  const [isFullRoadView, setIsFullRoadView] = useState<boolean>(false);
   const [isHubSelectorModalOpen, setIsHubSelectorModalOpen] =
     useState<boolean>(false);
   const [isAutoFollowActive, setIsAutoFollowActive] = useState<boolean>(true);
@@ -1673,6 +1673,38 @@ export const ShiftRadarModule: React.FC = () => {
     }
   };
 
+  const handleToggleFullRoadView = useCallback(() => {
+    setIsFullRoadView((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('buddy-map-fullscreen-state', {
+            detail: { expanded: next },
+          })
+        );
+      }
+      window.setTimeout(() => {
+        leafletMapRef.current?.invalidateSize();
+      }, 60);
+      window.setTimeout(() => {
+        leafletMapRef.current?.invalidateSize();
+      }, 220);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('buddy-map-fullscreen-state', {
+            detail: { expanded: false },
+          })
+        );
+      }
+    };
+  }, []);
+
   const handleOpenExternalNav = (app: 'WAZE' | 'GMAPS') => {
     const destQuery =
       hasRealActiveDelivery && activeDeliveryLifecycle.destinationName
@@ -1689,157 +1721,35 @@ export const ShiftRadarModule: React.FC = () => {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  const getDockIconButtonStyle = (isActive = false): React.CSSProperties => {
+    if (isActive) {
+      return {
+        backgroundColor: '#00E5FF',
+        borderColor: '#00E5FF',
+        color: '#090D16',
+        boxShadow: '0 0 14px rgba(0, 229, 255, 0.55)',
+      };
+    }
+    return {
+      backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
+      borderColor: '#00E5FF',
+      color: isDaylight ? '#00B8D4' : '#00E5FF',
+      boxShadow: isDaylight
+        ? '0 4px 12px rgba(9, 13, 22, 0.14)'
+        : '0 4px 14px rgba(0, 0, 0, 0.65)',
+    };
+  };
+
   return (
-    <div className="space-y-2">
-      {/* UNIFIED COMPACT MAP CONTROL TOOLBAR:
-          Row 1: [📍 Amarante (Raio 35 km) | 🚸 Marcar Passadeira Aqui | Mudar Centro]
-          Row 2: [Mapa Neon | Trânsito Google | Satélite] + [🎯 Centrar] */}
+    <div className="flex-1 w-full h-full flex flex-col overflow-hidden">
+      {/* FULL-HEIGHT INTERACTIVE WAZE-STYLE LEAFLET MAP CONTAINER */}
       <div
-        style={{
-          backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
-          borderColor: isDaylight ? '#CBD5E1' : 'rgba(0, 229, 255, 0.35)',
-          color: isDaylight ? '#090D16' : '#FFFFFF',
-        }}
-        className="w-full rounded-2xl border p-2.5 space-y-2 shadow-sm"
-      >
-        {/* Row 1: Hub Badge + 1-Tap Teach Crosswalk + Mudar Centro */}
-        <div className="flex items-center justify-between gap-1.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsHubSelectorModalOpen(true)}
-            className="flex items-center gap-1.5 min-w-0 text-left cursor-pointer"
-          >
-            <span className="h-2.5 w-2.5 rounded-full bg-[#00E5FF] shadow-[0_0_8px_rgba(0,229,255,0.85)] shrink-0" />
-            <span
-              style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-              className="text-xs sm:text-sm font-extrabold whitespace-nowrap"
-            >
-              📍 Amarante (Raio 35 km)
-            </span>
-          </button>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={handleTeachCrosswalkHere}
-              style={{
-                backgroundColor: '#0B0F17',
-                borderColor: '#00E5FF',
-                color: '#00E5FF',
-              }}
-              title="Ensinar / Marcar uma Passadeira de Peões na tua posição GPS atual em Amarante"
-              className="rounded-xl border px-2.5 py-1 text-xs font-extrabold shrink-0 whitespace-nowrap cursor-pointer transition hover:opacity-90 flex items-center gap-1 shadow-[0_0_10px_rgba(0,229,255,0.2)]"
-            >
-              <span>🚸 Marcar Passadeira Aqui</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsHubSelectorModalOpen(true)}
-              style={{
-                backgroundColor: isDaylight ? '#F1F5F9' : '#111827',
-                borderColor: isDaylight ? '#CBD5E1' : 'rgba(0, 229, 255, 0.35)',
-                color: isDaylight ? '#090D16' : '#FFFFFF',
-              }}
-              className="rounded-xl border px-2.5 py-1 text-xs font-extrabold shrink-0 whitespace-nowrap cursor-pointer transition hover:opacity-90"
-            >
-              Mudar Centro
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: Layer Switcher [Mapa Neon | Trânsito Google | Satélite] + [🎯 Centrar] */}
-        <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-zinc-800/40 flex-wrap">
-          <div className="inline-flex items-center rounded-xl bg-zinc-950 border border-zinc-800 p-0.5">
-            <button
-              type="button"
-              onClick={() => setMapStyleMode('MAPA_NEON')}
-              style={
-                mapStyleMode === 'MAPA_NEON'
-                  ? {
-                      backgroundColor: '#00E5FF',
-                      color: '#090D16',
-                    }
-                  : undefined
-              }
-              className={`rounded-lg px-2.5 py-1 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
-                mapStyleMode === 'MAPA_NEON'
-                  ? 'shadow-xs'
-                  : 'text-zinc-300 hover:text-white'
-              }`}
-            >
-              ✨ Mapa Neon
-            </button>
-            <button
-              type="button"
-              onClick={() => setMapStyleMode('TRANSITO_GOOGLE')}
-              style={
-                mapStyleMode === 'TRANSITO_GOOGLE'
-                  ? {
-                      backgroundColor: '#00E5FF',
-                      color: '#090D16',
-                    }
-                  : undefined
-              }
-              className={`rounded-lg px-2.5 py-1 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
-                mapStyleMode === 'TRANSITO_GOOGLE'
-                  ? 'shadow-xs'
-                  : 'text-zinc-300 hover:text-white'
-              }`}
-            >
-              🚦 Trânsito Google
-            </button>
-            <button
-              type="button"
-              onClick={() => setMapStyleMode('SATELITE')}
-              style={
-                mapStyleMode === 'SATELITE'
-                  ? {
-                      backgroundColor: '#00E5FF',
-                      color: '#090D16',
-                    }
-                  : undefined
-              }
-              className={`rounded-lg px-2.5 py-1 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
-                mapStyleMode === 'SATELITE'
-                  ? 'shadow-xs'
-                  : 'text-zinc-300 hover:text-white'
-              }`}
-            >
-              🛰️ Satélite
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleRecenterAndFollowGps}
-            style={
-              isAutoFollowActive && localLiveCoords
-                ? {
-                    backgroundColor: '#0B0F17',
-                    borderColor: '#00E5FF',
-                    color: '#00E5FF',
-                  }
-                : undefined
-            }
-            className={`rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition shrink-0 ${
-              isAutoFollowActive && localLiveCoords
-                ? 'shadow-[0_0_10px_rgba(0,229,255,0.2)]'
-                : 'bg-zinc-950 border-zinc-700 text-zinc-100 hover:bg-zinc-900'
-            }`}
-          >
-            <Compass className="h-3.5 w-3.5 shrink-0" />
-            <span>🎯 Centrar</span>
-          </button>
-        </div>
-      </div>
-
-      {/* FULL INTERACTIVE LEAFLET MAP CONTAINER */}
-      <div
-        className={`relative rounded-2xl overflow-hidden border shadow-xl h-[calc(100vh-232px)] min-h-[430px] max-h-[720px] ${
-          isDaylight
-            ? 'border-slate-300 bg-slate-100'
-            : 'border-zinc-800 bg-zinc-950'
+        className={`relative flex-1 w-full h-full min-h-[440px] overflow-hidden shadow-xl ${
+          isFullRoadView
+            ? 'rounded-none border-0'
+            : isDaylight
+              ? 'rounded-2xl border border-slate-300 bg-slate-100'
+              : 'rounded-2xl border border-zinc-800 bg-zinc-950'
         }`}
       >
         {/* Leaflet Map Canvas */}
@@ -1848,9 +1758,401 @@ export const ShiftRadarModule: React.FC = () => {
           className="absolute inset-0 z-0 h-full w-full"
         />
 
+        {/* TOP-LEFT FLOATING STATUS CAPSULE: Pulsing GPS Radar + Amarante 35km • Online Count + Inline 📍⚙ Hub Button */}
+        <div
+          style={{
+            top: '12px',
+            left: '12px',
+            backgroundColor: isDaylight
+              ? 'rgba(255, 255, 255, 0.96)'
+              : 'rgba(11, 15, 23, 0.94)',
+            borderColor: '#00E5FF',
+            color: isDaylight ? '#090D16' : '#FFFFFF',
+            boxShadow: isDaylight
+              ? '0 4px 14px rgba(9, 13, 22, 0.14)'
+              : '0 4px 16px rgba(0, 0, 0, 0.65)',
+          }}
+          className="absolute z-[430] rounded-full border-1.5 pl-2.5 pr-1.5 py-1.5 flex items-center gap-2 backdrop-blur-md"
+        >
+          {/* Pulsing / Blinking Light Neon Blue (#00E5FF) GPS Satellite/Radar Indicator */}
+          <div
+            title={
+              localLiveCoords
+                ? 'Sinal GPS Ativo em Tempo Real'
+                : 'A sincronizar satélite GPS...'
+            }
+            className="relative flex items-center justify-center h-5 w-5 shrink-0"
+          >
+            <span className="absolute inset-0 rounded-full bg-[#00E5FF]/35 animate-ping" />
+            <svg
+              viewBox="0 0 24 24"
+              className="relative h-4 w-4"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="8.5"
+                stroke="#00E5FF"
+                strokeWidth="1.8"
+                strokeDasharray="3 2"
+              />
+              <circle cx="12" cy="12" r="3.5" fill="#00E5FF" />
+            </svg>
+          </div>
+
+          <span
+            style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+            className="text-xs font-black tracking-tight whitespace-nowrap"
+          >
+            Amarante 35km
+          </span>
+
+          <span
+            style={{ color: isDaylight ? '#64748B' : '#94A3B8' }}
+            className="text-xs font-black select-none"
+          >
+            •
+          </span>
+
+          <span
+            style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
+            className="text-xs font-extrabold whitespace-nowrap"
+          >
+            {totalOnlineCouriersCount} online
+          </span>
+
+          {/* Small Inline 📍⚙ Icon Button to Open Mudar Centro */}
+          <button
+            type="button"
+            onClick={() => setIsHubSelectorModalOpen(true)}
+            title="Mudar Centro Operacional (Raio 35 km)"
+            aria-label="Mudar Centro Operacional"
+            style={{
+              backgroundColor: isDaylight ? '#F0F9FF' : '#111827',
+              borderColor: '#00E5FF',
+              color: isDaylight ? '#090D16' : '#00E5FF',
+            }}
+            className="h-7 w-7 rounded-full border flex items-center justify-center cursor-pointer transition active:scale-95 shrink-0"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M12 21C15.5 17.4 18 14.3 18 10.5C18 7.18629 15.3137 4.5 12 4.5C8.68629 4.5 6 7.18629 6 10.5C6 14.3 8.5 17.4 12 21Z"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <circle cx="12" cy="10.5" r="2.2" fill="currentColor" />
+            </svg>
+          </button>
+        </div>
+
+        {/* TOP-RIGHT FLOATING ICON DOCK (40x40px Crisp Custom SVG Icon Buttons, Zero Long Text Labels) */}
+        <div
+          style={{ top: '12px', right: '12px' }}
+          className="absolute z-[430] flex flex-col items-center gap-2"
+        >
+          {/* 1. 🎯 Center on Courier Icon (Centrar) */}
+          <button
+            type="button"
+            onClick={handleRecenterAndFollowGps}
+            title="Centrar no meu GPS"
+            aria-label="Centrar no meu GPS"
+            style={getDockIconButtonStyle(
+              Boolean(isAutoFollowActive && localLiveCoords)
+            )}
+            className="h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="7"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <circle cx="12" cy="12" r="2.5" fill="currentColor" />
+              <line
+                x1="12"
+                y1="2"
+                x2="12"
+                y2="5"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <line
+                x1="12"
+                y1="19"
+                x2="12"
+                y2="22"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <line
+                x1="2"
+                y1="12"
+                x2="5"
+                y2="12"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <line
+                x1="19"
+                y1="12"
+                x2="22"
+                y2="12"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+
+          {/* 2. 🚸+ Mark Crosswalk Icon (Marcar Passadeira em 1 Toque) */}
+          <button
+            type="button"
+            onClick={handleTeachCrosswalkHere}
+            title="Marcar Passadeira de Peões na posição GPS atual"
+            aria-label="Marcar Passadeira de Peões"
+            style={getDockIconButtonStyle(false)}
+            className="relative h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="4.5" r="1.8" fill="currentColor" />
+              <path
+                d="M9.5 14L11 9.5L13.5 9.5L15 14M10.5 14L9 18M13.5 14L15 18"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <line
+                x1="4"
+                y1="20.5"
+                x2="7.5"
+                y2="20.5"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+              <line
+                x1="10.2"
+                y1="20.5"
+                x2="13.8"
+                y2="20.5"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+              <line
+                x1="16.5"
+                y1="20.5"
+                x2="20"
+                y2="20.5"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span
+              style={{
+                backgroundColor: '#00E5FF',
+                color: '#090D16',
+              }}
+              className="absolute -top-1 -right-1 h-4 w-4 rounded-full text-[11px] font-black leading-none flex items-center justify-center shadow-xs"
+            >
+              +
+            </span>
+          </button>
+
+          {/* 3A. Map Layer 1: Neon Map Icon (Mapa Neon) */}
+          <button
+            type="button"
+            onClick={() => setMapStyleMode('MAPA_NEON')}
+            title="Camada: Mapa Neon"
+            aria-label="Camada Mapa Neon"
+            style={getDockIconButtonStyle(mapStyleMode === 'MAPA_NEON')}
+            className="h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M3.5 6.5L9 4L15 6.5L20.5 4V17.5L15 20L9 17.5L3.5 20V6.5Z"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinejoin="round"
+              />
+              <line
+                x1="9"
+                y1="4"
+                x2="9"
+                y2="17.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              />
+              <line
+                x1="15"
+                y1="6.5"
+                x2="15"
+                y2="20"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              />
+            </svg>
+          </button>
+
+          {/* 3B. Map Layer 2: Google Traffic Icon (Trânsito Google) */}
+          <button
+            type="button"
+            onClick={() => setMapStyleMode('TRANSITO_GOOGLE')}
+            title="Camada: Trânsito Google em Tempo Real"
+            aria-label="Camada Trânsito Google"
+            style={getDockIconButtonStyle(mapStyleMode === 'TRANSITO_GOOGLE')}
+            className="h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <rect
+                x="7.5"
+                y="2.5"
+                width="9"
+                height="19"
+                rx="4.5"
+                stroke="currentColor"
+                strokeWidth="1.9"
+              />
+              <circle cx="12" cy="7" r="1.7" fill="currentColor" />
+              <circle cx="12" cy="12" r="1.7" fill="currentColor" />
+              <circle cx="12" cy="17" r="1.7" fill="currentColor" />
+            </svg>
+          </button>
+
+          {/* 3C. Map Layer 3: Satellite Icon (Satélite) */}
+          <button
+            type="button"
+            onClick={() => setMapStyleMode('SATELITE')}
+            title="Camada: Vista Satélite"
+            aria-label="Camada Vista Satélite"
+            style={getDockIconButtonStyle(mapStyleMode === 'SATELITE')}
+            className="h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="8.5"
+                stroke="currentColor"
+                strokeWidth="1.9"
+              />
+              <ellipse
+                cx="12"
+                cy="12"
+                rx="4"
+                ry="8.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              />
+              <line
+                x1="3.8"
+                y1="12"
+                x2="20.2"
+                y2="12"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              />
+            </svg>
+          </button>
+
+          {/* 4. ⛶ Fullscreen Toggle Icon (Ampliar / Reduzir Mapa 100%) */}
+          <button
+            type="button"
+            onClick={handleToggleFullRoadView}
+            title={
+              isFullRoadView
+                ? 'Sair do Ecrã Inteiro'
+                : 'Ampliar Mapa em Ecrã Inteiro'
+            }
+            aria-label="Alternar Mapa em Ecrã Inteiro"
+            style={getDockIconButtonStyle(isFullRoadView)}
+            className="h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
+          >
+            {isFullRoadView ? (
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  d="M9 4V9H4M15 4V9H20M9 20V15H4M15 20V15H20"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4 9V4H9M20 9V4H15M4 15V20H9M20 15V20H15"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+          </button>
+        </div>
+
         {/* TOP HUD ALERTS: Crosswalk Proximity Heads-Up (<= 45m & > 28 km/h) or Taught Confirmation */}
         {(approachingCrosswalkAlert || crosswalkFeedbackBanner) && (
-          <div className="absolute top-3 left-3 right-3 z-[450] flex flex-col items-center gap-1.5 pointer-events-none">
+          <div className="absolute top-14 left-3 right-14 z-[450] flex flex-col items-start gap-1.5 pointer-events-none">
             {approachingCrosswalkAlert && (
               <div
                 style={{
@@ -1858,7 +2160,7 @@ export const ShiftRadarModule: React.FC = () => {
                   borderColor: '#00E5FF',
                   color: '#FFFFFF',
                 }}
-                className="pointer-events-auto rounded-2xl border-2 px-4 py-2 shadow-[0_0_20px_rgba(0,229,255,0.55)] flex items-center gap-2.5 animate-pulse"
+                className="pointer-events-auto rounded-2xl border-2 px-3.5 py-2 shadow-[0_0_20px_rgba(0,229,255,0.55)] flex items-center gap-2.5 animate-pulse"
               >
                 <span className="text-lg">🚸</span>
                 <div>
@@ -1887,8 +2189,11 @@ export const ShiftRadarModule: React.FC = () => {
           </div>
         )}
 
-        {/* WAZE-STYLE SPEEDOMETER & ROAD LIMIT HUD (Bottom-Left Corner Above Status Pill) */}
-        <div className="absolute bottom-16 left-3 z-[420] flex items-center gap-2 pointer-events-none">
+        {/* WAZE-STYLE SPEEDOMETER & ROAD LIMIT HUD (Positioned cleanly at bottom: 20px inside map container) */}
+        <div
+          style={{ bottom: '20px', left: '12px' }}
+          className="absolute z-[420] flex items-center gap-2 pointer-events-none"
+        >
           <div
             style={{
               backgroundColor: isDaylight
@@ -1903,12 +2208,12 @@ export const ShiftRadarModule: React.FC = () => {
                 ? '0 0 22px rgba(0, 229, 255, 0.85)'
                 : '0 4px 16px rgba(0, 0, 0, 0.45)',
             }}
-            className={`pointer-events-auto rounded-2xl border-2 px-3 py-2 flex items-center gap-3 transition-all ${
+            className={`pointer-events-auto rounded-2xl border-2 px-3 py-2 flex items-center gap-2.5 transition-all ${
               isSpeedAlertPulsing ? 'animate-pulse' : ''
             }`}
           >
             {/* Current GPS Speed (km/h) */}
-            <div className="text-center min-w-[48px]">
+            <div className="text-center min-w-[44px]">
               <span
                 style={{
                   color: isSpeedAlertPulsing
@@ -1917,7 +2222,7 @@ export const ShiftRadarModule: React.FC = () => {
                       ? '#090D16'
                       : '#FFFFFF',
                 }}
-                className="text-2xl font-black leading-none block"
+                className="text-2xl font-black leading-none block tabular-nums"
               >
                 {currentSpeedKmh}
               </span>
@@ -1937,18 +2242,18 @@ export const ShiftRadarModule: React.FC = () => {
                 borderColor: '#EF4444',
                 color: '#090D16',
               }}
-              className="h-11 w-11 rounded-full border-[3.5px] flex flex-col items-center justify-center shrink-0 shadow-sm"
+              className="h-10 w-10 rounded-full border-[3.5px] flex flex-col items-center justify-center shrink-0 shadow-sm"
             >
               <span
                 style={{ color: '#090D16' }}
-                className="text-sm font-black leading-none"
+                className="text-xs font-black leading-none"
               >
                 {roadLimitKmh}
               </span>
             </div>
 
-            {/* Subtle 20s Over-Speed Progress / Road Label */}
-            <div className="min-w-0 max-w-[135px]">
+            {/* Subtle 20s Over-Speed Progress / Road Label & Crosswalk Count */}
+            <div className="min-w-0 max-w-[128px]">
               <span
                 style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
                 className="text-[11px] font-extrabold block truncate leading-tight"
@@ -1973,51 +2278,40 @@ export const ShiftRadarModule: React.FC = () => {
           </div>
         </div>
 
-        {/* CLEAN COMPACT BOTTOM STATUS PILL (No black drawer, no duplicate Disponível button) */}
-        <div className="absolute bottom-3 left-3 right-3 z-[400] flex items-center justify-between gap-2 pointer-events-none">
-          <div className="pointer-events-auto rounded-xl bg-zinc-950/90 backdrop-blur-md border border-zinc-800 px-3 py-2 shadow-lg flex items-center gap-2 min-w-0">
-            <span
-              className={`h-2.5 w-2.5 rounded-full shrink-0 ${
-                !localLiveCoords
-                  ? 'bg-amber-400 animate-pulse'
-                  : isAppPaused
-                    ? 'bg-zinc-400'
-                    : 'bg-emerald-400 animate-ping'
-              }`}
-            />
-            <span className="text-[11px] font-extrabold text-zinc-100 truncate">
-              {localLiveCoords
-                ? isAutoFollowActive
-                  ? 'GPS HD Gliding (A seguir)'
-                  : 'GPS Ativo (Toque 🎯 Centrar p/ seguir)'
-                : 'A obter sinal GPS do telemóvel...'}
-            </span>
-            <span className="rounded-lg bg-zinc-800 px-2 py-0.5 text-[10px] font-bold text-emerald-400 shrink-0">
-              {totalOnlineCouriersCount} online
-            </span>
+        {/* Optional Active Delivery Quick External Navigation Buttons (Bottom-Right Corner Only When Active Order Exists) */}
+        {hasRealActiveDelivery && (
+          <div
+            style={{ bottom: '20px', right: '12px' }}
+            className="absolute z-[420] flex items-center gap-1.5"
+          >
+            <button
+              type="button"
+              onClick={() => handleOpenExternalNav('WAZE')}
+              style={{
+                backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
+                borderColor: '#00E5FF',
+                color: isDaylight ? '#090D16' : '#00E5FF',
+              }}
+              className="rounded-xl border-1.5 px-2.5 py-2 text-xs font-extrabold shadow-lg flex items-center gap-1 cursor-pointer"
+            >
+              <Navigation className="h-3.5 w-3.5 text-[#00E5FF]" />
+              <span>Waze</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenExternalNav('GMAPS')}
+              style={{
+                backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
+                borderColor: '#00E5FF',
+                color: isDaylight ? '#090D16' : '#00E5FF',
+              }}
+              className="rounded-xl border-1.5 px-2.5 py-2 text-xs font-extrabold shadow-lg flex items-center gap-1 cursor-pointer"
+            >
+              <Navigation className="h-3.5 w-3.5 text-[#00E5FF]" />
+              <span>Maps</span>
+            </button>
           </div>
-
-          {hasRealActiveDelivery && (
-            <div className="pointer-events-auto flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => handleOpenExternalNav('WAZE')}
-                className="rounded-xl bg-sky-600 hover:bg-sky-500 text-white px-3 py-2 text-base font-extrabold shadow-lg flex items-center gap-1 cursor-pointer"
-              >
-                <Navigation className="h-4 w-4" />
-                <span>Waze</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleOpenExternalNav('GMAPS')}
-                className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 text-base font-extrabold shadow-lg flex items-center gap-1 cursor-pointer"
-              >
-                <Navigation className="h-4 w-4" />
-                <span>Maps</span>
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       <OperationalHubSelectorModal

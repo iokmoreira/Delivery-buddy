@@ -28,10 +28,10 @@ export const LOGIN_INTRO_VOICE_RATE = 1.05;
 
 export const BUDDY_LOGIN_INTRO_SENTENCES: string[] = [
   'Olá! Sou o Buddy, o seu robozinho e copiloto inteligente de rua, criado para organizar a tua rotina, proteger-te no trânsito e aumentar os teus ganhos reais.',
-  'Enquanto trabalhas na Glovo, Uber ou Bolt, eu fico flutuando na tua tela. Tocou pedido? Eu leio na hora e desconto combustível, desgaste do veículo e impostos. Faço toda a tua gestão financeira automática, acompanhando as tuas metas e projeções diárias, semanais e mensais para saberes ao cêntimo o teu lucro por quilómetro e por hora.',
-  'Comigo tens acesso a um banco de dados completo da tua região: vês o clima em tempo real, acordos de piso mínimo, alertas de perigos na via e todo o registo de rotas proibidas, problemas e reclamações para evitares atrasos e ciladas.',
-  'Os teus dados pessoais, a tua localização e toda a tua contabilidade são cem por cento privados, protegidos por criptografia avançada segundo a lei europeia de proteção de dados e nunca são partilhados com as plataformas de entrega ou terceiros.',
-  'Além disso, comunicas com outros Buddys pelo chat, walkie-talkie, blog e tradutor simultâneo com Libras, comandas tudo por voz sem tirar a mão da direção e contas com deteção automática de queda e alerta SOS. Faz login ou cria a tua conta aqui embaixo e vamos trabalhar. Boas entregas e conduza com segurança!',
+  'Enquanto trabalhas na Glovo, Uber ou Bolt, eu fico flutuando na tua tela. Tocou pedido? Eu leio na hora e desconto combustível, desgaste e impostos. Podes registar cada entrega por foto ou vídeo guardando a morada e todos os dados, acompanhando as tuas metas para saberes ao cêntimo o teu lucro por quilómetro e por hora.',
+  'No mapa ampliado com trânsito em tempo real, tens velocímetro com limite da via, alerta de passadeiras de pedestres que podes ensinar à frota, aviso sutil de velocidade excessiva e um resumo no final da entrega que mostra na prática como conduzir no limite seguro poupa combustível e protege a tua vida quase no mesmo tempo.',
+  'Além disso, tens tradutor simultâneo de voz e ecrã de Libras com as minhas mãozinhas para falar com qualquer cliente, comunicas com outros Buddys pelo chat, walkie-talkie e blog, comandas tudo por voz e contas com deteção automática de queda e alerta SOS.',
+  'Os teus dados pessoais, localização e contabilidade são cem por cento privados, criptografados segundo a lei europeia e nunca são partilhados com as plataformas, contando ainda com um dossiê legal e fiscal completo no manual. Faz login ou cria a tua conta aqui embaixo e vamos trabalhar. Boas entregas e conduza com segurança!',
 ];
 
 export interface SavedLocalAccountRecord {

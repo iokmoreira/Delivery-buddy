@@ -106,6 +106,8 @@ const AppCockpitShell: React.FC = () => {
 
   const [deliveryRealitySummary, setDeliveryRealitySummary] =
     React.useState<DeliverySpeedRealitySummary | null>(null);
+  const [isMapRoadFullscreen, setIsMapRoadFullscreen] =
+    React.useState<boolean>(false);
 
   React.useEffect(() => {
     const handleRealitySummary = (ev: Event) => {
@@ -114,16 +116,32 @@ const AppCockpitShell: React.FC = () => {
         setDeliveryRealitySummary(customEv.detail);
       }
     };
+    const handleMapFullscreen = (ev: Event) => {
+      const customEv = ev as CustomEvent<{ expanded?: boolean }>;
+      setIsMapRoadFullscreen(Boolean(customEv.detail?.expanded));
+    };
     window.addEventListener(
       'buddy-delivery-reality-summary',
       handleRealitySummary
     );
-    return () =>
+    window.addEventListener('buddy-map-fullscreen-state', handleMapFullscreen);
+    return () => {
       window.removeEventListener(
         'buddy-delivery-reality-summary',
         handleRealitySummary
       );
+      window.removeEventListener(
+        'buddy-map-fullscreen-state',
+        handleMapFullscreen
+      );
+    };
   }, []);
+
+  React.useEffect(() => {
+    if (activeTab !== 'radar' && isMapRoadFullscreen) {
+      setIsMapRoadFullscreen(false);
+    }
+  }, [activeTab, isMapRoadFullscreen]);
 
   // Bind Android Hardware / Gesture Back button (popstate) to minimize into floating bubble
   React.useEffect(() => {
@@ -727,13 +745,17 @@ const AppCockpitShell: React.FC = () => {
                 </div>
               </header>
             ) : (
-              <CockpitHeader />
+              !(isMapFullscreenCockpit && isMapRoadFullscreen) && (
+                <CockpitHeader />
+              )
             )}
 
             <main
               className={
                 isMapFullscreenCockpit
-                  ? 'flex-1 w-full px-1.5 pt-1 pb-14 overflow-hidden flex flex-col'
+                  ? isMapRoadFullscreen
+                    ? 'flex-1 w-full p-0 overflow-hidden flex flex-col'
+                    : 'flex-1 w-full px-1.5 pt-1 pb-[68px] overflow-hidden flex flex-col'
                   : 'flex-1 w-full px-3.5 pt-2.5 pb-24'
               }
             >
@@ -758,7 +780,9 @@ const AppCockpitShell: React.FC = () => {
             </main>
 
             {/* Clean 5-Item Bottom Navigation Bar */}
-            <CockpitNavigation />
+            {!(isMapFullscreenCockpit && isMapRoadFullscreen) && (
+              <CockpitNavigation />
+            )}
           </>
         )}
       </div>
