@@ -5,73 +5,116 @@ export const CockpitHeader: React.FC = () => {
   const {
     isAppPaused,
     toggleAppPauseMode,
+    userPrefs,
+    toggleAnonymousMode,
     themeMode,
     currentMascotState,
     currentMascotImageUrl,
+    setViewMode,
+    setActiveTab,
   } = useEstafetas();
 
   const isDaylight = themeMode === 'DAYLIGHT';
+  const isAnonymous = Boolean(userPrefs?.anonymousMode);
 
-  const mascotRingClass =
-    currentMascotState === 'DELIVERY'
+  // Cycle: 🟢 Online -> ⚪ Pausa -> 🥷 Anónimo -> 🟢 Online
+  const handleCycleHeaderStatus = () => {
+    if (!isAppPaused && !isAnonymous) {
+      // Online -> Pausa
+      toggleAppPauseMode();
+    } else if (isAppPaused) {
+      // Pausa -> Anónimo
+      toggleAppPauseMode();
+      if (!isAnonymous) {
+        toggleAnonymousMode();
+      }
+    } else {
+      // Anónimo -> Online
+      toggleAnonymousMode();
+    }
+  };
+
+  const mascotRingClass = isAnonymous
+    ? 'border-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.65)]'
+    : currentMascotState === 'DELIVERY'
       ? 'border-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.75)]'
       : currentMascotState === 'INACTIVE'
         ? 'border-slate-500 opacity-90'
         : 'border-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.55)]';
 
+  const statusDotClass = isAnonymous
+    ? 'bg-purple-400'
+    : currentMascotState === 'DELIVERY'
+      ? 'bg-amber-400 animate-ping'
+      : isAppPaused
+        ? 'bg-slate-400'
+        : 'bg-emerald-400';
+
+  const statusTextLabel = isAnonymous
+    ? '🥷 Anónimo'
+    : currentMascotState === 'DELIVERY'
+      ? '🚀 Em Entrega'
+      : isAppPaused
+        ? '⚪ Pausa'
+        : '🟢 Online';
+
   return (
     <header
-      className={`sticky top-0 z-40 backdrop-blur-md border-b px-3.5 py-2.5 transition-colors ${
+      className={`sticky top-0 z-40 backdrop-blur-md border-b px-3.5 py-2 transition-colors ${
         isDaylight
           ? 'bg-white/95 border-slate-200/80 text-slate-900 shadow-2xs'
           : 'bg-slate-900/95 border-slate-800 text-slate-100'
       }`}
     >
       <div className="flex items-center justify-between gap-2">
-        {/* Left: Dynamic 3-State Robot Mascot Logo + Delivery Buddy Brand */}
-        <div className="flex items-center gap-2.5 min-w-0">
+        {/* Left: Clickable 3-State Robot Mascot Logo + Delivery Buddy Title with Integrated Status */}
+        <button
+          type="button"
+          onClick={handleCycleHeaderStatus}
+          title="Toque para alternar estado: Online → Pausa → Anónimo"
+          className="flex items-center gap-2.5 min-w-0 text-left cursor-pointer group bg-transparent border-0 p-0"
+        >
           <div
-            className={`relative h-9 w-9 rounded-full overflow-hidden bg-slate-950 border-2 shrink-0 transition-all ${mascotRingClass}`}
-            title={
-              currentMascotState === 'DELIVERY'
-                ? 'Buddy Mascote: Em Entrega 🚀'
-                : currentMascotState === 'INACTIVE'
-                  ? 'Buddy Mascote: Em Pausa (Mochila DB)'
-                  : 'Buddy Mascote: Online Ativo 👍'
-            }
+            className={`relative h-11 w-11 rounded-full overflow-hidden bg-[#090e13] border-2 shrink-0 transition-all p-0.5 ${mascotRingClass}`}
           >
             <img
               src={currentMascotImageUrl}
               alt="Buddy Mascote"
-              className="h-full w-full object-cover rounded-full"
+              className="h-full w-full object-contain rounded-full"
             />
           </div>
 
-          <span className="text-base font-black tracking-tight whitespace-nowrap">
-            Delivery Buddy
-          </span>
-        </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-extrabold tracking-tight whitespace-nowrap">
+                Delivery Buddy
+              </span>
+              <span
+                className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass}`}
+              />
+            </div>
+            <span className="text-xs font-bold text-emerald-400 block leading-tight">
+              {statusTextLabel} • Toque p/ mudar
+            </span>
+          </div>
+        </button>
 
-        {/* Right: Compact Status Badge (🟢 Online / ⚪ Pausa / 🚀 Em Entrega) */}
+        {/* Right: Compact Executive Admin Button (No duplicate Online button!) */}
         <button
           type="button"
-          onClick={toggleAppPauseMode}
-          title="Toque para alternar entre Online e Pausa"
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-extrabold cursor-pointer transition shrink-0 whitespace-nowrap ${
-            currentMascotState === 'DELIVERY'
-              ? 'bg-amber-500/20 text-amber-400 border border-amber-400/60'
-              : isDaylight
-                ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700'
-          }`}
+          onClick={() => {
+            setViewMode('PAINEL_ADMIN');
+            setActiveTab('admin_backoffice');
+          }}
+          style={{
+            backgroundColor: 'rgba(16, 185, 129, 0.14)',
+            borderColor: 'rgba(251, 191, 36, 0.55)',
+            color: '#fde68a',
+          }}
+          className="rounded-xl border px-3 py-1.5 text-sm font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:opacity-95 shrink-0 shadow-sm"
+          title="Abrir Painel de Administrador (CEO Dashboard)"
         >
-          <span>
-            {currentMascotState === 'DELIVERY'
-              ? '🚀 Em Entrega'
-              : isAppPaused
-                ? '⚪ Pausa'
-                : '🟢 Online'}
-          </span>
+          <span>👑 Admin</span>
         </button>
       </div>
     </header>

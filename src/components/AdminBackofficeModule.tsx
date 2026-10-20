@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Users,
   Megaphone,
@@ -21,6 +21,8 @@ import {
   ShieldCheck,
   Smartphone,
   Mic,
+  AlertTriangle,
+  MessageSquare,
 } from 'lucide-react';
 import {
   AdminBroadcastTargetType,
@@ -37,8 +39,17 @@ import {
   SUPABASE_COMPLETE_SQL_SCHEMA_SCRIPT,
   sanitizeSupabaseUrlInput,
   sanitizeSupabaseKeyInput,
+  insertDirectMessageToSupabaseRest,
 } from '../services/geminiAgent';
 import { useEstafetas } from '../context/EstafetasContext';
+import {
+  loadSavedAccounts,
+  loadSupportChatMessages,
+  SAVED_ACCOUNTS_STORAGE_KEY,
+  SUPPORT_CHAT_STORAGE_KEY,
+  SavedLocalAccountRecord,
+  SupportChatMessage,
+} from './AuthAndVerificationGate';
 
 export const AdminBackofficeModule: React.FC = () => {
   const {
@@ -58,7 +69,6 @@ export const AdminBackofficeModule: React.FC = () => {
     approveAndPublishAiSkillLog,
     discardAiSkillLog,
     testAiSkillLogMacro,
-    simulateNewAiSkillLearning,
     heartbeatSecondsLeft,
     deviceScreenProfile,
     startVoiceTeachSkillMode,
@@ -70,11 +80,103 @@ export const AdminBackofficeModule: React.FC = () => {
     triggerNativeAppInstallPrompt,
     showManualInstallGuideModal,
     setShowManualInstallGuideModal,
+    onlineDirectoryCouriers,
+    complaints,
+    evidentiaryVaultRecords,
+    roadHazards,
+    buddyMascotImages,
+    uploadThreePoseMascotSheet,
+    resetMascotImagesToBuiltin,
   } = useEstafetas();
 
   const [subTab, setSubTab] = useState<
-    'IA_SKILLS' | 'PATROCINIOS' | 'KYC' | 'COMUNICADOS'
+    'IA_SKILLS' | 'KYC' | 'RECLAMACOES_ALERTAS' | 'SUPORTE_ATIVO'
   >('IA_SKILLS');
+
+  const mascotAdminInputRef = useRef<HTMLInputElement | null>(null);
+  const [mascotAdminMsg, setMascotAdminMsg] = useState<string>('');
+
+  // Local registered accounts & live support inbox state
+  const [localAccounts, setLocalAccounts] = useState<SavedLocalAccountRecord[]>(
+    () => loadSavedAccounts()
+  );
+  const [supportMessages, setSupportMessages] = useState<SupportChatMessage[]>(
+    () => loadSupportChatMessages()
+  );
+  const [adminReplyText, setAdminReplyText] = useState<string>('');
+
+  useEffect(() => {
+    const syncAdminInbox = () => {
+      setLocalAccounts(loadSavedAccounts());
+      setSupportMessages(loadSupportChatMessages());
+    };
+    const intervalId = window.setInterval(syncAdminInbox, 2500);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const handleToggleLocalAccountStatus = (
+    usernameKey: string,
+    status: 'APROVADO' | 'BLOQUEADO'
+  ) => {
+    const updated = localAccounts.map((acc) =>
+      acc.username === usernameKey ? { ...acc, status } : acc
+    );
+    setLocalAccounts(updated);
+    try {
+      localStorage.setItem(SAVED_ACCOUNTS_STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSendAdminSupportReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = adminReplyText.trim();
+    if (!clean) return;
+    const nowTime = new Date().toLocaleTimeString('pt-PT', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const replyMsg: SupportChatMessage = {
+      id: `admin-sup-${Date.now()}`,
+      sender: 'SUPPORT',
+      topicBadge: '👑 Suporte Admin (CEO)',
+      text: clean,
+      timestamp: nowTime,
+    };
+    const nextList = [...supportMessages, replyMsg];
+    setSupportMessages(nextList);
+    setAdminReplyText('');
+    try {
+      localStorage.setItem(SUPPORT_CHAT_STORAGE_KEY, JSON.stringify(nextList));
+    } catch {
+      // ignore
+    }
+    try {
+      if (aiAgentConfig.supabaseUrl && aiAgentConfig.supabaseAnonKey) {
+        await insertDirectMessageToSupabaseRest({
+          supabaseUrl: aiAgentConfig.supabaseUrl,
+          supabaseAnonKey: aiAgentConfig.supabaseAnonKey,
+          senderId: 'ADMIN_CEO',
+          senderCallsign: '👑 Suporte Admin (CEO)',
+          recipientId: 'SUPORTE_DIRETO',
+          messageBody: clean,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const liveOnlineCount = Math.max(
+    1,
+    onlineDirectoryCouriers.length,
+    adminManagedCouriers.length
+  );
+  const totalRegisteredCount = Math.max(
+    liveOnlineCount,
+    adminManagedCouriers.length + localAccounts.length
+  );
 
   const [skillFilter, setSkillFilter] = useState<'TODAS' | AiSkillLogCategory>(
     'TODAS'
@@ -277,64 +379,270 @@ export const AdminBackofficeModule: React.FC = () => {
         )}
       </div>
 
-      {/* Top 4-Tab Segmented Switcher */}
-      <div className="bg-zinc-900 p-1 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-1 border border-zinc-800/80">
+      {/* Top 4-Tab Segmented Switcher (CEO Admin Dashboard) */}
+      <div className="bg-zinc-900 p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-1.5 border border-amber-500/35 shadow-md">
         <button
           type="button"
           onClick={() => setSubTab('IA_SKILLS')}
-          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer flex items-center justify-center gap-1 ${
+          className={`rounded-xl py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5 ${
             subTab === 'IA_SKILLS'
-              ? 'bg-white text-zinc-950 font-extrabold'
-              : 'text-zinc-200 hover:text-white bg-zinc-950/60'
+              ? 'bg-emerald-500 text-slate-950 shadow-sm'
+              : 'text-zinc-200 hover:text-white bg-zinc-950/70'
           }`}
         >
-          <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
-          <span className="truncate">IA &amp; Logs de Skills</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubTab('PATROCINIOS')}
-          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate ${
-            subTab === 'PATROCINIOS'
-              ? 'bg-white text-zinc-950 font-semibold'
-              : 'text-zinc-400 hover:text-zinc-100'
-          }`}
-        >
-          Patrocínios ({adminSponsoredCampaigns.length})
+          <span>📊 Online Agora &amp; Projeções</span>
         </button>
         <button
           type="button"
           onClick={() => setSubTab('KYC')}
-          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate ${
+          className={`rounded-xl py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5 ${
             subTab === 'KYC'
-              ? 'bg-white text-zinc-950 font-semibold'
-              : 'text-zinc-400 hover:text-zinc-100'
+              ? 'bg-emerald-500 text-slate-950 shadow-sm'
+              : 'text-zinc-200 hover:text-white bg-zinc-950/70'
           }`}
         >
-          Estafetas KYC ({adminManagedCouriers.length})
+          <span>✅ Requisições de Aceitação ({totalRegisteredCount})</span>
         </button>
         <button
           type="button"
-          onClick={() => setSubTab('COMUNICADOS')}
-          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate ${
-            subTab === 'COMUNICADOS'
-              ? 'bg-white text-zinc-950 font-semibold'
-              : 'text-zinc-400 hover:text-zinc-100'
+          onClick={() => setSubTab('RECLAMACOES_ALERTAS')}
+          className={`rounded-xl py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+            subTab === 'RECLAMACOES_ALERTAS'
+              ? 'bg-emerald-500 text-slate-950 shadow-sm'
+              : 'text-zinc-200 hover:text-white bg-zinc-950/70'
           }`}
         >
-          Comunicados
+          <span>
+            ⚠️ Reclamações &amp; Alertas (
+            {complaints.length + roadHazards.filter((h) => !h.resolved).length})
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab('SUPORTE_ATIVO')}
+          className={`rounded-xl py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+            subTab === 'SUPORTE_ATIVO'
+              ? 'bg-emerald-500 text-slate-950 shadow-sm'
+              : 'text-zinc-200 hover:text-white bg-zinc-950/70'
+          }`}
+        >
+          <span>💬 Central de Suporte Ativo ({supportMessages.length})</span>
         </button>
       </div>
 
       {/* =====================================================================
-          VIEW 0: [IA & LOGS DE SKILLS] — GOOGLE AI STUDIO PRO & HYBRID ENGINE,
-          SUPABASE REALTIME & SQL GENERATOR, AND SKILL LEARNING LOBBY
+          VIEW 0: [📊 ONLINE AGORA & PROJEÇÕES] — LIVE COURIERS, 30D/90D/1Y
+          GROWTH PROJECTIONS, 3D MASCOT MANAGER, AI STUDIO & SUPABASE
           ===================================================================== */}
       {subTab === 'IA_SKILLS' && (
         <section
-          aria-label="Agente IA Google AI Studio Pro, Supabase Realtime e Logs de Aprendizagem de Skills"
+          aria-label="Online Agora, Projeções de Crescimento, Mascote 3D, AI Studio e Supabase"
           className="rounded-2xl bg-zinc-900/95 border border-zinc-800/80 p-3.5 space-y-3.5 shadow-lg"
         >
+          {/* CEO Executive Live KPIs & 30d / 90d / 1-Year Growth Projections */}
+          <div className="rounded-2xl bg-zinc-950 border border-emerald-500/40 p-3.5 space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                  <span>📊 Estafetas Online Agora &amp; Projeções de Crescimento</span>
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Centro Operacional Ativo: <strong className="text-emerald-400">Amarante (Raio 35 km)</strong> • Sincronização em Tempo Real
+                </p>
+              </div>
+              <span className="rounded-full bg-emerald-500/20 border border-emerald-400/50 px-3 py-1 text-xs font-extrabold text-emerald-300">
+                ● {liveOnlineCount} Online Agora
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3">
+                <span className="block text-xs font-bold text-zinc-400">
+                  Online Agora
+                </span>
+                <span className="block text-2xl font-extrabold text-emerald-400 mt-0.5">
+                  {liveOnlineCount}
+                </span>
+                <span className="block text-[11px] text-zinc-400">
+                  No Mapa (Amarante)
+                </span>
+              </div>
+              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3">
+                <span className="block text-xs font-bold text-zinc-400">
+                  Contas Registadas
+                </span>
+                <span className="block text-2xl font-extrabold text-white mt-0.5">
+                  {totalRegisteredCount}
+                </span>
+                <span className="block text-[11px] text-zinc-400">
+                  Estafetas Verificados
+                </span>
+              </div>
+              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3">
+                <span className="block text-xs font-bold text-zinc-400">
+                  Hub Regional
+                </span>
+                <span className="block text-lg font-extrabold text-amber-300 mt-0.5 truncate">
+                  Amarante 35 km
+                </span>
+                <span className="block text-[11px] text-emerald-400 font-bold">
+                  100% Ativo
+                </span>
+              </div>
+            </div>
+
+            {/* 30-Day / 90-Day / 1-Year Growth Projections */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+              <div className="rounded-xl bg-emerald-950/35 border border-emerald-500/35 p-3 space-y-1">
+                <span className="text-xs font-extrabold text-emerald-300 block">
+                  📈 Projeção 30 Dias
+                </span>
+                <span className="text-xl font-extrabold text-white block">
+                  28 Estafetas Ativos
+                </span>
+                <span className="text-xs font-bold text-emerald-400 block">
+                  Receita B2B Est.: € 420 / mês
+                </span>
+                <span className="text-[11px] text-zinc-400 block">
+                  Consolidação Amarante, Vila Meã e Lixa
+                </span>
+              </div>
+
+              <div className="rounded-xl bg-indigo-950/35 border border-indigo-500/35 p-3 space-y-1">
+                <span className="text-xs font-extrabold text-indigo-300 block">
+                  🚀 Projeção 90 Dias
+                </span>
+                <span className="text-xl font-extrabold text-white block">
+                  85 Estafetas Ativos
+                </span>
+                <span className="text-xs font-bold text-indigo-300 block">
+                  Receita B2B Est.: € 1.450 / mês
+                </span>
+                <span className="text-[11px] text-zinc-400 block">
+                  Expansão Tâmega e Sousa (Felgueiras / Marco)
+                </span>
+              </div>
+
+              <div className="rounded-xl bg-amber-950/35 border border-amber-500/40 p-3 space-y-1">
+                <span className="text-xs font-extrabold text-amber-300 block">
+                  👑 Projeção 1 Ano (12 Meses)
+                </span>
+                <span className="text-xl font-extrabold text-white block">
+                  340 Estafetas Ativos
+                </span>
+                <span className="text-xs font-bold text-amber-300 block">
+                  Receita B2B Est.: € 5.800 / mês
+                </span>
+                <span className="text-[11px] text-zinc-400 block">
+                  Rede Regional Norte + Seguros &amp; Oficinas B2B
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Admin Mascot 3-Pose Manager (Moved from Courier Ajustes to Admin Dashboard) */}
+          <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-3">
+            <input
+              ref={mascotAdminInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  setMascotAdminMsg('A recortar as 3 poses...');
+                  await uploadThreePoseMascotSheet(file);
+                  setMascotAdminMsg('✓ 3 Poses atualizadas com sucesso!');
+                } catch {
+                  setMascotAdminMsg('Erro ao processar imagem.');
+                }
+                e.target.value = '';
+              }}
+            />
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h4 className="text-sm font-extrabold text-white">
+                  🤖 Mascote Oficial 3D Delivery Buddy (3 Poses Integradas)
+                </h4>
+                <p className="text-xs text-zinc-400">
+                  Integrado nativamente no APK, Ícone Android, Topo, Mapa, Barra Inferior e Bolinha
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => mascotAdminInputRef.current?.click()}
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-extrabold cursor-pointer transition"
+                >
+                  🖼️ Substituir Imagem 3 Poses (Admin)
+                </button>
+                {buddyMascotImages.isCustomUploaded && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetMascotImagesToBuiltin();
+                      setMascotAdminMsg('Mascote 3D oficial restaurado.');
+                    }}
+                    className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1.5 text-xs font-bold cursor-pointer"
+                  >
+                    Repor Padrão 3D
+                  </button>
+                )}
+              </div>
+            </div>
+            {mascotAdminMsg && (
+              <p className="text-xs font-bold text-emerald-400">{mascotAdminMsg}</p>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-zinc-900 border border-emerald-500/40 p-2 flex items-center gap-2">
+                <img
+                  src={buddyMascotImages.mascotActive}
+                  alt="Pose 1"
+                  className="h-12 w-12 rounded-full object-contain bg-[#090E13] p-1 border border-emerald-400 shrink-0"
+                />
+                <div className="min-w-0">
+                  <span className="block text-xs font-extrabold text-emerald-300 truncate">
+                    1. Online
+                  </span>
+                  <span className="block text-[10px] text-zinc-400 truncate">
+                    Ativo / Frente
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-xl bg-zinc-900 border border-slate-500/40 p-2 flex items-center gap-2">
+                <img
+                  src={buddyMascotImages.mascotInactive}
+                  alt="Pose 2"
+                  className="h-12 w-12 rounded-full object-contain bg-[#090E13] p-1 border border-slate-400 shrink-0"
+                />
+                <div className="min-w-0">
+                  <span className="block text-xs font-extrabold text-slate-200 truncate">
+                    2. Pausa
+                  </span>
+                  <span className="block text-[10px] text-zinc-400 truncate">
+                    Mochila DB
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-xl bg-zinc-900 border border-amber-500/40 p-2 flex items-center gap-2">
+                <img
+                  src={buddyMascotImages.mascotDelivery}
+                  alt="Pose 3"
+                  className="h-12 w-12 rounded-full object-contain bg-[#090E13] p-1 border border-amber-400 shrink-0"
+                />
+                <div className="min-w-0">
+                  <span className="block text-xs font-extrabold text-amber-300 truncate">
+                    3. Entrega 🚀
+                  </span>
+                  <span className="block text-[10px] text-zinc-400 truncate">
+                    Jato Ativo
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* =================================================================
               CARD 1: GOOGLE AI STUDIO • MOTOR AVANÇADO PRO & HÍBRIDO
               ================================================================= */}
@@ -971,54 +1279,345 @@ export const AdminBackofficeModule: React.FC = () => {
         </section>
       )}
 
-      {/* VIEW 1: PATROCÍNIOS & SEGUROS */}
-      {subTab === 'PATROCINIOS' && (
-        <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
-              <Briefcase className="h-3.5 w-3.5 text-zinc-300" />
-              <span>Campanhas Patrocinadas B2B</span>
-            </span>
+      {/* =====================================================================
+          VIEW 1: [✅ REQUISIÇÕES DE ACEITAÇÃO] — KYC & ACCOUNT APPROVALS
+          ===================================================================== */}
+      {subTab === 'KYC' && (
+        <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800/80 p-3.5 space-y-3 shadow-lg">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <span className="text-base font-extrabold text-zinc-100 flex items-center gap-1.5">
+                <Users className="h-4 w-4 text-emerald-400" />
+                <span>
+                  ✅ Requisições de Aceitação &amp; Controlo de Contas ({totalRegisteredCount})
+                </span>
+              </span>
+              <span className="text-xs text-zinc-400 block mt-0.5">
+                Aprove ou bloqueie contas de estafetas com 1 toque (sincronizado com{' '}
+                <code className="text-emerald-300">public.couriers</code> e registos locais).
+              </span>
+            </div>
             <button
               type="button"
-              onClick={() => setIsCampaignModalOpen(true)}
-              className="rounded-lg bg-white text-zinc-950 px-2.5 py-1 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+              onClick={() => setIsCourierRegistrationModalOpen(true)}
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-extrabold cursor-pointer transition shrink-0"
             >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Nova Campanha</span>
+              {realCourierProfile
+                ? `Editar Meu Registo (${realCourierProfile.name})`
+                : '+ Registar Meu Perfil no Mapa'}
             </button>
           </div>
 
+          {/* Local Registered Accounts on Device */}
+          {localAccounts.length > 0 && (
+            <div className="space-y-2">
+              <span className="text-xs font-extrabold text-emerald-300 block">
+                Contas Registadas (Acesso App &amp; Login):
+              </span>
+              {localAccounts.map((acc) => {
+                const status = acc.status || 'APROVADO';
+                return (
+                  <div
+                    key={acc.username}
+                    className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 flex items-center justify-between gap-2 flex-wrap"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-extrabold text-white">
+                          {acc.username}
+                        </span>
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold ${
+                            status === 'BLOQUEADO'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          }`}
+                        >
+                          {status === 'BLOQUEADO' ? '🚫 BLOQUEADO' : '✓ APROVADO'}
+                        </span>
+                      </div>
+                      <span className="text-xs text-zinc-400 block">
+                        {acc.emailOrPhone || 'Sem contacto'} • {acc.vehicle} •{' '}
+                        {acc.zone}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleToggleLocalAccountStatus(acc.username, 'APROVADO')
+                        }
+                        className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                          status !== 'BLOQUEADO'
+                            ? 'bg-emerald-500 text-slate-950'
+                            : 'bg-zinc-900 border border-zinc-700 text-zinc-300'
+                        }`}
+                      >
+                        ✓ Aprovar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleToggleLocalAccountStatus(acc.username, 'BLOQUEADO')
+                        }
+                        className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                          status === 'BLOQUEADO'
+                            ? 'bg-rose-600 text-white'
+                            : 'bg-zinc-900 border border-zinc-700 text-rose-300'
+                        }`}
+                      >
+                        🚫 Bloquear
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Supabase Realtime Couriers */}
           <div className="space-y-2">
-            {adminSponsoredCampaigns.map((camp) => (
-              <div
-                key={camp.id}
-                className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-3 flex items-center justify-between gap-2"
-              >
-                <div className="min-w-0">
-                  <span className="text-[10px] text-zinc-400 block">
-                    {camp.category} • {camp.placement}
-                  </span>
-                  <span className="text-xs font-semibold text-zinc-100 block truncate">
-                    {camp.sponsorName} — {camp.offerHeadline}
-                  </span>
-                  <span className="text-[11px] text-zinc-400 block">
-                    {camp.discountOrBonusValue} • {camp.viewsCount} vistas
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toggleAdminSponsoredCampaignActive(camp.id)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold shrink-0 cursor-pointer ${
-                    camp.isActive
-                      ? 'bg-white text-zinc-950'
-                      : 'bg-zinc-800 text-zinc-400'
+            {adminManagedCouriers.map((c) => {
+              const isSelf =
+                Boolean(c.isSelfRegistered) ||
+                Boolean(realCourierProfile && c.id === realCourierProfile.id);
+              return (
+                <div
+                  key={c.id}
+                  className={`rounded-xl bg-zinc-950 p-3 space-y-2 border ${
+                    isSelf ? 'border-emerald-500/50' : 'border-zinc-800/80'
                   }`}
                 >
-                  {camp.isActive ? 'Ativa' : 'Pausada'}
-                </button>
-              </div>
-            ))}
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-sm font-extrabold text-zinc-100">
+                          {c.fullName}
+                        </span>
+                        <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          ● ONLINE NO MAPA ({c.lastActiveText})
+                        </span>
+                        <span className="rounded bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-bold text-zinc-300">
+                          Estado: {c.kycStatus}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-emerald-400 block mt-0.5">
+                        {c.vehicle || 'Mota 125cc'} • Zona:{' '}
+                        {c.activeAmaranteZone || c.cityZone}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => updateAdminCourierKycStatus(c.id, 'Ativo')}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                          c.kycStatus === 'Ativo'
+                            ? 'bg-emerald-500 text-slate-950'
+                            : 'bg-zinc-900 border border-zinc-800 text-zinc-300'
+                        }`}
+                      >
+                        ✓ Aprovar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateAdminCourierKycStatus(c.id, 'Suspenso')
+                        }
+                        className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                          c.kycStatus === 'Suspenso'
+                            ? 'bg-rose-600 text-white'
+                            : 'bg-zinc-900 border border-zinc-800 text-rose-300'
+                        }`}
+                      >
+                        🚫 Bloquear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* =====================================================================
+          VIEW 2: [⚠️ RECLAMAÇÕES & ALERTAS] — COMPLAINTS, HAZARDS & BROADCASTS
+          ===================================================================== */}
+      {subTab === 'RECLAMACOES_ALERTAS' && (
+        <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800/80 p-3.5 space-y-3.5 shadow-lg">
+          {/* Feed of Courier Complaints & Forbidden Routes */}
+          <div className="rounded-xl bg-zinc-950 border border-amber-500/40 p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-extrabold text-amber-300 flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                <span>
+                  ⚠️ Reclamações de Rotas, Pilaretes &amp; Desvios ({complaints.length})
+                </span>
+              </span>
+              <span className="rounded-full bg-amber-500/20 border border-amber-500/40 px-2.5 py-0.5 text-xs font-bold text-amber-200">
+                Provas Arquivadas: {evidentiaryVaultRecords.length}
+              </span>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {complaints.map((rc) => (
+                <div
+                  key={rc.id}
+                  className="rounded-xl bg-zinc-900 border border-zinc-800 p-3 space-y-1"
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-extrabold text-white">
+                      {rc.platform} • {rc.title}
+                    </span>
+                    <span className="rounded bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 text-[10px] font-extrabold text-rose-300">
+                      {rc.category} ({rc.confirmationsCount} conf.)
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-300">{rc.description}</p>
+                  {typeof rc.appAnnouncedKm === 'number' &&
+                    typeof rc.realLegalKm === 'number' && (
+                      <span className="block text-[10px] text-zinc-400">
+                        Anunciado: {rc.appAnnouncedKm.toFixed(1)} km → Real:{' '}
+                        {rc.realLegalKm.toFixed(1)} km
+                      </span>
+                    )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Active Road Hazards in Amarante */}
+          <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-2.5">
+            <span className="text-sm font-extrabold text-white block">
+              🚧 Perigos na Via Ativos em Amarante (
+              {roadHazards.filter((h) => !h.resolved).length})
+            </span>
+            <div className="space-y-2">
+              {roadHazards
+                .filter((h) => !h.resolved)
+                .map((haz) => (
+                  <div
+                    key={haz.id}
+                    className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2"
+                  >
+                    <div>
+                      <span className="text-xs font-extrabold text-amber-300 block">
+                        {haz.hazardType} — {haz.streetLocation}
+                      </span>
+                      <span className="text-[11px] text-zinc-400 block">
+                        Reportado por {haz.reporterName} • {haz.reportedAt} (
+                        {haz.confirmations} confirmações)
+                      </span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          {/* Send Official Admin Broadcast */}
+          <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-3">
+            <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
+              <Megaphone className="h-4 w-4 text-emerald-400" />
+              <span>Enviar Comunicado Oficial à Frota</span>
+            </span>
+
+            <form onSubmit={handleSendBroadcast} className="space-y-2">
+              <select
+                value={targetType}
+                onChange={(e) =>
+                  setTargetType(e.target.value as AdminBroadcastTargetType)
+                }
+                className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
+              >
+                <option value="TODOS_ESTAFETAS">Todos os Estafetas</option>
+                <option value="ZONA_ESPECIFICA">
+                  Zona Específica (Amarante 35 km)
+                </option>
+              </select>
+              <input
+                type="text"
+                required
+                value={msgTitle}
+                onChange={(e) => setMsgTitle(e.target.value)}
+                placeholder="Título do comunicado..."
+                className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
+              />
+              <input
+                type="text"
+                required
+                value={msgBody}
+                onChange={(e) => setMsgBody(e.target.value)}
+                placeholder="Mensagem curta para os estafetas..."
+                className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
+              />
+              <button
+                type="submit"
+                className="w-full rounded-xl py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Send className="h-3.5 w-3.5" />
+                <span>Publicar Comunicado Oficial</span>
+              </button>
+            </form>
+
+            <div className="space-y-1.5 pt-1">
+              {adminBroadcasts.slice(0, 3).map((b) => (
+                <div
+                  key={b.id}
+                  className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 text-xs"
+                >
+                  <span className="font-bold text-zinc-100 block">
+                    {b.title}
+                  </span>
+                  <span className="text-[11px] text-zinc-400">{b.body}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* B2B Sponsored Campaigns */}
+          <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
+                <Briefcase className="h-4 w-4 text-zinc-300" />
+                <span>Campanhas Patrocinadas B2B ({adminSponsoredCampaigns.length})</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsCampaignModalOpen(true)}
+                className="rounded-lg bg-white text-zinc-950 px-2.5 py-1 text-xs font-extrabold flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Nova Campanha</span>
+              </button>
+            </div>
+            <div className="space-y-2">
+              {adminSponsoredCampaigns.map((camp) => (
+                <div
+                  key={camp.id}
+                  className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-zinc-100 block truncate">
+                      {camp.sponsorName} — {camp.offerHeadline}
+                    </span>
+                    <span className="text-[11px] text-zinc-400 block">
+                      {camp.discountOrBonusValue} • {camp.viewsCount} vistas
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleAdminSponsoredCampaignActive(camp.id)}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-extrabold shrink-0 cursor-pointer ${
+                      camp.isActive
+                        ? 'bg-emerald-500 text-slate-950'
+                        : 'bg-zinc-800 text-zinc-400'
+                    }`}
+                  >
+                    {camp.isActive ? 'Ativa' : 'Pausada'}
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
 
           {isCampaignModalOpen && (
@@ -1039,7 +1638,6 @@ export const AdminBackofficeModule: React.FC = () => {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-
                 <div className="space-y-2">
                   <input
                     type="text"
@@ -1097,7 +1695,6 @@ export const AdminBackofficeModule: React.FC = () => {
                     className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
                   />
                 </div>
-
                 <button
                   type="submit"
                   className="w-full rounded-lg py-2 bg-white text-zinc-950 font-semibold text-xs cursor-pointer"
@@ -1110,185 +1707,76 @@ export const AdminBackofficeModule: React.FC = () => {
         </section>
       )}
 
-      {/* VIEW 2: ESTAFETAS KYC */}
-      {subTab === 'KYC' && (
-        <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 space-y-2.5">
+      {/* =====================================================================
+          VIEW 3: [💬 CENTRAL DE SUPORTE ATIVO (TEMPO REAL)] — LIVE ADMIN INBOX
+          ===================================================================== */}
+      {subTab === 'SUPORTE_ATIVO' && (
+        <section className="rounded-2xl bg-zinc-900/95 border border-sky-500/40 p-4 space-y-3.5 shadow-lg">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
-              <span className="text-xs font-extrabold text-zinc-100 flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5 text-emerald-400" />
-                <span>
-                  Controlo de Contas KYC &amp; Presença Realtime (
-                  {adminManagedCouriers.length})
-                </span>
-              </span>
-              <span className="text-[10px] text-zinc-400 block mt-0.5">
-                Sincronizado dinamicamente com a tabela{' '}
-                <code className="text-emerald-300">
-                  public.couriers
-                </code>{' '}
-                do Supabase (Amarante 25km).
-              </span>
+              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-sky-400" />
+                <span>💬 Central de Suporte Ativo (Tempo Real)</span>
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Receba e responda em tempo real às mensagens de suporte enviadas pelos estafetas na App e no Login.
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsCourierRegistrationModalOpen(true)}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 text-[10px] font-extrabold cursor-pointer transition shrink-0"
-            >
-              {realCourierProfile
-                ? `Editar Meu Registo (${realCourierProfile.name})`
-                : '+ Registar Meu Perfil no Mapa'}
-            </button>
+            <span className="rounded-full bg-emerald-500/20 border border-emerald-400/50 px-3 py-1 text-xs font-extrabold text-emerald-300">
+              ● Canal Direto Ativo
+            </span>
           </div>
 
-          <div className="space-y-2">
-            {adminManagedCouriers.length === 0 ? (
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-4 text-center space-y-2">
-                <p className="text-xs font-bold text-zinc-100">
-                  Modo Produção Real Ativo • 0 estafetas registados em{' '}
-                  <code>public.couriers</code>
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setIsCourierRegistrationModalOpen(true)}
-                  className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-extrabold cursor-pointer transition"
+          <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-3.5 max-h-80 overflow-y-auto space-y-2.5">
+            {supportMessages.map((msg) => {
+              const isAdmin = msg.sender === 'SUPPORT';
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex flex-col ${
+                    isAdmin ? 'items-end' : 'items-start'
+                  }`}
                 >
-                  Entrar Online no Mapa &amp; Guardar no Supabase
-                </button>
-              </div>
-            ) : (
-              adminManagedCouriers.map((c) => {
-                const isSelf =
-                  Boolean(c.isSelfRegistered) ||
-                  Boolean(realCourierProfile && c.id === realCourierProfile.id);
-                return (
                   <div
-                    key={c.id}
-                    className={`rounded-xl bg-zinc-950 p-3 space-y-2 border ${
-                      isSelf
-                        ? 'border-emerald-500/50'
-                        : 'border-zinc-800/80'
+                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
+                      isAdmin
+                        ? 'bg-emerald-600 text-white font-bold'
+                        : 'bg-zinc-900 border border-sky-500/40 text-zinc-100 font-semibold'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2 flex-wrap">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs font-extrabold text-zinc-100">
-                            {c.fullName}
-                          </span>
-                          <span className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                            ● ONLINE NO MAPA ({c.lastActiveText})
-                          </span>
-                          <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-300">
-                            KYC: {c.kycStatus}
-                          </span>
-                        </div>
-                        <span className="text-[11px] font-semibold text-emerald-400 block mt-0.5">
-                          {c.vehicle || 'Mota 125cc'} • Zona:{' '}
-                          {c.activeAmaranteZone || c.cityZone}
-                        </span>
-                        <span className="text-[10px] text-zinc-400 block">
-                          {c.joinedAt} • {c.courierTag} • Rep: {c.reputationPct}
-                          %
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        {(
-                          [
-                            { id: 'Ativo', label: 'Ativo' },
-                            { id: 'Pendente IA', label: 'Pendente IA' },
-                            { id: 'Suspenso', label: 'Suspender' },
-                          ] as { id: AdminCourierKycStatus; label: string }[]
-                        ).map((st) => (
-                          <button
-                            key={st.id}
-                            type="button"
-                            onClick={() =>
-                              updateAdminCourierKycStatus(c.id, st.id)
-                            }
-                            className={`rounded-lg px-2 py-1 text-[10px] font-bold cursor-pointer transition ${
-                              c.kycStatus === st.id
-                                ? 'bg-white text-zinc-950'
-                                : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                            }`}
-                          >
-                            {st.label}
-                          </button>
-                        ))}
-                      </div>
+                    <div className="flex items-center justify-between gap-3 mb-1 text-[11px] opacity-85">
+                      <span className="font-extrabold">
+                        {msg.topicBadge ||
+                          (isAdmin ? '👑 Suporte Admin (CEO)' : '👤 Estafeta')}
+                      </span>
+                      <span>{msg.timestamp}</span>
                     </div>
-
-                    <p className="text-[10px] text-zinc-400 bg-zinc-900/80 border border-zinc-800/80 rounded-lg px-2.5 py-1.5">
-                      {c.kycProofSummary}
-                    </p>
+                    <p className="leading-snug">{msg.text}</p>
                   </div>
-                );
-              })
-            )}
+                </div>
+              );
+            })}
           </div>
-        </section>
-      )}
 
-      {/* VIEW 3: COMUNICADOS */}
-      {subTab === 'COMUNICADOS' && (
-        <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 space-y-3">
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
-            <Megaphone className="h-3.5 w-3.5 text-zinc-300" />
-            <span>Enviar Comunicado Oficial</span>
-          </span>
-
-          <form onSubmit={handleSendBroadcast} className="space-y-2">
-            <select
-              value={targetType}
-              onChange={(e) =>
-                setTargetType(e.target.value as AdminBroadcastTargetType)
-              }
-              className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-100"
-            >
-              <option value="TODOS_ESTAFETAS">Todos os Estafetas</option>
-              <option value="ZONA_ESPECIFICA">
-                Zona Específica (Amarante)
-              </option>
-            </select>
+          <form
+            onSubmit={(e) => void handleSendAdminSupportReply(e)}
+            className="flex items-center gap-2"
+          >
             <input
               type="text"
-              required
-              value={msgTitle}
-              onChange={(e) => setMsgTitle(e.target.value)}
-              placeholder="Título do comunicado..."
-              className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-100"
-            />
-            <input
-              type="text"
-              required
-              value={msgBody}
-              onChange={(e) => setMsgBody(e.target.value)}
-              placeholder="Mensagem curta..."
-              className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-100"
+              value={adminReplyText}
+              onChange={(e) => setAdminReplyText(e.target.value)}
+              placeholder="Escrever resposta oficial como Administrador (CEO)..."
+              className="flex-1 rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-3 text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
             />
             <button
               type="submit"
-              className="w-full rounded-lg py-2 bg-white text-zinc-950 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-3 text-sm font-extrabold flex items-center gap-1.5 cursor-pointer shrink-0 shadow-md"
             >
-              <Send className="h-3.5 w-3.5" />
-              <span>Enviar Comunicado</span>
+              <Send className="h-4 w-4" />
+              <span>Responder</span>
             </button>
           </form>
-
-          <div className="space-y-1.5 pt-1">
-            {adminBroadcasts.slice(0, 2).map((b) => (
-              <div
-                key={b.id}
-                className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2.5 text-xs"
-              >
-                <span className="font-semibold text-zinc-100 block">
-                  {b.title}
-                </span>
-                <span className="text-[11px] text-zinc-400">{b.body}</span>
-              </div>
-            ))}
-          </div>
         </section>
       )}
     </div>

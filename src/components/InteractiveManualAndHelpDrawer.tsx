@@ -1623,6 +1623,9 @@ export const MenuMaisHubView: React.FC = () => {
   };
 
   const [subPage, setSubPage] = useState<AjustesSubPageId>('LISTA_PRINCIPAL');
+  const [openAccordion, setOpenAccordion] = useState<
+    'PERFIL' | 'VOZ_BOLINHA' | 'CENTRO_FINANCAS' | 'SEGURANCA_SISTEMA' | null
+  >('PERFIL');
   const [isLiveSupportModalOpen, setIsLiveSupportModalOpen] =
     useState<boolean>(false);
   const [isDirectApkShareModalOpen, setIsDirectApkShareModalOpen] =
@@ -1630,56 +1633,11 @@ export const MenuMaisHubView: React.FC = () => {
   const [isHubSelectorModalOpen, setIsHubSelectorModalOpen] =
     useState<boolean>(false);
   const [isShiftDrawerOpen, setIsShiftDrawerOpen] = useState<boolean>(false);
-  const [isSimulatorOpen, setIsSimulatorOpen] = useState<boolean>(false);
-  const [isDeviceProfileOpen, setIsDeviceProfileOpen] =
-    useState<boolean>(false);
-  const [customDeviceModelDraft, setCustomDeviceModelDraft] = useState<string>(
-    deviceScreenProfile.deviceModel
-  );
-  const [showApkBuildSteps, setShowApkBuildSteps] = useState<boolean>(true);
 
-  const hasNativeOverlayBridge =
-    typeof window !== 'undefined' &&
-    Boolean(
-      (
-        window as unknown as {
-          BuddyNativeOverlay?: unknown;
-          BuddyAndroid?: unknown;
-        }
-      ).BuddyNativeOverlay ||
-        (
-          window as unknown as {
-            BuddyNativeOverlay?: unknown;
-            BuddyAndroid?: unknown;
-          }
-        ).BuddyAndroid
-    );
-
-  const handlePickPreset = (preset: ScannedOffer) => {
-    selectOfferPreset(preset);
-    setIsSimulatorOpen(false);
-    setActiveTab('scanner');
-  };
-
-  const handlePickSubMinimum = () => {
-    const subMinOffer: ScannedOffer = {
-      id: `PRESET-SUB-MIN-${Date.now()}`,
-      presetBadge: '6. Abaixo do Mínimo (3,00 € / 1.5 km)',
-      platform: 'Uber Eats',
-      grossAmountEur: 3.0,
-      appAnnouncedKm: 1.5,
-      estimatedMinutes: 10,
-      originName: 'Padaria Portuguesa — Amarante',
-      destinationName: 'Av. General Silveira',
-      segmentText: 'Amarante Centro → Av. General Silveira (1.5 km)',
-      cityZone: 'Amarante — São Gonçalo',
-      ocrRawSnippet:
-        'UBER EATS • 3,00 € • 1.5 km • Recolha: Padaria Portuguesa Amarante',
-    };
-    setActiveScannedOffer(subMinOffer);
-    setAuditedOrderItemsPreset('NORMAL_2_4KG');
-    setIsSimulatorOpen(false);
-    setActiveTab('scanner');
+  const toggleAccordionCard = (
+    cardId: 'PERFIL' | 'VOZ_BOLINHA' | 'CENTRO_FINANCAS' | 'SEGURANCA_SISTEMA'
+  ) => {
+    setOpenAccordion((prev) => (prev === cardId ? null : cardId));
   };
 
   const shiftBadge = isAppPaused
@@ -1730,585 +1688,30 @@ export const MenuMaisHubView: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {/* Dynamic 3-State Robot Mascot (Ativo / Inativo / Em Entrega) & Floating Bubble Resting Position */}
-      <div className="rounded-xl bg-zinc-900/95 border border-emerald-500/45 p-3 space-y-3 shadow-md">
-        <input
-          ref={mascotFileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            try {
-              setMascotUploadStatus('A recortar as 3 poses da imagem...');
-              await uploadThreePoseMascotSheet(file);
-              setMascotUploadStatus(
-                '✓ 3 Poses do Robô Buddy recortadas e aplicadas na App, Mapa e Bolinha!'
-              );
-            } catch {
-              setMascotUploadStatus('Erro ao processar a imagem.');
-            }
-            e.target.value = '';
-          }}
-        />
-
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div>
-            <span className="text-xs font-extrabold text-zinc-100 block">
-              🤖 Mascote Dinâmico Delivery Buddy (3 Estados)
-            </span>
-            <span className="text-[10px] text-zinc-400 block">
-              Muda automaticamente no Topo, Pino GPS e Bolinha Flutuante
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              onClick={() => {
-                mascotFileInputRef.current?.click();
-                if (isLegacyAndroidWebViewWithoutFileChooser()) {
-                  handleOpenExternalChromeBridge();
-                }
-              }}
-              style={{ backgroundColor: '#059669', color: '#ffffff' }}
-              className="rounded-xl hover:opacity-95 text-white px-3 py-2 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow"
-            >
-              <span>🖼️ Carregar Imagem das 3 Poses do Buddy</span>
-            </button>
-            {buddyMascotImages.isCustomUploaded && (
-              <button
-                type="button"
-                onClick={() => {
-                  resetMascotImagesToBuiltin();
-                  setMascotUploadStatus('Robô vetorial padrão restaurado.');
-                }}
-                title="Repor robô padrão"
-                className="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2.5 py-2 text-[10px] font-bold cursor-pointer"
-              >
-                Repor
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Zero-APK OTA Upload Methods: 1. External Chrome Cloud Bridge + 2. Direct Samsung Clipboard Paste Box */}
-        <div className="rounded-xl bg-zinc-950/90 border border-emerald-500/35 p-2.5 space-y-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <a
-              ref={chromeBridgeAnchorRef}
-              href={chromeDirectSchemeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => {
-                setMascotUploadStatus(
-                  '🌐 A abrir Galeria via Chrome... Selecione a imagem lá para sincronizar automaticamente!'
-                );
-              }}
-              style={{
-                backgroundColor: '#0284c7',
-                borderColor: '#38bdf8',
-                color: '#ffffff',
-              }}
-              className="rounded-xl border px-3 py-2 text-[11px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow transition text-center no-underline"
-            >
-              <span>🌐 Abrir Galeria via Chrome &amp; Sincronizar</span>
-            </a>
-
-            <button
-              type="button"
-              onClick={() => void handleReadClipboardButton()}
-              style={{
-                backgroundColor: '#1e1b4b',
-                borderColor: '#6366f1',
-                color: '#e0e7ff',
-              }}
-              className="rounded-xl border px-3 py-2 text-[11px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow transition"
-            >
-              <span>📋 Ler Imagem Copiada (1-Toque)</span>
-            </button>
-          </div>
-
-          <div
-            contentEditable
-            suppressContentEditableWarning
-            onPaste={(e) => void handleMascotPasteEvent(e)}
-            onInput={(e) => {
-              const el = e.currentTarget;
-              const imgEl = el.querySelector('img');
-              if (imgEl && imgEl.src) {
-                const src = imgEl.src;
-                el.innerHTML = '';
-                setMascotUploadStatus('A recortar as 3 poses da imagem colada...');
-                void uploadThreePoseMascotSheetFromDataUrl(src)
-                  .then(() => {
-                    setMascotUploadStatus(
-                      '✓ 3 Poses coladas do teclado/galeria e aplicadas!'
-                    );
-                  })
-                  .catch(() => {
-                    setMascotUploadStatus('Erro ao recortar a imagem colada.');
-                  });
-                return;
-              }
-              el.innerHTML = '';
-            }}
-            style={{
-              backgroundColor: '#090d16',
-              borderColor: '#10b981',
-              color: '#a7f3d0',
-            }}
-            className="w-full rounded-xl border-2 border-dashed px-3 py-2 text-center text-[11px] font-bold cursor-text outline-none focus:ring-2 focus:ring-emerald-400"
-          >
-            📋 Toque aqui e escolha &ldquo;Colar&rdquo; (ou cole a imagem do Teclado Samsung / Galeria)
-          </div>
-        </div>
-
-        {mascotUploadStatus && (
-          <div className="rounded-lg bg-emerald-950/70 border border-emerald-500/40 px-2.5 py-1.5 text-[10px] font-bold text-emerald-300">
-            {mascotUploadStatus}
-          </div>
-        )}
-
-        {/* 3 Poses Preview Row */}
-        <div className="grid grid-cols-3 gap-2">
-          <div
-            className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
-              currentMascotState === 'ACTIVE'
-                ? 'bg-emerald-950/60 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
-                : 'bg-zinc-950 border-zinc-800'
-            }`}
-          >
-            <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-emerald-400 bg-slate-950 mb-1">
-              <img
-                src={buddyMascotImages.mascotActive}
-                alt="Pose 1 Ativo"
-                className="h-full w-full object-cover"
-              />
-            </div>
-            <span className="text-[10px] font-extrabold text-emerald-300">
-              1. Ativo 👍
-            </span>
-            <span className="text-[9px] text-zinc-400">🟢 Online</span>
-          </div>
-
-          <div
-            className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
-              currentMascotState === 'INACTIVE'
-                ? 'bg-slate-900 border-slate-400 shadow-sm'
-                : 'bg-zinc-950 border-zinc-800'
-            }`}
-          >
-            <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-slate-400 bg-slate-950 mb-1">
-              <img
-                src={buddyMascotImages.mascotInactive}
-                alt="Pose 2 Inativo"
-                className="h-full w-full object-cover"
-              />
-            </div>
-            <span className="text-[10px] font-extrabold text-slate-200">
-              2. Inativo
-            </span>
-            <span className="text-[9px] text-zinc-400">⚪ Pausa (Costas)</span>
-          </div>
-
-          <div
-            className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
-              currentMascotState === 'DELIVERY'
-                ? 'bg-amber-950/60 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                : 'bg-zinc-950 border-zinc-800'
-            }`}
-          >
-            <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-amber-400 bg-slate-950 mb-1">
-              <img
-                src={buddyMascotImages.mascotDelivery}
-                alt="Pose 3 Em Entrega"
-                className="h-full w-full object-cover"
-              />
-            </div>
-            <span className="text-[10px] font-extrabold text-amber-300">
-              3. Em Entrega 🚀
-            </span>
-            <span className="text-[9px] text-zinc-400">Jato DB Ativo</span>
-          </div>
-        </div>
-
-        {/* Configurable Floating Bubble Resting Position Selector */}
-        <div className="pt-2 border-t border-zinc-800 space-y-2">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-xs font-extrabold text-zinc-100">
-              📍 Posição de Repouso da Bolinha Flutuante
-            </span>
-            <span
-              style={{
-                backgroundColor: '#064e3b',
-                borderColor: '#10b981',
-                color: '#6ee7b7',
-              }}
-              className="rounded-full border px-2.5 py-0.5 text-[10px] font-extrabold"
-            >
-              Ativo:{' '}
-              {BUBBLE_RESTING_PRESET_OPTIONS.find(
-                (o) => o.id === bubbleRestingPreset
-              )?.label || 'Canto Inferior Direito'}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {BUBBLE_RESTING_PRESET_OPTIONS.map((opt) => {
-              const isSelected = bubbleRestingPreset === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => setBubbleRestingPreset(opt.id)}
-                  style={{
-                    backgroundColor: isSelected ? '#064e3b' : '#09090b',
-                    borderColor: isSelected ? '#10b981' : '#3f3f46',
-                    color: '#ffffff',
-                    boxShadow: isSelected
-                      ? '0 0 14px rgba(16, 185, 129, 0.38)'
-                      : 'none',
-                  }}
-                  className="rounded-xl px-3 py-2.5 text-left border-2 transition cursor-pointer flex items-center justify-between gap-2"
-                >
-                  <div className="min-w-0">
-                    <span
-                      style={{ color: isSelected ? '#ecfdf5' : '#f4f4f5' }}
-                      className="block text-xs font-extrabold truncate"
-                    >
-                      {opt.label}
-                    </span>
-                    <span
-                      style={{ color: isSelected ? '#a7f3d0' : '#a1a1aa' }}
-                      className="block text-[10px] truncate"
-                    >
-                      {opt.shortDesc}
-                    </span>
-                  </div>
-                  <span
-                    style={{
-                      backgroundColor: isSelected ? '#10b981' : '#27272a',
-                      borderColor: isSelected ? '#6ee7b7' : '#52525b',
-                      color: isSelected ? '#022c22' : '#71717a',
-                    }}
-                    className="h-5 w-5 rounded-full border flex items-center justify-center text-xs font-black shrink-0"
-                  >
-                    {isSelected ? '✓' : '○'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Natural Male pt-BR Voice Engine Tuning Card (1.30x Default +30% Faster) */}
-      <div className="rounded-xl bg-zinc-900/95 border border-indigo-500/35 p-3 space-y-2.5">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div>
-            <span className="text-xs font-extrabold text-zinc-100 flex items-center gap-1.5">
-              <Volume2 className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-              <span>
-                Velocidade da Voz (pt-BR Masculina): {buddyVoiceRate.toFixed(2)}x (
-                {Math.abs(buddyVoiceRate - 1.3) < 0.01
-                  ? '+30% Rápida — Padrão'
-                  : `${Math.round((buddyVoiceRate - 1) * 100)}% Rápida`}
-                )
-              </span>
-            </span>
-            <span className="block text-[10px] text-zinc-400">
-              Voz Masculina pt-BR Prioritária:{' '}
-              <strong className="text-indigo-300">{resolvedPtBrVoiceName}</strong>{' '}
-              • Pitch 0.95 • Sem Eco
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              speakTextPt('Uber: 6,20 limpos, 1,55 por km. Vale a pena.')
-            }
-            className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow shrink-0"
-          >
-            <Volume2 className="h-3.5 w-3.5" />
-            <span>🔊 Ouvir Voz do Buddy ({buddyVoiceRate.toFixed(2)}x)</span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] text-zinc-400">1.00x</span>
-          <input
-            type="range"
-            min="1.0"
-            max="1.5"
-            step="0.05"
-            value={buddyVoiceRate}
-            onChange={(e) => setBuddyVoiceRate(Number(e.target.value))}
-            aria-label="Velocidade da Voz do Buddy"
-            className="flex-1 accent-indigo-500 cursor-pointer"
-          />
-          <span className="text-[10px] text-zinc-400">1.50x</span>
-          {Math.abs(buddyVoiceRate - 1.3) >= 0.01 && (
-            <button
-              type="button"
-              onClick={() => setBuddyVoiceRate(1.3)}
-              className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 px-2 py-0.5 text-[10px] font-bold cursor-pointer"
-            >
-              Repor 1.30x
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 5 Street Safety & Battery Survival Modules Control Center */}
-      <div className="rounded-xl bg-zinc-900/95 border border-zinc-800 p-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-extrabold text-zinc-100">
-            🛡️ Proteção de Rua, Chuva, Queda &amp; Bateria
-          </span>
-          <span className="text-[10px] text-emerald-400">
-            {batteryLevelPct}% {isBatteryCharging ? '⚡ A Carregar' : '🔋 Bateria'}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-          {/* Module 1: Rain Lock */}
-          <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <span className="text-[11px] font-bold text-zinc-100 block truncate">
-                🌧️ Modo Chuva &amp; Luvas
-              </span>
-              <span className="text-[9px] text-zinc-400 block truncate">
-                Bloqueia toques fantasma
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={toggleRainLock}
-              className={`shrink-0 rounded-lg px-2 py-1 text-[10px] font-extrabold cursor-pointer ${
-                rainLockActive
-                  ? 'bg-sky-500 text-zinc-950'
-                  : 'bg-zinc-900 border border-zinc-800 text-zinc-300'
-              }`}
-            >
-              {rainLockActive ? 'ATIVO' : 'Ativar'}
-            </button>
-          </div>
-
-          {/* Module 2: Crash Detection Auto-SOS */}
-          <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <span className="text-[11px] font-bold text-zinc-100 block truncate">
-                🚨 Deteção Queda (45s)
-              </span>
-              <span className="text-[9px] text-zinc-400 block truncate">
-                Auto-SOS se imóvel
-              </span>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={toggleCrashDetection}
-                className={`rounded-lg px-2 py-1 text-[10px] font-extrabold cursor-pointer ${
-                  crashDetectionEnabled
-                    ? 'bg-emerald-500 text-zinc-950'
-                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400'
-                }`}
-              >
-                {crashDetectionEnabled ? 'ON' : 'OFF'}
-              </button>
-              <button
-                type="button"
-                onClick={triggerSimulatedCrashTest}
-                title="Testar contagem regressiva Auto-SOS 45s"
-                className="rounded-lg bg-rose-600/20 border border-rose-500/40 text-rose-300 px-1.5 py-1 text-[9px] font-bold cursor-pointer"
-              >
-                Testar
-              </button>
-            </div>
-          </div>
-
-          {/* Module 5: Battery Survival & Charger Unplugged Alert */}
-          <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <span className="text-[11px] font-bold text-zinc-100 block truncate">
-                🔋 Sobrevivência &lt;20%
-              </span>
-              <span className="text-[9px] text-zinc-400 block truncate">
-                Alerta cabo desligado
-              </span>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={toggleBatterySurvivalMode}
-                className={`rounded-lg px-2 py-1 text-[10px] font-extrabold cursor-pointer ${
-                  batterySurvivalMode
-                    ? 'bg-amber-500 text-zinc-950'
-                    : 'bg-zinc-900 border border-zinc-800 text-zinc-300'
-                }`}
-              >
-                {batterySurvivalMode ? 'ON' : 'Eco'}
-              </button>
-              <button
-                type="button"
-                onClick={simulateChargerUnpluggedAlert}
-                title="Testar alerta de carregador desligado na mota"
-                className="rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 px-1.5 py-1 text-[9px] font-bold cursor-pointer"
-              >
-                Cabo
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Direct SOS Emergency Trigger inside Ajustes */}
+      {/* Top Executive Action Bar: 👑 Painel Admin (CEO) + 📲 Partilhar APK (QR Code) + 💬 Suporte */}
+      <div className="rounded-2xl bg-zinc-900/95 border border-emerald-500/45 p-3.5 space-y-2.5 shadow-lg">
         <button
           type="button"
-          onClick={() => requestOrConfirmSosActivation('Acidente na Via')}
-          style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
-          className="w-full rounded-xl border border-red-400 py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition hover:opacity-95"
-        >
-          <span>🆘 Acionar Alerta SOS de Emergência (ou diga &ldquo;Buddy SOS&rdquo;)</span>
-        </button>
-      </div>
-
-      {/* Top Bar: Courier Identity, Zero-AI Photo & Active Platforms Quick Access */}
-      <div className="rounded-xl bg-zinc-900/95 border border-emerald-500/35 p-3 space-y-2.5">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2.5 min-w-0">
-            {realCourierProfile?.isRegistered && realCourierProfile.avatar_url ? (
-              <img
-                src={realCourierProfile.avatar_url}
-                alt={realCourierProfile.name}
-                className="h-9 w-9 rounded-full object-cover border-2 border-emerald-400 shrink-0"
-              />
-            ) : (
-              <MapPin className="h-4 w-4 text-emerald-400 shrink-0" />
-            )}
-            <div className="min-w-0">
-              <span className="block text-xs font-extrabold text-zinc-100 truncate">
-                {realCourierProfile?.isRegistered && realCourierProfile.name
-                  ? `Registado no Mapa: ${realCourierProfile.name} (${realCourierProfile.vehicle})`
-                  : 'Ainda não registado no Mapa em Tempo Real'}
-              </span>
-              <span className="block text-[10px] text-zinc-400 truncate">
-                {realCourierProfile?.isRegistered && realCourierProfile.name
-                  ? `Zona: ${realCourierProfile.zone} • GPS: ${realCourierProfile.lat.toFixed(4)}, ${realCourierProfile.lng.toFixed(4)}`
-                  : 'Registe o seu perfil para aparecer no Mapa de Amarante, Buddys e KYC.'}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-            <button
-              type="button"
-              onClick={refreshLiveGpsPosition}
-              className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1.5 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition"
-            >
-              <RefreshCw className="h-3 w-3 text-emerald-400" />
-              <span>GPS</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsCourierRegistrationModalOpen(true)}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer transition"
-            >
-              <UserCheck className="h-3.5 w-3.5" />
-              <span>Editar Meu Perfil / Registo</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Logout / Switch Account + Live Support Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setIsLiveSupportModalOpen(true)}
-            className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 border border-sky-400 text-white py-2 px-3 text-[11px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
-          >
-            <span>💬 Acessar Suporte em Tempo Real</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={logoutSession}
-            style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
-            className="w-full rounded-xl bg-rose-600 hover:bg-rose-500 border border-rose-400 text-white py-2 px-3 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            <span>Terminar Sessão / Trocar Conta</span>
-          </button>
-        </div>
-
-        {/* Live Support Modal inside Ajustes */}
-        {isLiveSupportModalOpen && (
-          <div className="fixed inset-0 z-[1300] bg-black/80 backdrop-blur-xs flex items-center justify-center p-3">
-            <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-sky-500/40 p-4 shadow-2xl">
-              <RealTimeSupportPanel
-                onBack={() => setIsLiveSupportModalOpen(false)}
-                isDaylight={themeMode === 'DAYLIGHT'}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Direct Zero-AI Photo Uploader & Active Platforms Selector in Ajustes */}
-        <ZeroAiProfilePhotoUploader
-          avatarUrl={
-            realCourierProfile?.isRegistered
-              ? realCourierProfile.avatar_url
-              : undefined
-          }
-          courierName={
-            realCourierProfile?.isRegistered && realCourierProfile.name
-              ? realCourierProfile.name
-              : 'Novo Estafeta'
-          }
-          onAvatarCompressedChange={(dataUrl) => {
-            void updateCourierAvatarUrl(dataUrl);
+          onClick={() => {
+            setViewMode('PAINEL_ADMIN');
+            setActiveTab('admin_backoffice');
           }}
-          compact
-        />
+          style={{
+            background: 'linear-gradient(135deg, #065f46 0%, #b45309 100%)',
+            borderColor: '#fbbf24',
+            color: '#ffffff',
+          }}
+          className="w-full rounded-xl border-2 py-3 px-4 text-base font-extrabold flex items-center justify-between gap-2 cursor-pointer shadow-[0_0_20px_rgba(245,158,11,0.3)] transition hover:opacity-95 active:scale-98"
+        >
+          <span className="flex items-center gap-2">
+            <span>👑</span>
+            <span>Abrir Painel de Administrador (CEO)</span>
+          </span>
+          <span className="rounded-lg bg-black/35 border border-amber-300/50 px-2 py-0.5 text-xs font-extrabold text-amber-200">
+            Online • Suporte • KYC
+          </span>
+        </button>
 
-        <ActivePlatformsSelectorGroup
-          selectedPlatforms={activePlatforms}
-          onTogglePlatform={toggleActivePlatform}
-        />
-
-        {/* Quick Actions Row: Official Manual + Screen WakeLock */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => setIsOfficialManualModalOpen(true)}
-            className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-3 text-base font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow"
-          >
-            <BookOpen className="h-4 w-4 shrink-0" />
-            <span>📘 Manual de Uso &amp; Lista de Comandos</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={toggleWakeLock}
-            className={`rounded-xl py-2.5 px-3 text-base font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
-              wakeLockEnabled
-                ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
-                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            {wakeLockEnabled ? (
-              <Lock className="h-4 w-4 text-emerald-400 shrink-0" />
-            ) : (
-              <Unlock className="h-4 w-4 text-zinc-500 shrink-0" />
-            )}
-            <span>
-              🔒 Manter Ecrã Ligado na Mota: {wakeLockEnabled ? 'ON' : 'OFF'}
-            </span>
-          </button>
-        </div>
-
-        {/* Prominent 1-Tap Direct APK Share & QR Code Button */}
         <button
           type="button"
           onClick={() => setIsDirectApkShareModalOpen(true)}
@@ -2318,303 +1721,782 @@ export const MenuMaisHubView: React.FC = () => {
           <Download className="h-5 w-5 shrink-0" />
           <span>📲 Enviar App a um Colega / Baixar APK Direto (QR Code)</span>
         </button>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setIsLiveSupportModalOpen(true)}
+            className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 border border-sky-400 text-white py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
+          >
+            <span>💬 Acessar Suporte em Tempo Real</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={logoutSession}
+            style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+            className="w-full rounded-xl bg-rose-600 hover:bg-rose-500 border border-rose-400 text-white py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Terminar Sessão / Trocar Conta</span>
+          </button>
+        </div>
       </div>
 
-      {/* Compact Soft Clean Settings List */}
-      <div className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 overflow-hidden">
-        {/* Enviar App a um Colega / Baixar APK Direto (Sem .ZIP) */}
+      {/* Live Support Modal inside Ajustes */}
+      {isLiveSupportModalOpen && (
+        <div className="fixed inset-0 z-[1300] bg-black/80 backdrop-blur-xs flex items-center justify-center p-3">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-sky-500/40 p-4 shadow-2xl">
+            <RealTimeSupportPanel
+              onBack={() => setIsLiveSupportModalOpen(false)}
+              isDaylight={themeMode === 'DAYLIGHT'}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          ACCORDION CARD 1: 👤 MEU PERFIL & PLATAFORMAS
+          ===================================================================== */}
+      <div className="rounded-2xl bg-zinc-900/95 border border-zinc-800 overflow-hidden shadow-md">
         <button
           type="button"
-          onClick={() => setIsDirectApkShareModalOpen(true)}
-          className="w-full py-3.5 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
+          onClick={() => toggleAccordionCard('PERFIL')}
+          className="w-full px-4 py-3.5 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/40 transition cursor-pointer"
         >
-          <span className="text-base font-bold text-emerald-300 flex items-center gap-2">
-            <Download className="h-4 w-4 text-emerald-400 shrink-0" />
-            <span>📲 Enviar App a um Colega / Baixar APK Direto</span>
+          <span className="text-base font-extrabold text-zinc-100 flex items-center gap-2">
+            <span>👤 Meu Perfil &amp; Plataformas</span>
           </span>
-          <span className="rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 text-base font-bold text-emerald-300 shrink-0">
-            QR &amp; Link
-          </span>
-        </button>
-        {/* Auto-Detetor de Pedidos (Acessibilidade) */}
-        <button
-          type="button"
-          onClick={() => {
-            const winAny = window as unknown as {
-              BuddyNativeOverlay?: {
-                openAccessibilitySettings?: () => void;
-              };
-            };
-            if (
-              typeof winAny.BuddyNativeOverlay?.openAccessibilitySettings ===
-              'function'
-            ) {
-              winAny.BuddyNativeOverlay.openAccessibilitySettings();
-            } else {
-              speakTextPt(
-                'Ative o serviço Delivery Buddy nas definições de Acessibilidade do Android para leitura automática de pedidos.'
-              );
-            }
-          }}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-            <Smartphone className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-            <span>Auto-Detetor de Pedidos (Acessibilidade)</span>
-          </span>
-          <span className="rounded bg-emerald-500/15 border border-emerald-500/35 px-2 py-0.5 text-[10px] text-emerald-300 shrink-0">
-            Configurar
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-0.5 text-xs font-extrabold text-emerald-300">
+              {realCourierProfile?.name || 'Estafeta'} • {activePlatforms.length} App(s)
+            </span>
+            <ChevronRight
+              className={`h-5 w-5 text-zinc-400 transition-transform ${
+                openAccordion === 'PERFIL' ? 'rotate-90' : ''
+              }`}
+            />
+          </div>
         </button>
 
-        {/* Atualizar App Agora (OTA) */}
-        <button
-          type="button"
-          onClick={() => {
-            try {
-              window.localStorage.setItem('buddy_pending_ota_toast_v1', '1');
-              window.dispatchEvent(new CustomEvent('buddy-ota-updated-toast'));
-            } catch {
-              // ignore
-            }
-            const winAny = window as unknown as {
-              BuddyNativeOverlay?: {
-                reloadOtaNow?: () => void;
-              };
-            };
-            if (typeof winAny.BuddyNativeOverlay?.reloadOtaNow === 'function') {
-              winAny.BuddyNativeOverlay.reloadOtaNow();
-              return;
-            }
-            try {
-              if ('caches' in window) {
-                caches.keys().then((names) => {
-                  names.forEach((n) => caches.delete(n));
-                });
+        {openAccordion === 'PERFIL' && (
+          <div className="p-3.5 pt-2 border-t border-zinc-800 space-y-3 bg-zinc-950/60">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2.5 min-w-0">
+                {realCourierProfile?.isRegistered &&
+                realCourierProfile.avatar_url ? (
+                  <img
+                    src={realCourierProfile.avatar_url}
+                    alt={realCourierProfile.name}
+                    className="h-10 w-10 rounded-full object-cover border-2 border-emerald-400 shrink-0"
+                  />
+                ) : (
+                  <MapPin className="h-5 w-5 text-emerald-400 shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <span className="block text-sm font-extrabold text-zinc-100 truncate">
+                    {realCourierProfile?.isRegistered && realCourierProfile.name
+                      ? `Registado no Mapa: ${realCourierProfile.name} (${realCourierProfile.vehicle})`
+                      : 'Ainda não registado no Mapa em Tempo Real'}
+                  </span>
+                  <span className="block text-xs text-zinc-400 truncate">
+                    {realCourierProfile?.isRegistered && realCourierProfile.name
+                      ? `Zona: ${realCourierProfile.zone} • GPS: ${realCourierProfile.lat.toFixed(4)}, ${realCourierProfile.lng.toFixed(4)}`
+                      : 'Registe o seu perfil para aparecer no Mapa de Amarante e Buddys.'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  onClick={refreshLiveGpsPosition}
+                  className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer transition"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>GPS</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCourierRegistrationModalOpen(true)}
+                  className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-extrabold flex items-center gap-1 cursor-pointer transition"
+                >
+                  <UserCheck className="h-4 w-4" />
+                  <span>Editar Meu Perfil / Registo</span>
+                </button>
+              </div>
+            </div>
+
+            <ZeroAiProfilePhotoUploader
+              avatarUrl={
+                realCourierProfile?.isRegistered
+                  ? realCourierProfile.avatar_url
+                  : undefined
               }
-            } catch {
-              // ignore
-            }
-            const baseUrl = window.location.href.split('?')[0];
-            window.location.replace(`${baseUrl}?ota_ts=${Date.now()}`);
-          }}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-            <RefreshCw className="h-3.5 w-3.5 text-sky-400 shrink-0" />
-            <span>Atualizar App Agora (OTA)</span>
-          </span>
-          <span className="rounded bg-sky-500/15 border border-sky-500/35 px-2 py-0.5 text-[10px] text-sky-300 shrink-0">
-            Recarregar
-          </span>
-        </button>
+              courierName={
+                realCourierProfile?.isRegistered && realCourierProfile.name
+                  ? realCourierProfile.name
+                  : 'Novo Estafeta'
+              }
+              onAvatarCompressedChange={(dataUrl) => {
+                void updateCourierAvatarUrl(dataUrl);
+              }}
+              compact
+            />
 
-        {/* 1. Navigable Item: Personalizar Alertas (±45%), Voz & Trigger */}
+            <ActivePlatformsSelectorGroup
+              selectedPlatforms={activePlatforms}
+              onTogglePlatform={toggleActivePlatform}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* =====================================================================
+          ACCORDION CARD 2: 🎙️ VOZ & POSIÇÃO DA BOLINHA
+          ===================================================================== */}
+      <div className="rounded-2xl bg-zinc-900/95 border border-zinc-800 overflow-hidden shadow-md">
         <button
           type="button"
-          onClick={() => setSubPage('PERSONALIZAR_ALERTAS_VOZ')}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
+          onClick={() => toggleAccordionCard('VOZ_BOLINHA')}
+          className="w-full px-4 py-3.5 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/40 transition cursor-pointer"
         >
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2 min-w-0">
-            <Sliders className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-            <span className="truncate">
-              Voz &amp; Trigger (&ldquo;
-              {voiceActivationConfig.customTriggerWord || 'Buddy'}&rdquo;),
-              Alertas (±45%) &amp; Mensagens
-            </span>
+          <span className="text-base font-extrabold text-zinc-100 flex items-center gap-2">
+            <span>🎙️ Voz &amp; Posição da Bolinha</span>
           </span>
-          <div className="flex items-center gap-1.5 shrink-0 ml-2">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-200">
-              {alertPopupPrefs.sizeVh.replace('VH', '%')} • &ldquo;
-              {voiceActivationConfig.customTriggerWord || 'Buddy'}&rdquo;
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="rounded-lg bg-indigo-500/15 border border-indigo-500/35 px-2.5 py-0.5 text-xs font-extrabold text-indigo-300">
+              {buddyVoiceRate.toFixed(2)}x • pt-BR
             </span>
-            <ChevronRight className="h-4 w-4 text-zinc-500" />
+            <ChevronRight
+              className={`h-5 w-5 text-zinc-400 transition-transform ${
+                openAccordion === 'VOZ_BOLINHA' ? 'rotate-90' : ''
+              }`}
+            />
           </div>
         </button>
 
-        {/* 2. Centro Operacional & Raio 35 km (Amarante) */}
-        <button
-          type="button"
-          onClick={() => setIsHubSelectorModalOpen(true)}
-          className="w-full py-3.5 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-base font-bold text-zinc-100 flex items-center gap-2">
-            <Compass className="h-4 w-4 text-emerald-400 shrink-0" />
-            <span>📍 Centro: Amarante (Raio 35 km)</span>
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-1 text-base font-bold text-emerald-300">
-              Ativo • 35 km
-            </span>
-            <ChevronRight className="h-4 w-4 text-zinc-500" />
-          </div>
-        </button>
+        {openAccordion === 'VOZ_BOLINHA' && (
+          <div className="p-3.5 pt-2 border-t border-zinc-800 space-y-3 bg-zinc-950/60">
+            {/* Natural Male pt-BR Voice Engine Tuning Card */}
+            <div className="rounded-xl bg-zinc-900 border border-indigo-500/35 p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
+                    <Volume2 className="h-4 w-4 text-indigo-400 shrink-0" />
+                    <span>
+                      Velocidade da Voz (pt-BR Masculina):{' '}
+                      {buddyVoiceRate.toFixed(2)}x
+                    </span>
+                  </span>
+                  <span className="block text-xs text-zinc-400">
+                    Voz Ativa:{' '}
+                    <strong className="text-indigo-300">
+                      {resolvedPtBrVoiceName}
+                    </strong>{' '}
+                    • Pitch 0.95 • Sem Eco
+                  </span>
+                </div>
 
-        {/* 3. Metas Financeiras & Caixa */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('financas')}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100">
-            Metas Financeiras &amp; Caixa
-          </span>
-          <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
-        </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    speakTextPt('Uber: 6,20 limpos, 1,55 por km. Vale a pena.')
+                  }
+                  className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow shrink-0"
+                >
+                  <Volume2 className="h-3.5 w-3.5" />
+                  <span>🔊 Ouvir Voz ({buddyVoiceRate.toFixed(2)}x)</span>
+                </button>
+              </div>
 
-        {/* 5. Acordos de Zona (Renamed from Pactos & Moved from Mapa to Ajustes) */}
-        <button
-          type="button"
-          onClick={() => setSubPage('ACORDOS_ZONA')}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-            <Handshake className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-            <span>Acordos de Zona (Piso Mínimo Coletivo)</span>
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-200">
-              {zonePacts.filter((p) => p.joinedByUser).length}/
-              {zonePacts.length} Ativos
-            </span>
-            <ChevronRight className="h-4 w-4 text-zinc-500" />
-          </div>
-        </button>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-zinc-400">1.00x</span>
+                <input
+                  type="range"
+                  min="1.0"
+                  max="1.5"
+                  step="0.05"
+                  value={buddyVoiceRate}
+                  onChange={(e) => setBuddyVoiceRate(Number(e.target.value))}
+                  aria-label="Velocidade da Voz do Buddy"
+                  className="flex-1 accent-indigo-500 cursor-pointer"
+                />
+                <span className="text-xs text-zinc-400">1.50x</span>
+                {Math.abs(buddyVoiceRate - 1.3) >= 0.01 && (
+                  <button
+                    type="button"
+                    onClick={() => setBuddyVoiceRate(1.3)}
+                    className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 px-2 py-0.5 text-xs font-bold cursor-pointer"
+                  >
+                    Repor 1.30x
+                  </button>
+                )}
+              </div>
+            </div>
 
-        {/* 6. Perigos na Via (Moved from Mapa to Ajustes) */}
-        <button
-          type="button"
-          onClick={() => setSubPage('PERIGOS_VIA')}
-          className="w-full py-3.5 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-base font-bold text-zinc-100 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-zinc-400 shrink-0" />
-            <span>Perigos na Via (Amarante — Raio 35 km)</span>
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="rounded-lg bg-zinc-800 px-2.5 py-1 text-base font-bold text-zinc-200">
-              {roadHazards.filter((h) => !h.resolved).length} Alertas
-            </span>
-            <ChevronRight className="h-4 w-4 text-zinc-500" />
-          </div>
-        </button>
+            {/* 3 Bundled 3D Poses Status Preview */}
+            <div className="grid grid-cols-3 gap-2">
+              <div
+                className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
+                  currentMascotState === 'ACTIVE'
+                    ? 'bg-emerald-950/60 border-emerald-400'
+                    : 'bg-zinc-900 border-zinc-800'
+                }`}
+              >
+                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-emerald-400 bg-[#090E13] p-1 mb-1">
+                  <img
+                    src={buddyMascotImages.mascotActive}
+                    alt="Pose 1 Ativo"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <span className="text-xs font-extrabold text-emerald-300">
+                  1. Online
+                </span>
+              </div>
 
-        {/* 7. Theme Mode Row: Modo Claro (Solar) vs Modo Escuro Suave */}
-        <button
-          type="button"
-          onClick={toggleThemeMode}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-            {themeMode === 'DAYLIGHT' ? (
-              <Sun className="h-3.5 w-3.5 text-zinc-400" />
-            ) : (
-              <Moon className="h-3.5 w-3.5 text-zinc-400" />
-            )}
-            <span>Tema Visual (Legibilidade ao Sol)</span>
-          </span>
-          <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-zinc-200">
-            {themeMode === 'DAYLIGHT'
-              ? 'Modo Claro (Solar)'
-              : 'Modo Escuro Suave'}
-          </span>
-        </button>
+              <div
+                className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
+                  currentMascotState === 'INACTIVE'
+                    ? 'bg-slate-900 border-slate-400'
+                    : 'bg-zinc-900 border-zinc-800'
+                }`}
+              >
+                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-slate-400 bg-[#090E13] p-1 mb-1">
+                  <img
+                    src={buddyMascotImages.mascotInactive}
+                    alt="Pose 2 Pausa"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <span className="text-xs font-extrabold text-slate-200">
+                  2. Pausa
+                </span>
+              </div>
 
-        {/* 8. Estado do Turno (Pausa / Anónimo / Voz) */}
-        <button
-          type="button"
-          onClick={() => setIsShiftDrawerOpen((prev) => !prev)}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100">
-            Estado do Turno (Pausa / Anónimo / Voz)
-          </span>
-          <div className="flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-200">
-              {shiftBadge}
-            </span>
-            <ChevronRight className="h-4 w-4 text-zinc-500" />
-          </div>
-        </button>
+              <div
+                className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
+                  currentMascotState === 'DELIVERY'
+                    ? 'bg-amber-950/60 border-amber-400'
+                    : 'bg-zinc-900 border-zinc-800'
+                }`}
+              >
+                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-amber-400 bg-[#090E13] p-1 mb-1">
+                  <img
+                    src={buddyMascotImages.mascotDelivery}
+                    alt="Pose 3 Entrega"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <span className="text-xs font-extrabold text-amber-300">
+                  3. Entrega 🚀
+                </span>
+              </div>
+            </div>
 
-        {isShiftDrawerOpen && (
-          <div className="px-4 py-3 bg-zinc-950 border-b border-zinc-800 grid grid-cols-3 gap-1.5">
+            {/* Configurable Floating Bubble Resting Position Selector */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-sm font-extrabold text-zinc-100">
+                  📍 Posição de Repouso da Bolinha Flutuante
+                </span>
+                <span className="rounded-full bg-emerald-950 border border-emerald-500 px-2.5 py-0.5 text-xs font-extrabold text-emerald-300">
+                  {BUBBLE_RESTING_PRESET_OPTIONS.find(
+                    (o) => o.id === bubbleRestingPreset
+                  )?.label || 'Canto Inferior Direito'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {BUBBLE_RESTING_PRESET_OPTIONS.map((opt) => {
+                  const isSelected = bubbleRestingPreset === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => setBubbleRestingPreset(opt.id)}
+                      style={{
+                        backgroundColor: isSelected ? '#064e3b' : '#09090b',
+                        borderColor: isSelected ? '#10b981' : '#3f3f46',
+                        color: '#ffffff',
+                      }}
+                      className="rounded-xl px-3 py-2.5 text-left border-2 transition cursor-pointer flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <span className="block text-sm font-extrabold truncate text-white">
+                          {opt.label}
+                        </span>
+                        <span className="block text-xs truncate text-zinc-300">
+                          {opt.shortDesc}
+                        </span>
+                      </div>
+                      <span className="h-5 w-5 rounded-full border border-emerald-400 flex items-center justify-center text-xs font-black shrink-0">
+                        {isSelected ? '✓' : '○'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <button
               type="button"
-              onClick={toggleAppPauseMode}
-              className={`rounded-lg py-2 px-2 text-xs font-semibold cursor-pointer ${
-                isAppPaused
-                  ? 'bg-white text-zinc-950'
-                  : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
-              }`}
+              onClick={() => setSubPage('PERSONALIZAR_ALERTAS_VOZ')}
+              className="w-full rounded-xl bg-zinc-900 border border-zinc-800 py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/60 transition cursor-pointer"
             >
-              {isAppPaused ? 'Retomar' : 'Pausar'}
-            </button>
-            <button
-              type="button"
-              onClick={toggleAnonymousMode}
-              className={`rounded-lg py-2 px-2 text-xs font-semibold cursor-pointer ${
-                userPrefs.anonymousMode
-                  ? 'bg-white text-zinc-950'
-                  : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
-              }`}
-            >
-              Anónimo: {userPrefs.anonymousMode ? 'ON' : 'OFF'}
-            </button>
-            <button
-              type="button"
-              onClick={toggleTtsVoice}
-              className={`rounded-lg py-2 px-2 text-xs font-semibold cursor-pointer ${
-                ttsVoiceEnabled
-                  ? 'bg-white text-zinc-950'
-                  : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
-              }`}
-            >
-              Voz: {ttsVoiceEnabled ? 'ON' : 'OFF'}
+              <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-2 min-w-0">
+                <Sliders className="h-4 w-4 text-emerald-400 shrink-0" />
+                <span className="truncate">
+                  Personalizar Alertas (±45%), Trigger (&ldquo;
+                  {voiceActivationConfig.customTriggerWord || 'Buddy'}&rdquo;) &amp; Macros
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-zinc-400 shrink-0" />
             </button>
           </div>
         )}
+      </div>
 
-        {/* 10. Predefinições & Fiscal (Critérios de Aceitação, Veículo & Impostos) */}
+      {/* =====================================================================
+          ACCORDION CARD 3: 📍 CENTRO: AMARANTE (RAIO 35 KM) & FINANÇAS
+          ===================================================================== */}
+      <div className="rounded-2xl bg-zinc-900/95 border border-zinc-800 overflow-hidden shadow-md">
         <button
           type="button"
-          onClick={() => setActiveTab('calculadora')}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
+          onClick={() => toggleAccordionCard('CENTRO_FINANCAS')}
+          className="w-full px-4 py-3.5 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/40 transition cursor-pointer"
         >
-          <span className="text-xs font-semibold text-zinc-100">
-            Veículo, Custos &amp; Impostos
+          <span className="text-base font-extrabold text-zinc-100 flex items-center gap-2">
+            <span>📍 Centro: Amarante (Raio 35 km) &amp; Finanças</span>
           </span>
-          <div className="flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
-            <span className="text-[11px] text-zinc-400">
-              &gt;= {userPrefs.minGrossOrderValueEur.toFixed(2)} €
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-0.5 text-xs font-extrabold text-emerald-300">
+              Ativo • 35 km
             </span>
-            <ChevronRight className="h-4 w-4 text-zinc-500" />
+            <ChevronRight
+              className={`h-5 w-5 text-zinc-400 transition-transform ${
+                openAccordion === 'CENTRO_FINANCAS' ? 'rotate-90' : ''
+              }`}
+            />
           </div>
         </button>
 
-        {/* 11. Rotas Proibidas & Reclamações */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('reclamacoes')}
-          className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
-        >
-          <span className="text-xs font-semibold text-zinc-100">
-            Rotas Proibidas &amp; Reclamações
-          </span>
-          <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
-        </button>
+        {openAccordion === 'CENTRO_FINANCAS' && (
+          <div className="border-t border-zinc-800 divide-y divide-zinc-800 bg-zinc-950/60">
+            <button
+              type="button"
+              onClick={() => setIsHubSelectorModalOpen(true)}
+              className="w-full py-3.5 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+            >
+              <span className="text-base font-bold text-zinc-100 flex items-center gap-2">
+                <Compass className="h-4 w-4 text-emerald-400 shrink-0" />
+                <span>📍 Centro: Amarante (Raio 35 km)</span>
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-1 text-sm font-bold text-emerald-300">
+                  Ativo • 35 km
+                </span>
+                <ChevronRight className="h-4 w-4 text-zinc-500" />
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('financas')}
+              className="w-full py-3.5 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+            >
+              <span className="text-sm font-bold text-zinc-100">
+                💰 Metas Financeiras &amp; Caixa
+              </span>
+              <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('calculadora')}
+              className="w-full py-3.5 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+            >
+              <span className="text-sm font-bold text-zinc-100">
+                🧮 Veículo, Custos &amp; Impostos
+              </span>
+              <div className="flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
+                <span className="text-xs font-bold text-emerald-300">
+                  &gt;= {userPrefs.minGrossOrderValueEur.toFixed(2)} €
+                </span>
+                <ChevronRight className="h-4 w-4 text-zinc-500" />
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSubPage('ACORDOS_ZONA')}
+              className="w-full py-3.5 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+            >
+              <span className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                <Handshake className="h-4 w-4 text-zinc-400 shrink-0" />
+                <span>Acordos de Zona (Piso Mínimo Coletivo)</span>
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-200">
+                  {zonePacts.filter((p) => p.joinedByUser).length}/
+                  {zonePacts.length} Ativos
+                </span>
+                <ChevronRight className="h-4 w-4 text-zinc-500" />
+              </div>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Discrete Session Footer (Repor Dados only — Terminar Sessão is in the top Profile card) */}
-      <div className="flex items-center justify-start px-1 pt-1">
+      {/* =====================================================================
+          ACCORDION CARD 4: 🛡️ SEGURANÇA DE RUA & SISTEMA
+          ===================================================================== */}
+      <div className="rounded-2xl bg-zinc-900/95 border border-zinc-800 overflow-hidden shadow-md">
         <button
           type="button"
-          onClick={resetAllToSeed}
-          className="text-base text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 cursor-pointer"
+          onClick={() => toggleAccordionCard('SEGURANCA_SISTEMA')}
+          className="w-full px-4 py-3.5 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/40 transition cursor-pointer"
         >
-          <RotateCcw className="h-4 w-4" />
-          <span>Repor Dados</span>
+          <span className="text-base font-extrabold text-zinc-100 flex items-center gap-2">
+            <span>🛡️ Segurança de Rua &amp; Sistema</span>
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="rounded-lg bg-zinc-800 px-2.5 py-0.5 text-xs font-extrabold text-emerald-300">
+              {batteryLevelPct}% {isBatteryCharging ? '⚡' : '🔋'}
+            </span>
+            <ChevronRight
+              className={`h-5 w-5 text-zinc-400 transition-transform ${
+                openAccordion === 'SEGURANCA_SISTEMA' ? 'rotate-90' : ''
+              }`}
+            />
+          </div>
         </button>
+
+        {openAccordion === 'SEGURANCA_SISTEMA' && (
+          <div className="p-3.5 pt-2 border-t border-zinc-800 space-y-3 bg-zinc-950/60">
+            {/* Street Safety & Battery Survival Modules */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-zinc-100 block truncate">
+                    🌧️ Modo Chuva &amp; Luvas
+                  </span>
+                  <span className="text-[11px] text-zinc-400 block truncate">
+                    Bloqueia toques fantasma
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleRainLock}
+                  className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-extrabold cursor-pointer ${
+                    rainLockActive
+                      ? 'bg-sky-500 text-zinc-950'
+                      : 'bg-zinc-800 text-zinc-300'
+                  }`}
+                >
+                  {rainLockActive ? 'ATIVO' : 'Ativar'}
+                </button>
+              </div>
+
+              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-zinc-100 block truncate">
+                    🚨 Deteção Queda (45s)
+                  </span>
+                  <span className="text-[11px] text-zinc-400 block truncate">
+                    Auto-SOS se imóvel
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={toggleCrashDetection}
+                    className={`rounded-lg px-2 py-1 text-xs font-extrabold cursor-pointer ${
+                      crashDetectionEnabled
+                        ? 'bg-emerald-500 text-zinc-950'
+                        : 'bg-zinc-800 text-zinc-400'
+                    }`}
+                  >
+                    {crashDetectionEnabled ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={triggerSimulatedCrashTest}
+                    className="rounded-lg bg-rose-600/20 border border-rose-500/40 text-rose-300 px-2 py-1 text-xs font-bold cursor-pointer"
+                  >
+                    Testar
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-zinc-100 block truncate">
+                    🔋 Sobrevivência &lt;20%
+                  </span>
+                  <span className="text-[11px] text-zinc-400 block truncate">
+                    Alerta cabo desligado
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={toggleBatterySurvivalMode}
+                    className={`rounded-lg px-2 py-1 text-xs font-extrabold cursor-pointer ${
+                      batterySurvivalMode
+                        ? 'bg-amber-500 text-zinc-950'
+                        : 'bg-zinc-800 text-zinc-300'
+                    }`}
+                  >
+                    {batterySurvivalMode ? 'ON' : 'Eco'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={simulateChargerUnpluggedAlert}
+                    className="rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2 py-1 text-xs font-bold cursor-pointer"
+                  >
+                    Cabo
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => requestOrConfirmSosActivation('Acidente na Via')}
+              style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+              className="w-full rounded-xl border border-red-400 py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition hover:opacity-95"
+            >
+              <span>
+                🆘 Acionar Alerta SOS de Emergência (ou diga &ldquo;Buddy SOS&rdquo;)
+              </span>
+            </button>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setIsOfficialManualModalOpen(true)}
+                className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow"
+              >
+                <BookOpen className="h-4 w-4 shrink-0" />
+                <span>📘 Manual de Uso &amp; Comandos</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleWakeLock}
+                className={`rounded-xl py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
+                  wakeLockEnabled
+                    ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {wakeLockEnabled ? (
+                  <Lock className="h-4 w-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <Unlock className="h-4 w-4 text-zinc-500 shrink-0" />
+                )}
+                <span>
+                  🔒 Ecrã Sempre Ligado: {wakeLockEnabled ? 'ON' : 'OFF'}
+                </span>
+              </button>
+            </div>
+
+            <div className="rounded-xl bg-zinc-900 border border-zinc-800 divide-y divide-zinc-800 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  const winAny = window as unknown as {
+                    BuddyNativeOverlay?: {
+                      openAccessibilitySettings?: () => void;
+                    };
+                  };
+                  if (
+                    typeof winAny.BuddyNativeOverlay?.openAccessibilitySettings ===
+                    'function'
+                  ) {
+                    winAny.BuddyNativeOverlay.openAccessibilitySettings();
+                  } else {
+                    speakTextPt(
+                      'Ative o serviço Delivery Buddy nas definições de Acessibilidade do Android para leitura automática de pedidos.'
+                    );
+                  }
+                }}
+                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              >
+                <span className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>Auto-Detetor de Pedidos (Acessibilidade)</span>
+                </span>
+                <span className="rounded bg-emerald-500/15 border border-emerald-500/35 px-2 py-0.5 text-xs font-bold text-emerald-300 shrink-0">
+                  Configurar
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    window.localStorage.setItem(
+                      'buddy_pending_ota_toast_v1',
+                      '1'
+                    );
+                    window.dispatchEvent(
+                      new CustomEvent('buddy-ota-updated-toast')
+                    );
+                  } catch {
+                    // ignore
+                  }
+                  const winAny = window as unknown as {
+                    BuddyNativeOverlay?: {
+                      reloadOtaNow?: () => void;
+                    };
+                  };
+                  if (
+                    typeof winAny.BuddyNativeOverlay?.reloadOtaNow ===
+                    'function'
+                  ) {
+                    winAny.BuddyNativeOverlay.reloadOtaNow();
+                    return;
+                  }
+                  try {
+                    if ('caches' in window) {
+                      caches.keys().then((names) => {
+                        names.forEach((n) => caches.delete(n));
+                      });
+                    }
+                  } catch {
+                    // ignore
+                  }
+                  const baseUrl = window.location.href.split('?')[0];
+                  window.location.replace(`${baseUrl}?ota_ts=${Date.now()}`);
+                }}
+                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              >
+                <span className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-sky-400 shrink-0" />
+                  <span>Atualizar App Agora (OTA)</span>
+                </span>
+                <span className="rounded bg-sky-500/15 border border-sky-500/35 px-2 py-0.5 text-xs font-bold text-sky-300 shrink-0">
+                  Recarregar
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSubPage('PERIGOS_VIA')}
+                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              >
+                <span className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-zinc-400 shrink-0" />
+                  <span>Perigos na Via (Amarante — Raio 35 km)</span>
+                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="rounded-lg bg-zinc-800 px-2.5 py-0.5 text-xs font-bold text-zinc-200">
+                    {roadHazards.filter((h) => !h.resolved).length} Alertas
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-zinc-500" />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('reclamacoes')}
+                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              >
+                <span className="text-sm font-bold text-zinc-100">
+                  ⚠️ Rotas Proibidas &amp; Reclamações
+                </span>
+                <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleThemeMode}
+                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              >
+                <span className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                  {themeMode === 'DAYLIGHT' ? (
+                    <Sun className="h-4 w-4 text-zinc-400" />
+                  ) : (
+                    <Moon className="h-4 w-4 text-zinc-400" />
+                  )}
+                  <span>Tema Visual (Legibilidade ao Sol)</span>
+                </span>
+                <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-200">
+                  {themeMode === 'DAYLIGHT'
+                    ? 'Modo Claro (Solar)'
+                    : 'Modo Escuro Suave'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsShiftDrawerOpen((prev) => !prev)}
+                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              >
+                <span className="text-sm font-bold text-zinc-100">
+                  Estado do Turno (Pausa / Anónimo / Voz)
+                </span>
+                <div className="flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
+                  <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-200">
+                    {shiftBadge}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-zinc-500" />
+                </div>
+              </button>
+
+              {isShiftDrawerOpen && (
+                <div className="px-4 py-3 bg-zinc-950 grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={toggleAppPauseMode}
+                    className={`rounded-lg py-2 px-2 text-xs font-semibold cursor-pointer ${
+                      isAppPaused
+                        ? 'bg-white text-zinc-950'
+                        : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                    }`}
+                  >
+                    {isAppPaused ? 'Retomar' : 'Pausar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleAnonymousMode}
+                    className={`rounded-lg py-2 px-2 text-xs font-semibold cursor-pointer ${
+                      userPrefs.anonymousMode
+                        ? 'bg-white text-zinc-950'
+                        : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                    }`}
+                  >
+                    Anónimo: {userPrefs.anonymousMode ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleTtsVoice}
+                    className={`rounded-lg py-2 px-2 text-xs font-semibold cursor-pointer ${
+                      ttsVoiceEnabled
+                        ? 'bg-white text-zinc-950'
+                        : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                    }`}
+                  >
+                    Voz: {ttsVoiceEnabled ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-start px-1 pt-1">
+              <button
+                type="button"
+                onClick={resetAllToSeed}
+                className="text-sm text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span>Repor Dados</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <DirectApkShareModal

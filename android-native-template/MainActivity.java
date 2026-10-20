@@ -134,8 +134,9 @@ public class MainActivity extends BridgeActivity {
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
             settings.setGeolocationEnabled(true);
-            settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+            settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
             settings.setMediaPlaybackRequiresUserGesture(false);
+            webView.clearCache(true);
             webView.addJavascriptInterface(new BuddyNativeOverlayBridge(), "BuddyNativeOverlay");
 
             webView.setWebChromeClient(new WebChromeClient() {
@@ -222,7 +223,7 @@ public class MainActivity extends BridgeActivity {
 
             // Automatic Live OTA check on startup: load https://iokmoreira.github.io/Delivery-buddy/ if reachable,
             // otherwise stay on the bundled local Capacitor build (https://localhost) seamlessly!
-            checkAndLoadLiveOtaIfOnline(false);
+            checkAndLoadLiveOtaIfOnline(true);
         }
     }
 
@@ -1434,7 +1435,7 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public int getNativeBridgeVersion() {
-            return 11;
+            return 12;
         }
 
         @JavascriptInterface

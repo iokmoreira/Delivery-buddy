@@ -343,11 +343,11 @@ const AppCockpitShell: React.FC = () => {
         {!isBubbleMinimized && (
           <>
             {isAdminView ? (
-              <header className="sticky top-0 z-40 min-h-14 py-2 bg-white/95 border-b border-slate-200 px-4 flex items-center justify-between gap-2 flex-wrap shadow-xs">
+              <header className="sticky top-0 z-40 min-h-14 py-2.5 bg-zinc-950/95 border-b border-amber-500/40 px-4 flex items-center justify-between gap-2 flex-wrap shadow-md">
                 <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-slate-700" />
-                  <span className="text-sm font-bold text-slate-900">
-                    Consola do Proprietário (Admin Isolado)
+                  <span className="text-lg">👑</span>
+                  <span className="text-base font-extrabold text-amber-300">
+                    Painel de Administrador (CEO)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -356,7 +356,7 @@ const AppCockpitShell: React.FC = () => {
                     onClick={() => setIsOfficialManualModalOpen(true)}
                     className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition"
                   >
-                    <span>📘 Manual de Uso &amp; Lista de Comandos</span>
+                    <span>📘 Manual</span>
                   </button>
                   <button
                     type="button"
@@ -364,9 +364,9 @@ const AppCockpitShell: React.FC = () => {
                       setViewMode('MODO_ESTAFETA');
                       setActiveTab('scanner');
                     }}
-                    className="rounded-xl bg-slate-900 text-white px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-sm"
                   >
-                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <ArrowLeft className="h-4 w-4" />
                     <span>Voltar à App do Estafeta</span>
                   </button>
                 </div>

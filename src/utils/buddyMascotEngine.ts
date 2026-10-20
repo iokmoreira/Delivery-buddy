@@ -15,7 +15,7 @@ export interface BuddyMascotImagesSet {
 }
 
 export const BUDDY_MASCOT_IMAGES_STORAGE_KEY =
-  'delivery_buddy_mascot_3poses_v1';
+  'delivery_buddy_mascot_3poses_v2';
 
 export const BUBBLE_RESTING_PRESET_STORAGE_KEY =
   'delivery_buddy_bubble_resting_preset_v1';
@@ -249,10 +249,17 @@ const BUILTIN_SVG_DELIVERY = svgToDataUrl(`
 </svg>
 `);
 
+const MASCOT_BASE_URL =
+  typeof import.meta !== 'undefined' &&
+  typeof (import.meta as unknown as { env?: { BASE_URL?: string } }).env
+    ?.BASE_URL === 'string'
+    ? (import.meta as unknown as { env: { BASE_URL: string } }).env.BASE_URL
+    : './';
+
 export const DEFAULT_BUILTIN_MASCOT_IMAGES: BuddyMascotImagesSet = {
-  mascotActive: BUILTIN_SVG_ACTIVE,
-  mascotInactive: BUILTIN_SVG_INACTIVE,
-  mascotDelivery: BUILTIN_SVG_DELIVERY,
+  mascotActive: `${MASCOT_BASE_URL}mascot/buddy-active.png`,
+  mascotInactive: `${MASCOT_BASE_URL}mascot/buddy-pause.png`,
+  mascotDelivery: `${MASCOT_BASE_URL}mascot/buddy-delivery.png`,
   isCustomUploaded: false,
 };
 
@@ -264,18 +271,20 @@ export function loadSavedMascotImages(): BuddyMascotImagesSet {
     const parsed = JSON.parse(raw) as Partial<BuddyMascotImagesSet>;
     if (
       parsed &&
+      parsed.isCustomUploaded &&
       typeof parsed.mascotActive === 'string' &&
-      parsed.mascotActive.startsWith('data:image/') &&
+      parsed.mascotActive.length > 5 &&
+      !parsed.mascotActive.startsWith('data:image/svg+xml') &&
       typeof parsed.mascotInactive === 'string' &&
-      parsed.mascotInactive.startsWith('data:image/') &&
+      parsed.mascotInactive.length > 5 &&
       typeof parsed.mascotDelivery === 'string' &&
-      parsed.mascotDelivery.startsWith('data:image/')
+      parsed.mascotDelivery.length > 5
     ) {
       return {
         mascotActive: parsed.mascotActive,
         mascotInactive: parsed.mascotInactive,
         mascotDelivery: parsed.mascotDelivery,
-        isCustomUploaded: Boolean(parsed.isCustomUploaded),
+        isCustomUploaded: true,
       };
     }
   } catch {

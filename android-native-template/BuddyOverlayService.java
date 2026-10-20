@@ -256,7 +256,7 @@ public class BuddyOverlayService extends Service {
 
     private void snapBubbleToConfiguredRestingPosition() {
         if (layoutParams == null) return;
-        int sizePx = dpToPx(64f);
+        int sizePx = dpToPx(68f);
         int[] xy = computeRestingXY(sizePx);
         layoutParams.x = xy[0];
         layoutParams.y = xy[1];
@@ -279,7 +279,7 @@ public class BuddyOverlayService extends Service {
             return;
         }
 
-        int sizePx = dpToPx(64f);
+        int sizePx = dpToPx(68f);
         int overlayType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             : WindowManager.LayoutParams.TYPE_PHONE;
@@ -485,7 +485,7 @@ public class BuddyOverlayService extends Service {
             ringColor = Color.WHITE;
         }
 
-        int sizePx = dpToPx(64f);
+        int sizePx = dpToPx(68f);
         Bitmap avatarBmp = decodeCustomOrDrawBuiltinMascot(b64, state, sizePx, ringColor);
         mascotImageView.setImageBitmap(avatarBmp);
 
@@ -504,17 +504,8 @@ public class BuddyOverlayService extends Service {
             badgeCaptionView.setBackground(pillBg);
             badgeCaptionView.setVisibility(View.VISIBLE);
         } else {
-            pillBg.setColor(Color.parseColor("#0F172A"));
-            pillBg.setStroke(dpToPx(1f), ringColor);
-            String badgeTxt = "DELIVERY".equals(state)
-                ? "🚀 ROTA"
-                : "INACTIVE".equals(state)
-                    ? "⚪ PAUSA"
-                    : "DB 👍";
-            badgeCaptionView.setText(badgeTxt);
-            badgeCaptionView.setPadding(dpToPx(5f), dpToPx(1f), dpToPx(5f), dpToPx(1f));
-            badgeCaptionView.setBackground(pillBg);
-            badgeCaptionView.setVisibility(View.VISIBLE);
+            badgeCaptionView.setText("");
+            badgeCaptionView.setVisibility(View.GONE);
         }
     }
 
@@ -532,7 +523,7 @@ public class BuddyOverlayService extends Service {
 
         Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         bgPaint.setStyle(Paint.Style.FILL);
-        bgPaint.setColor(isListeningState ? Color.parseColor("#065F46") : Color.parseColor("#0F172A"));
+        bgPaint.setColor(isListeningState ? Color.parseColor("#065F46") : Color.parseColor("#090E13"));
         canvas.drawCircle(half, half, radius, bgPaint);
 
         boolean drewCustom = false;
@@ -559,6 +550,39 @@ public class BuddyOverlayService extends Service {
                     imgPaint.setShader(shader);
                     canvas.drawCircle(half, half, radius - 1f, imgPaint);
                     drewCustom = true;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (!drewCustom) {
+            try {
+                String resName = "buddy_active";
+                if ("INACTIVE".equals(state)) {
+                    resName = "buddy_pause";
+                } else if ("DELIVERY".equals(state)) {
+                    resName = "buddy_delivery";
+                }
+                int resId = getResources().getIdentifier(resName, "drawable", getPackageName());
+                if (resId != 0) {
+                    Bitmap builtinBmp = BitmapFactory.decodeResource(getResources(), resId);
+                    if (builtinBmp != null) {
+                        BitmapShader shader = new BitmapShader(builtinBmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+                        Matrix m = new Matrix();
+                        float innerDiameter = (radius - dpToPx(2f)) * 2f;
+                        float scale = innerDiameter / (float) Math.max(builtinBmp.getWidth(), builtinBmp.getHeight());
+                        m.setScale(scale, scale);
+                        m.postTranslate(
+                            (sizePx - builtinBmp.getWidth() * scale) / 2f,
+                            (sizePx - builtinBmp.getHeight() * scale) / 2f
+                        );
+                        shader.setLocalMatrix(m);
+                        Paint imgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                        imgPaint.setFilterBitmap(true);
+                        imgPaint.setShader(shader);
+                        canvas.drawCircle(half, half, radius - 1f, imgPaint);
+                        drewCustom = true;
+                    }
                 }
             } catch (Exception ignored) {
             }

@@ -1117,25 +1117,17 @@ export const ShiftRadarModule: React.FC = () => {
       }).addTo(map);
     }
 
-    // Dynamic 3-State Robot Mascot GPS Pin for logged-in user
-    const stateBadge =
-      currentMascotState === 'DELIVERY'
-        ? '🚀'
-        : currentMascotState === 'INACTIVE'
-          ? '⚪'
-          : '👍';
-
+    // Dynamic 3-State Robot Mascot GPS Pin for logged-in user (clean full-body robot, no emoji badge)
     const selfIcon = L.divIcon({
       className: 'buddy-clean-self-pin',
       html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);">
-        <div style="position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center;">
+        <div style="position:relative;width:48px;height:48px;display:flex;align-items:center;justify-content:center;">
           <span style="position:absolute;inset:-4px;border-radius:9999px;background:${dotColor};opacity:0.32;animation:ping 1.8s cubic-bezier(0,0,0.2,1) infinite;"></span>
-          <div style="width:42px;height:42px;border-radius:9999px;background:#0f172a;border:3px solid ${dotColor};overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;">
-            <img src="${currentMascotImageUrl}" alt="Buddy" style="width:100%;height:100%;object-fit:cover;border-radius:9999px;" />
+          <div style="width:46px;height:46px;border-radius:9999px;background:#090e13;border:3px solid ${dotColor};overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:2px;">
+            <img src="${currentMascotImageUrl}" alt="Buddy" style="width:100%;height:100%;object-fit:contain;border-radius:9999px;" />
           </div>
-          <span style="position:absolute;bottom:-2px;right:-4px;background:#09090b;border:1.5px solid ${dotColor};border-radius:9999px;font-size:10px;line-height:1;padding:2px 3px;">${stateBadge}</span>
         </div>
-        <span style="margin-top:3px;background:#09090b;color:#ffffff;font-size:10px;font-weight:900;padding:1.5px 7px;border-radius:9999px;border:1.5px solid ${dotColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.45);">
+        <span style="margin-top:3px;background:#09090b;color:#ffffff;font-size:11px;font-weight:900;padding:2px 8px;border-radius:9999px;border:1.5px solid ${dotColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.45);">
           ${selfCallsign}
         </span>
       </div>`,

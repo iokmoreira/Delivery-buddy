@@ -18,16 +18,17 @@ import {
 } from '../types/models';
 import { findExistingCourierByNameInSupabaseRest } from '../services/geminiAgent';
 
-interface SavedLocalAccountRecord {
+export interface SavedLocalAccountRecord {
   username: string;
   emailOrPhone?: string;
   pinOrPassword: string;
   vehicle: CourierRegistrationVehicle;
   platforms: PlatformName[];
   zone: AmaranteBaseZoneOption;
+  status?: 'APROVADO' | 'PENDENTE' | 'BLOQUEADO';
 }
 
-interface SupportChatMessage {
+export interface SupportChatMessage {
   id: string;
   sender: 'USER' | 'SUPPORT';
   text: string;
@@ -35,10 +36,10 @@ interface SupportChatMessage {
   topicBadge?: string;
 }
 
-const SAVED_ACCOUNTS_STORAGE_KEY = 'buddy_saved_accounts_v1';
-const SUPPORT_CHAT_STORAGE_KEY = 'buddy_realtime_support_chat_v1';
+export const SAVED_ACCOUNTS_STORAGE_KEY = 'buddy_saved_accounts_v1';
+export const SUPPORT_CHAT_STORAGE_KEY = 'buddy_realtime_support_chat_v1';
 
-function loadSavedAccounts(): SavedLocalAccountRecord[] {
+export function loadSavedAccounts(): SavedLocalAccountRecord[] {
   try {
     const raw = localStorage.getItem(SAVED_ACCOUNTS_STORAGE_KEY);
     if (!raw) return [];
@@ -67,7 +68,7 @@ function saveAccountLocally(record: SavedLocalAccountRecord) {
   }
 }
 
-function loadSupportChatMessages(): SupportChatMessage[] {
+export function loadSupportChatMessages(): SupportChatMessage[] {
   try {
     const raw = localStorage.getItem(SUPPORT_CHAT_STORAGE_KEY);
     if (raw) {
@@ -518,11 +519,11 @@ export const AuthAndVerificationGate: React.FC = () => {
         <div className="flex flex-col items-center text-center space-y-2.5 pt-1">
           <div className="relative">
             <span className="absolute -inset-1.5 rounded-full bg-emerald-500/25 blur-md animate-pulse pointer-events-none" />
-            <div className="relative h-20 w-20 rounded-full overflow-hidden border-[3px] border-emerald-400 bg-slate-950 shadow-[0_0_25px_rgba(16,185,129,0.55)] flex items-center justify-center">
+            <div className="relative h-24 w-24 rounded-full overflow-hidden border-[3px] border-emerald-400 bg-[#090e13] shadow-[0_0_25px_rgba(16,185,129,0.55)] flex items-center justify-center p-1">
               <img
                 src={buddyMascotImages.mascotActive}
                 alt="Mascote 3D Delivery Buddy"
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain"
               />
             </div>
             <span className="absolute -bottom-1 -right-1 rounded-full bg-emerald-500 text-slate-950 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider border border-white shadow">

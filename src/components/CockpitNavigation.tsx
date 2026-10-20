@@ -9,7 +9,7 @@ import { AppTabId } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
 import { playBuddyOpenChime } from '../services/voiceEngine';
 
-const CURRENT_OTA_BUILD_VERSION = 'v2.8.1-glovo-typo-35km-apk';
+const CURRENT_OTA_BUILD_VERSION = 'v2.9.0-3d-mascot-admin';
 const LAST_SEEN_OTA_BUILD_KEY = 'buddy_last_seen_ota_build_v1';
 const PENDING_OTA_TOAST_KEY = 'buddy_pending_ota_toast_v1';
 
@@ -164,10 +164,10 @@ export const CockpitNavigation: React.FC = () => {
       className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none"
     >
       <div
-        className={`max-w-[440px] mx-auto backdrop-blur-md border-t px-2 py-1.5 grid grid-cols-5 gap-1 items-center pointer-events-auto transition-colors ${
+        className={`max-w-[440px] mx-auto backdrop-blur-md border-t px-2 py-1 grid grid-cols-5 gap-1 items-center pointer-events-auto transition-colors ${
           isDaylight
             ? 'bg-white/95 border-slate-200/80 shadow-lg'
-            : 'bg-slate-900/95 border-slate-800 shadow-2xl'
+            : 'bg-[#090e13]/95 border-slate-800 shadow-2xl'
         }`}
       >
         {bottomNavItems.map((item) => {
@@ -191,7 +191,7 @@ export const CockpitNavigation: React.FC = () => {
                       borderColor: '#34d399',
                       color: '#ffffff',
                     }}
-                    className="absolute -top-16 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-2xl border-2 px-3.5 py-2 shadow-[0_8px_25px_rgba(16,185,129,0.55)] animate-bounce cursor-pointer flex flex-col items-center"
+                    className="absolute -top-18 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-2xl border-2 px-3.5 py-2 shadow-[0_8px_25px_rgba(16,185,129,0.55)] animate-bounce cursor-pointer flex flex-col items-center"
                   >
                     <span className="text-xs font-black tracking-tight text-white flex items-center gap-1.5">
                       <span>🤖 ✅ Aplicativo atualizado!</span>
@@ -217,27 +217,36 @@ export const CockpitNavigation: React.FC = () => {
                     setActiveTab(item.id);
                   }}
                   style={{
-                    backgroundColor: isActive ? '#020617' : '#0f172a',
-                    color: '#ffffff',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    boxShadow: 'none',
                   }}
-                  className={`w-16 h-16 -mt-4 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition cursor-pointer relative ${
-                    buddyStatusConfig.ringClass
-                  } ${isActive ? 'scale-105 font-extrabold' : 'font-bold'}`}
+                  className={`-mt-6 flex flex-col items-center justify-center transition cursor-pointer relative ${
+                    isActive ? 'scale-105' : 'hover:scale-102'
+                  }`}
                 >
-                  <div className="relative h-9 w-9 rounded-full overflow-hidden border border-white/25 bg-slate-950 shrink-0">
-                    <img
-                      src={currentMascotImageUrl}
-                      alt={`Buddy ${buddyStatusConfig.statusShort}`}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
+                  <img
+                    src={currentMascotImageUrl}
+                    alt={`Buddy ${buddyStatusConfig.statusShort}`}
+                    style={{
+                      height: '62px',
+                      width: '62px',
+                      objectFit: 'contain',
+                      filter: isActive
+                        ? 'drop-shadow(0 0 10px rgba(16, 185, 129, 0.7))'
+                        : 'drop-shadow(0 3px 8px rgba(0, 0, 0, 0.75))',
+                    }}
+                    className="rounded-full select-none pointer-events-none"
+                  />
                   <span
-                    title={`Estado: ${buddyStatusConfig.statusShort}`}
-                    className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-slate-950 border border-white/30 flex items-center justify-center text-[9px] leading-none shadow"
+                    className={`text-xs leading-none whitespace-nowrap font-extrabold tracking-tight mt-0.5 ${
+                      isActive
+                        ? 'text-emerald-400'
+                        : isDaylight
+                          ? 'text-slate-800'
+                          : 'text-white'
+                    }`}
                   >
-                    {buddyStatusConfig.badgeEmoji}
-                  </span>
-                  <span className="text-[9px] leading-none whitespace-nowrap text-white font-extrabold tracking-tight">
                     {item.label}
                   </span>
                 </button>
