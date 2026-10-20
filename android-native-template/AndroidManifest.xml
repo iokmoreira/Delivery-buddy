@@ -12,6 +12,10 @@
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
+        <package android:name="com.ubercab.driver" />
+        <package android:name="com.glovo.courier" />
+        <package android:name="com.glovo" />
+        <package android:name="ee.mtakso.driver" />
     </queries>
 
     <!-- Network & WebView OTA -->
@@ -37,6 +41,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <application
         android:allowBackup="true"
@@ -66,6 +72,21 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location|microphone" />
+
+        <!-- Native Automatic Incoming Offer Detector (Uber Eats / Glovo / Bolt Food) -->
+        <service
+            android:name=".BuddyOfferDetectorService"
+            android:enabled="true"
+            android:exported="true"
+            android:label="Delivery Buddy — Auto-Detetor de Ofertas"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

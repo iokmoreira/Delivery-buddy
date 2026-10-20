@@ -138,7 +138,6 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
     alertPopupPrefs,
     voiceActivationConfig,
     isPttActive,
-    releasePttHold,
     themeMode,
     onlineDirectoryCouriers,
     minimizedBuddyBubbleCourierId,
@@ -157,7 +156,10 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
     completeAndSaveVoiceTaughtSkill,
     cancelVoiceTeachSkillMode,
     lastHeardLiveTranscript,
-    toggleVoiceMicListening,
+    lastHeardSpokenText,
+    lastExecutedVoiceActionText,
+    lastAutoDetectedOfferBanner,
+    dismissAutoDetectedOfferBanner,
     speakTextPt,
     isAmaranteWeatherModalOpen,
     setIsAmaranteWeatherModalOpen,
@@ -433,21 +435,9 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
       setMinimizedBuddyBubbleCourierId(null);
     };
 
-    const triggerSosAction = () => {
-      requestOrConfirmSosActivation('Acidente na Via');
-    };
-
-    const triggerPttAction = () => {
-      releasePttHold();
-    };
-
-    const toggleLogoMicAction = () => {
-      toggleVoiceMicListening();
-    };
-
     return (
       <>
-        {/* 4. Minimized Buddy Avatar Bubble ("Bolinha com Foto do Perfil" - Freely Draggable) */}
+        {/* Minimized Buddy Avatar Bubble ("Bolinha com Foto do Perfil" - Freely Draggable) */}
         {minimizedBuddyCourier && (
           <div
             style={{
@@ -499,86 +489,99 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
           </div>
         )}
 
-        {/* 3. Freely Draggable Round SOS Bubble (Visible when app is open) */}
-        {!isBubbleMinimized && (
-          <button
-            type="button"
-            style={{
-              left: `${bubblePositions.sos.x}px`,
-              top: `${bubblePositions.sos.y}px`,
-            }}
-            onPointerDown={(e) => handleBubblePointerDown('sos', e)}
-            onPointerMove={(e) => handleBubblePointerMove('sos', e)}
-            onPointerUp={(e) =>
-              handleBubblePointerUp('sos', e, triggerSosAction)
-            }
-            onPointerCancel={(e) => handleBubblePointerCancel('sos', e)}
-            onClick={(e) =>
-              handleBubbleFallbackClick('sos', e, triggerSosAction)
-            }
-            title="Arrastar livremente (X, Y) ou tocar para SOS Emergência (Confirmação em 2 Etapas / 5s)"
-            aria-label="Ativar SOS Emergência em 2 Etapas"
-            className={`fixed z-40 w-12 h-12 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-xl flex flex-col items-center justify-center border border-rose-400/80 touch-none select-none cursor-grab active:cursor-grabbing ${
-              sosPendingConfirmation.isPending || activeSosBeacon?.active
-                ? 'ring-2 ring-rose-300 animate-pulse'
-                : ''
+        {/* High-Contrast Auto-Detected Offer Verdict Toast / Banner */}
+        {lastAutoDetectedOfferBanner && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className={`fixed top-14 left-1/2 -translate-x-1/2 z-50 w-[94%] max-w-[410px] rounded-2xl p-3.5 shadow-[0_14px_38px_rgba(0,0,0,0.75)] border-2 backdrop-blur-md transition-all ${
+              lastAutoDetectedOfferBanner.passes
+                ? 'bg-emerald-950/95 border-emerald-400 text-white'
+                : 'bg-rose-950/95 border-rose-400 text-white'
             }`}
           >
-            <ShieldAlert className="h-4 w-4 stroke-[2.3] pointer-events-none" />
-            <span className="text-[8px] font-extrabold leading-none mt-0.5 pointer-events-none">
-              SOS
-            </span>
-          </button>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${
+                    lastAutoDetectedOfferBanner.passes
+                      ? 'bg-emerald-400 text-slate-950'
+                      : 'bg-rose-400 text-slate-950'
+                  }`}
+                >
+                  ⚡ {lastAutoDetectedOfferBanner.verdictLabel}
+                </span>
+                <span className="text-[11px] font-extrabold text-zinc-200">
+                  {lastAutoDetectedOfferBanner.platform} •{' '}
+                  {lastAutoDetectedOfferBanner.detectedAt}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    speakTextPt(lastAutoDetectedOfferBanner.spokenSummary)
+                  }
+                  className="rounded-lg bg-white/15 hover:bg-white/25 px-2 py-1 text-[10px] font-extrabold text-white cursor-pointer"
+                >
+                  🔊 Ouvir
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissAutoDetectedOfferBanner}
+                  aria-label="Fechar alerta de oferta"
+                  className="rounded-lg bg-white/15 hover:bg-white/25 p-1 text-white cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-black/35 px-3 py-2 border border-white/10">
+              <div>
+                <p className="text-[9px] font-bold uppercase text-zinc-300">
+                  Oferta Bruta
+                </p>
+                <p className="text-sm font-black text-white font-mono">
+                  {lastAutoDetectedOfferBanner.grossEur.toFixed(2)} € •{' '}
+                  {lastAutoDetectedOfferBanner.realKm.toFixed(1)} km
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold uppercase text-zinc-300">
+                  Lucro Líquido
+                </p>
+                <p className="text-sm font-black text-emerald-300 font-mono">
+                  +{lastAutoDetectedOfferBanner.netProfitEur.toFixed(2)} €
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold uppercase text-zinc-300">
+                  Tarifa Real
+                </p>
+                <p className="text-sm font-black text-amber-300 font-mono">
+                  {lastAutoDetectedOfferBanner.netEurPerKm.toFixed(2)} €/km
+                </p>
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* 2. Conditional Freely Draggable Round Push-to-Talk (PTT) Bubble
-            CRITICAL RULE: Automatically hides (hidden) whenever Trigger Word is ON (true),
-            and reappears automatically whenever Trigger Word is OFF (false). */}
-        <button
-          type="button"
-          style={{
-            left: `${bubblePositions.ptt.x}px`,
-            top: `${bubblePositions.ptt.y}px`,
-          }}
-          onPointerDown={(e) => handleBubblePointerDown('ptt', e)}
-          onPointerMove={(e) => handleBubblePointerMove('ptt', e)}
-          onPointerUp={(e) =>
-            handleBubblePointerUp('ptt', e, triggerPttAction)
-          }
-          onPointerCancel={(e) => handleBubblePointerCancel('ptt', e)}
-          onClick={(e) =>
-            handleBubbleFallbackClick('ptt', e, triggerPttAction)
-          }
-          title="Arrastar livremente (X, Y) ou tocar para Push-to-Talk (Visível quando Trigger Word está OFF)"
-          aria-label="Botão Flutuante Push-to-Talk"
-          className={`${
-            voiceActivationConfig.triggerWordEnabled ? 'hidden' : 'flex'
-          } fixed z-40 w-12 h-12 rounded-full shadow-xl flex-col items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing border ${
-            isListeningSpeechRecognition || isPttActive
-              ? 'bg-emerald-500 text-slate-950 border-emerald-300 font-bold'
-              : 'bg-zinc-900 hover:bg-zinc-800 text-white border-zinc-700'
-          }`}
-        >
-          <Mic className="h-4 w-4 stroke-[2.2] pointer-events-none" />
-          <span className="text-[8px] font-mono font-bold leading-none mt-0.5 pointer-events-none">
-            {isPttActive ? 'VOZ' : 'PTT'}
-          </span>
-        </button>
-
-        {/* Prominent Real-Time Live Voice Transcription HUD Card */}
+        {/* Prominent 4-Second Persistent Real-Time Live Voice Transcription HUD Card */}
         {(lastHeardLiveTranscript || isListeningSpeechRecognition) && (
           <div
             role="status"
             aria-live="polite"
-            className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-[390px] rounded-2xl px-4 py-3 shadow-[0_12px_34px_rgba(0,0,0,0.65)] border backdrop-blur-md transition-all pointer-events-none ${
+            className={`fixed ${
+              lastAutoDetectedOfferBanner ? 'top-44' : 'top-16'
+            } left-1/2 -translate-x-1/2 z-50 w-[94%] max-w-[400px] rounded-2xl px-4 py-3 shadow-[0_14px_36px_rgba(0,0,0,0.75)] border-2 backdrop-blur-md transition-all pointer-events-none ${
               lastHeardLiveTranscript?.startsWith('✅')
-                ? 'bg-emerald-950/95 border-emerald-400 text-emerald-50'
+                ? 'bg-[#090d16]/95 border-emerald-400 text-white'
                 : lastHeardLiveTranscript?.startsWith('⚠️')
-                  ? 'bg-amber-950/95 border-amber-400 text-amber-50'
-                  : 'bg-slate-950/95 border-emerald-400/90 text-white'
+                  ? 'bg-[#090d16]/95 border-amber-400 text-white'
+                  : 'bg-[#090d16]/95 border-emerald-400 text-white'
             }`}
           >
-            <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
               <div className="flex items-center gap-2">
                 <span
                   className={`h-2.5 w-2.5 rounded-full shrink-0 ${
@@ -587,70 +590,40 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                       : 'bg-emerald-400'
                   }`}
                 />
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-300">
-                  {isListeningSpeechRecognition
-                    ? 'Microfone Ativo • Transcrição em Tempo Real'
-                    : 'Comando de Voz Delivery Buddy'}
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
+                  MICROFONE ATIVO • TRANSCRIÇÃO EM TEMPO REAL
                 </span>
               </div>
-              <span className="text-[10px] font-mono text-zinc-400">PT-PT</span>
+              <span className="text-[10px] font-mono font-bold text-zinc-300">
+                PT-PT
+              </span>
             </div>
-            <div className="text-sm font-extrabold leading-snug break-words text-white">
-              {lastHeardLiveTranscript ||
-                '🗣️ Ouvindo: fale agora (ex: "Buddy clima", "Buddy minimizar")...'}
+            <div className="space-y-1 text-xs sm:text-sm leading-snug break-words">
+              <div className="font-extrabold text-white">
+                🗣️ Ouvido:{' '}
+                <span className="text-emerald-300">
+                  &ldquo;
+                  {lastHeardSpokenText ||
+                    (lastHeardLiveTranscript
+                      ? lastHeardLiveTranscript
+                          .replace(/^✅\s*Comando:\s*/i, '')
+                          .replace(/^🗣️\s*Ouvindo:\s*/i, '')
+                      : 'A escutar a sua voz...')}
+                  &rdquo;
+                </span>
+              </div>
+              <div className="font-bold text-zinc-200">
+                ⚡ Ação executada:{' '}
+                <span className="text-amber-300 font-extrabold">
+                  {lastExecutedVoiceActionText ||
+                    (isListeningSpeechRecognition
+                      ? 'A aguardar conclusão da frase...'
+                      : 'Comando processado')}
+                </span>
+              </div>
             </div>
           </div>
         )}
-
-        {/* 1. Freely Draggable Round Persistent Logo Bubble (Turns Emerald Green when Mic is Open) */}
-        <button
-          type="button"
-          style={{
-            left: `${bubblePositions.logo.x}px`,
-            top: `${bubblePositions.logo.y}px`,
-          }}
-          onPointerDown={(e) => handleBubblePointerDown('logo', e)}
-          onPointerMove={(e) => handleBubblePointerMove('logo', e)}
-          onPointerUp={(e) =>
-            handleBubblePointerUp('logo', e, toggleLogoMicAction)
-          }
-          onPointerCancel={(e) => handleBubblePointerCancel('logo', e)}
-          onClick={(e) =>
-            handleBubbleFallbackClick('logo', e, toggleLogoMicAction)
-          }
-          title={
-            isListeningSpeechRecognition
-              ? '🎙️ Microfone Aberto (Escutando "Buddy...") — Toque para Pausar ou Arraste (X, Y)'
-              : '🎙️ Microfone Pausado — Toque para Ativar Escuta "Buddy..." ou Arraste (X, Y)'
-          }
-          aria-label={
-            isListeningSpeechRecognition
-              ? 'Microfone Buddy Ativo — Toque para Pausar'
-              : 'Ativar Microfone Buddy'
-          }
-          className={`fixed z-40 w-13 h-13 rounded-full flex flex-col items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing transition-all duration-200 ${
-            isListeningSpeechRecognition
-              ? 'bg-emerald-500 hover:bg-emerald-400 text-white border-2 border-emerald-200 shadow-[0_0_25px_rgba(16,185,129,0.85)]'
-              : 'bg-[#0f172a] hover:bg-slate-800 text-white border border-zinc-700/80 shadow-xl'
-          }`}
-        >
-          {isListeningSpeechRecognition && (
-            <span className="absolute inset-0 rounded-full bg-emerald-400/50 animate-ping pointer-events-none" />
-          )}
-          <span
-            className={`absolute -top-1.5 -right-1.5 rounded-full px-1.5 py-0.5 text-[7px] font-mono font-extrabold leading-none shadow-sm pointer-events-none z-20 border ${
-              isListeningSpeechRecognition
-                ? 'bg-emerald-950 text-emerald-300 border-emerald-300'
-                : 'bg-slate-800 text-zinc-400 border-zinc-600'
-            }`}
-          >
-            {isListeningSpeechRecognition ? '🎙️ ON' : '🎙️ OFF'}
-          </span>
-          <Bike className="h-4 w-4 stroke-[2.4] text-white pointer-events-none relative z-10" />
-          <span className="text-[8px] font-mono font-extrabold leading-none mt-0.5 text-white pointer-events-none relative z-10">
-            Logo
-          </span>
-        </button>
       </>
     );
   };

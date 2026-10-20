@@ -73,6 +73,8 @@
 #app-audit-root.theme-daylight .text-slate-900,
 #app-audit-root.theme-daylight .text-zinc-100,
 #app-audit-root.theme-daylight .text-zinc-200,
+#app-audit-root.theme-daylight .bg-zinc-950 .text-white,
+#app-audit-root.theme-daylight .bg-zinc-900 .text-white,
 #app-audit-root.theme-daylight .dark\:text-zinc-100,
 #app-audit-root.theme-daylight .dark\:text-white {
   color: #0f172a !important;

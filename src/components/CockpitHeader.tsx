@@ -122,22 +122,50 @@ export const CockpitHeader: React.FC = () => {
             onClick={toggleVoiceMicListening}
             title={
               isListeningSpeechRecognition
-                ? `🎙️ Microfone Aberto (Escutando "${triggerWordLabel}...") — Toque para Desligar`
-                : `🎙️ Microfone Desligado — Toque para Ativar ("${triggerWordLabel}...")`
+                ? `🎙️ Microfone Aberto (Escutando "${triggerWordLabel}...") — Toque para Parar`
+                : `🎙️ Toque para Falar (sem precisar dizer "${triggerWordLabel}")`
             }
-            aria-label="Alternar Microfone Contínuo Buddy"
-            className={`h-7 rounded-lg px-1.5 flex items-center gap-1 text-[10px] font-bold cursor-pointer transition border whitespace-nowrap ${
+            aria-label="Ativar Comando de Voz"
+            className={`h-7 rounded-lg px-2 flex items-center gap-1 text-[10px] font-extrabold cursor-pointer transition border whitespace-nowrap ${
               isListeningSpeechRecognition
-                ? 'bg-emerald-500 text-white border-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.6)]'
+                ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.75)] animate-pulse'
                 : isDaylight
-                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-700 shadow-xs'
+                  : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-xs'
             }`}
           >
             <Mic className="h-3 w-3 shrink-0" />
-            <span className="truncate max-w-[64px]">
-              &ldquo;{triggerWordLabel}&rdquo; {isListeningSpeechRecognition ? 'ON' : 'OFF'}
+            <span>
+              {isListeningSpeechRecognition ? '🎙️ Ouvindo...' : '🎙️ Falar'}
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleThemeMode}
+            title={
+              isDaylight
+                ? 'Ativar Modo Noturno (Escuro)'
+                : 'Ativar Modo Claro (Solar)'
+            }
+            aria-label="Alternar Modo Noturno / Claro"
+            className={`h-7 rounded-lg px-1.5 flex items-center gap-1 text-[10px] font-extrabold cursor-pointer transition border whitespace-nowrap ${
+              isDaylight
+                ? 'bg-slate-900 hover:bg-slate-800 text-amber-300 border-slate-700'
+                : 'bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border-amber-400/40'
+            }`}
+          >
+            {isDaylight ? (
+              <>
+                <Moon className="h-3 w-3 shrink-0" />
+                <span>Noturno</span>
+              </>
+            ) : (
+              <>
+                <Sun className="h-3 w-3 shrink-0" />
+                <span>Claro</span>
+              </>
+            )}
           </button>
 
           <button
@@ -152,28 +180,6 @@ export const CockpitHeader: React.FC = () => {
             }`}
           >
             <BookOpen className="h-3.5 w-3.5" />
-          </button>
-
-          <button
-            type="button"
-            onClick={toggleThemeMode}
-            title={
-              isDaylight
-                ? 'Mudar para Modo Escuro Suave (Noite)'
-                : 'Mudar para Modo Claro Solar (Dia)'
-            }
-            aria-label="Alternar Modo Dia / Noite"
-            className={`h-7 w-7 rounded-lg flex items-center justify-center cursor-pointer transition ${
-              isDaylight
-                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-            }`}
-          >
-            {isDaylight ? (
-              <Moon className="h-3.5 w-3.5" />
-            ) : (
-              <Sun className="h-3.5 w-3.5" />
-            )}
           </button>
         </div>
       </div>

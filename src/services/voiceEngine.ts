@@ -107,6 +107,43 @@ export function cancelBuddySpeechNow(): void {
   }
 }
 
+let sharedChimeCtx: AudioContext | null = null;
+
+export function playBuddyConfirmationChime(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!sharedChimeCtx) {
+      sharedChimeCtx = new AudioCtx();
+    }
+    if (sharedChimeCtx.state === 'suspended') {
+      void sharedChimeCtx.resume();
+    }
+    const now = sharedChimeCtx.currentTime;
+    const osc = sharedChimeCtx.createOscillator();
+    const gain = sharedChimeCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, now); // D5
+    osc.frequency.setValueAtTime(880, now + 0.07); // A5
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+    osc.connect(gain);
+    gain.connect(sharedChimeCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  } catch {
+    // ignore audio chime errors
+  }
+}
+
+export function speakBuddy(text: string): void {
+  speakWithBuddyVoiceEngine({ text });
+}
+
 export interface SpeakBuddyVoiceOptions {
   text: string;
   rate?: number;
@@ -120,7 +157,8 @@ export interface SpeakBuddyVoiceOptions {
 
 /**
  * Centralized Gemini-Style Natural Voice Engine (+15% Faster 1.15x Default).
- * Uses Native Android TextToSpeech inside the .APK and Web SpeechSynthesis in browsers.
+ * Uses Native Android TextToSpeech (speakText / speakNativeTts) inside the .APK
+ * and Web SpeechSynthesis + Audio Chime in browsers.
  */
 export function speakWithBuddyVoiceEngine(
   options: SpeakBuddyVoiceOptions
@@ -140,16 +178,22 @@ export function speakWithBuddyVoiceEngine(
     return;
   }
 
-  // 1. Native Android APK TextToSpeech Bridge (works 100% reliably inside Capacitor WebView)
+  playBuddyConfirmationChime();
+
+  // 1. Native Android APK TextToSpeech Bridge (speakText / speakNativeTts)
   try {
     const winAny = window as unknown as {
       BuddyNativeOverlay?: {
+        speakText?: (spokenText: string) => void;
         speakNativeTts?: (spokenText: string) => void;
       };
     };
-    if (typeof winAny.BuddyNativeOverlay?.speakNativeTts === 'function') {
+    const nativeSpeakFn =
+      winAny.BuddyNativeOverlay?.speakText ||
+      winAny.BuddyNativeOverlay?.speakNativeTts;
+    if (typeof nativeSpeakFn === 'function') {
       onStart?.();
-      winAny.BuddyNativeOverlay.speakNativeTts(text);
+      nativeSpeakFn.call(winAny.BuddyNativeOverlay, text.trim());
       onVoiceResolved?.('Voz Nativa Android PT');
       window.setTimeout(() => {
         onEnd?.();
@@ -167,6 +211,7 @@ export function speakWithBuddyVoiceEngine(
   try {
     // Cancel any queued stale speech before speaking new street alerts
     window.speechSynthesis.cancel();
+    window.speechSynthesis.resume?.();
 
     const activeRate =
       rate !== undefined && Number.isFinite(rate)
@@ -174,9 +219,10 @@ export function speakWithBuddyVoiceEngine(
         : getSavedBuddyVoiceRate();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'pt-BR';
+    utterance.lang = 'pt-PT';
     utterance.rate = activeRate;
     utterance.pitch = pitch;
+    utterance.volume = 1.0;
 
     const voices = window.speechSynthesis.getVoices();
     const chosenVoice = selectBestGeminiLikePtVoice(voices);

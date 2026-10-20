@@ -6,6 +6,9 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.ContentObserver;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -14,6 +17,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
@@ -25,6 +29,7 @@ import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
@@ -51,6 +56,7 @@ public class MainActivity extends BridgeActivity {
     private Intent recognizerIntent;
     private TextToSpeech nativeTts;
     private boolean nativeTtsReady = false;
+    private ContentObserver screenshotObserver;
 
     // 100% Silent by Default: single-shot on-demand voice only (NEVER loops!)
     private boolean isSingleShotListening = false;
@@ -92,9 +98,11 @@ public class MainActivity extends BridgeActivity {
         isSingleShotListening = false;
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        setVolumeControlStream(AudioManager.STREAM_MUSIC);
         requestRuntimePermissionsIfNeeded();
         initRecognizerIntent();
         initNativeTts();
+        registerScreenshotObserver();
 
         if (getBridge() != null && getBridge().getWebView() != null) {
             final WebView webView = getBridge().getWebView();
@@ -138,6 +146,16 @@ public class MainActivity extends BridgeActivity {
                         if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
                             nativeTts.setLanguage(new Locale("pt", "BR"));
                         }
+                        nativeTts.setSpeechRate(1.05f);
+                        nativeTts.setPitch(1.0f);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            AudioAttributes attrs = new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .setLegacyStreamType(AudioManager.STREAM_MUSIC)
+                                .build();
+                            nativeTts.setAudioAttributes(attrs);
+                        }
                         nativeTtsReady = true;
                     }
                 }
@@ -154,15 +172,121 @@ public class MainActivity extends BridgeActivity {
                 try {
                     if (nativeTts != null && nativeTtsReady) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            nativeTts.speak(text.trim(), TextToSpeech.QUEUE_FLUSH, null, "buddy_tts_" + System.currentTimeMillis());
+                            Bundle params = new Bundle();
+                            params.putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC);
+                            params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f);
+                            nativeTts.speak(
+                                text.trim(),
+                                TextToSpeech.QUEUE_FLUSH,
+                                params,
+                                "buddy_tts_" + System.currentTimeMillis()
+                            );
                         } else {
-                            nativeTts.speak(text.trim(), TextToSpeech.QUEUE_FLUSH, null);
+                            java.util.HashMap<String, String> params = new java.util.HashMap<>();
+                            params.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_MUSIC));
+                            params.put(TextToSpeech.Engine.KEY_PARAM_VOLUME, "1.0");
+                            nativeTts.speak(text.trim(), TextToSpeech.QUEUE_FLUSH, params);
                         }
                     }
                 } catch (Exception ignored) {
                 }
             }
         });
+    }
+
+    private void registerScreenshotObserver() {
+        try {
+            screenshotObserver = new ContentObserver(mainHandler) {
+                private long lastShotTs = 0L;
+                @Override
+                public void onChange(boolean selfChange, Uri uri) {
+                    super.onChange(selfChange, uri);
+                    long now = System.currentTimeMillis();
+                    if (now - lastShotTs < 4000L) return;
+                    lastShotTs = now;
+                    // Notify WebView that a new screenshot was captured while on shift
+                    if (getBridge() != null && getBridge().getWebView() != null) {
+                        getBridge().getWebView().post(new Runnable() {
+                            @Override
+                            public void run() {
+                                getBridge().getWebView().evaluateJavascript(
+                                    "window.onBuddyScreenshotCaptured && window.onBuddyScreenshotCaptured();",
+                                    null
+                                );
+                            }
+                        });
+                    }
+                }
+            };
+            getContentResolver().registerContentObserver(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                true,
+                screenshotObserver
+            );
+        } catch (Exception ignored) {
+        }
+    }
+
+    public static void dispatchAutoDetectedOffer(
+        final Context ctx,
+        final double euros,
+        final double km,
+        final String platform
+    ) {
+        final MainActivity act = getInstance();
+        final String safePlatform = (platform != null && !platform.trim().isEmpty()) ? platform.trim() : "Glovo";
+        final double netProfit = Math.max(0.20, (euros * 0.85) - (km * 0.16));
+        final double netPerKm = netProfit / Math.max(0.1, km);
+        final boolean isWorthIt = netPerKm >= 1.10 && netProfit >= 3.50;
+
+        final String eurosStr = String.format(Locale.FRANCE, "%.2f", euros);
+        final String kmStr = String.format(Locale.FRANCE, "%.1f", km);
+        final String netStr = String.format(Locale.FRANCE, "%.2f", netProfit);
+        final String perKmStr = String.format(Locale.FRANCE, "%.2f", netPerKm);
+
+        final String spokenVerdict = isWorthIt
+            ? "Nova oferta " + safePlatform + ": " + eurosStr + " euros para " + kmStr
+                + " quilómetros. Lucro líquido: " + netStr + " euros, " + perKmStr + " por quilómetro. Compensa aceitar!"
+            : "Atenção na " + safePlatform + ": " + eurosStr + " euros para " + kmStr
+                + " quilómetros. Apenas " + perKmStr + " por quilómetro. Não compensa!";
+
+        final String bannerToast = (isWorthIt ? "✅ COMPENSA (" : "⚠️ NÃO COMPENSA (")
+            + safePlatform + "): " + eurosStr + "€ / " + kmStr + "km → Líq: " + netStr + "€ (" + perKmStr + "€/km)";
+
+        if (act != null) {
+            act.mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Toast.makeText(act, bannerToast, Toast.LENGTH_LONG).show();
+                    } catch (Exception ignored) {
+                    }
+                    act.speakWithNativeTts(spokenVerdict);
+                    BuddyOverlayService.updateListeningStateWithCaption(act, false, bannerToast);
+                    if (act.getBridge() != null && act.getBridge().getWebView() != null) {
+                        final String quotedPlat = JSONObject.quote(safePlatform);
+                        final String js = String.format(
+                            Locale.US,
+                            "window.onAutoOfferDetected && window.onAutoOfferDetected(%.2f, %.2f, %s);",
+                            euros,
+                            km,
+                            quotedPlat
+                        );
+                        act.getBridge().getWebView().evaluateJavascript(js, null);
+                    }
+                }
+            });
+        } else if (ctx != null) {
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Toast.makeText(ctx.getApplicationContext(), bannerToast, Toast.LENGTH_LONG).show();
+                    } catch (Exception ignored) {
+                    }
+                }
+            });
+        }
     }
 
     @SuppressWarnings("deprecation")
@@ -424,7 +548,8 @@ public class MainActivity extends BridgeActivity {
             || norm.contains("minimiz")
             || norm.contains("modo invisivel")
             || norm.contains("esconder")
-            || norm.contains("ocultar");
+            || norm.contains("ocultar")
+            || norm.contains("bolinha");
     }
 
     private boolean isWakeOrForegroundCommand(String norm) {
@@ -433,22 +558,50 @@ public class MainActivity extends BridgeActivity {
             || norm.contains("maximiz")
             || norm.contains("abrir")
             || norm.contains("voltar")
-            || norm.contains("mostrar tela")
+            || norm.contains("mostrar")
             || norm.contains("restaurar")
+            || norm.contains("ecra")
+            || norm.contains("tela")
             || norm.contains("inicio")
+            || norm.contains("home")
+            || norm.contains("oferta")
             || norm.contains("clima")
             || norm.contains("tempo")
             || norm.contains("meteorologia")
             || norm.contains("chuva")
             || norm.contains("temperatura")
-            || norm.contains("financas")
+            || norm.contains("graus")
+            || norm.contains("finan")
+            || norm.contains("ganho")
+            || norm.contains("lucro")
+            || norm.contains("dinheiro")
             || norm.contains("carteira")
             || norm.contains("mapa")
-            || norm.contains("buddys")
+            || norm.contains("zona")
+            || norm.contains("onde")
+            || norm.contains("radar")
+            || norm.contains("buddy")
             || norm.contains("comunidade")
-            || norm.contains("ajustes")
+            || norm.contains("colega")
+            || norm.contains("ajust")
             || norm.contains("config")
-            || norm.contains("scanner");
+            || norm.contains("defin")
+            || norm.contains("scanner")
+            || norm.contains("dividir")
+            || norm.contains("peso")
+            || norm.contains("pesado")
+            || norm.contains("quilos")
+            || norm.contains("suporte")
+            || norm.contains("noturno")
+            || norm.contains("escuro")
+            || norm.contains("noite")
+            || norm.contains("claro")
+            || norm.contains("dia")
+            || norm.contains("sos")
+            || norm.contains("emerg")
+            || norm.contains("socorro")
+            || norm.contains("ajuda")
+            || norm.contains("acidente");
     }
 
     private boolean isActionableFastCommand(String norm) {
@@ -457,7 +610,6 @@ public class MainActivity extends BridgeActivity {
             || norm.contains("aceitar")
             || norm.contains("recusar")
             || norm.contains("rejeitar")
-            || norm.contains("dividir pedido")
             || norm.contains("iniciar entrega")
             || norm.contains("finalizar entrega")
             || norm.contains("modo chuva")
@@ -698,6 +850,13 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onDestroy() {
         stopAndReleaseMicrophoneNow();
+        if (screenshotObserver != null) {
+            try {
+                getContentResolver().unregisterContentObserver(screenshotObserver);
+            } catch (Exception ignored) {
+            }
+            screenshotObserver = null;
+        }
         if (nativeTts != null) {
             try {
                 nativeTts.stop();
@@ -787,6 +946,16 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public int getNativeBridgeVersion() {
+            return 7;
+        }
+
+        @JavascriptInterface
+        public void speakText(final String text) {
+            speakWithNativeTts(text);
+        }
+
+        @JavascriptInterface
         public void speakNativeTts(final String text) {
             speakWithNativeTts(text);
         }
@@ -804,6 +973,31 @@ public class MainActivity extends BridgeActivity {
                     }
                 }
             });
+        }
+
+        @JavascriptInterface
+        public void openAccessibilitySettings() {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(intent);
+                    } catch (Exception ignored) {
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public boolean isAutoOfferDetectorEnabled() {
+            return BuddyOfferDetectorService.isServiceRunning();
+        }
+
+        @JavascriptInterface
+        public void simulateIncomingAutoOffer(final double euros, final double km, final String platform) {
+            dispatchAutoDetectedOffer(MainActivity.this, euros, km, platform);
         }
 
         @JavascriptInterface

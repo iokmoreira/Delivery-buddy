@@ -870,11 +870,26 @@ interface EstafetasContextValue {
   unpluggedChargerAlertActive: boolean;
   dismissUnpluggedChargerAlert: () => void;
   simulateChargerUnpluggedAlert: () => void;
-  // Always-On Wake-Word Watchdog & Live Mic Feedback
+  // Always-On Wake-Word Watchdog & Live Mic Feedback (4s Persistent Box)
   lastHeardLiveTranscript: string | null;
+  lastHeardSpokenText: string | null;
+  lastExecutedVoiceActionText: string | null;
   toggleVoiceMicListening: () => void;
   startContinuousVoiceMic: () => void;
   stopContinuousVoiceMic: () => void;
+  // Automatic Incoming Order Detection & Instant Calculation
+  autoOfferDetectorEnabled: boolean;
+  lastAutoDetectedOfferBanner: AutoDetectedOfferBannerState | null;
+  dismissAutoDetectedOfferBanner: () => void;
+  openAndroidAccessibilitySettings: () => void;
+  triggerAutoDetectedOffer: (
+    euros: number,
+    km: number,
+    platformRaw?: string
+  ) => void;
+  // Scanner Main View Sync ('OFERTA_ATUAL' | 'DIVIDIDO_PESO')
+  scannerActiveMainView: 'OFERTA_ATUAL' | 'DIVIDIDO_PESO';
+  setScannerActiveMainView: (view: 'OFERTA_ATUAL' | 'DIVIDIDO_PESO') => void;
   // Live Open-Meteo Amarante Weather Modal & Rain Bonus Toggle
   isAmaranteWeatherModalOpen: boolean;
   setIsAmaranteWeatherModalOpen: (open: boolean) => void;
@@ -883,6 +898,19 @@ interface EstafetasContextValue {
   rainBonusFinanceActive: boolean;
   toggleRainBonusFinanceActive: () => void;
   openAndFetchAmaranteWeather: (speakNow?: boolean) => Promise<void>;
+}
+
+export interface AutoDetectedOfferBannerState {
+  id: string;
+  platform: PlatformName;
+  grossEur: number;
+  realKm: number;
+  netProfitEur: number;
+  netEurPerKm: number;
+  verdictLabel: 'COMPENSA ACEITAR' | 'RECUSAR OFERTA';
+  passes: boolean;
+  spokenSummary: string;
+  detectedAt: string;
 }
 
 export interface AmaranteLiveWeatherState {
@@ -1937,21 +1965,62 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
   const [lastHeardLiveTranscript, setLastHeardLiveTranscript] = useState<
     string | null
   >(null);
+  const [lastHeardSpokenText, setLastHeardSpokenText] = useState<string | null>(
+    null
+  );
+  const [lastExecutedVoiceActionText, setLastExecutedVoiceActionText] =
+    useState<string | null>(null);
   const lastHeardTranscriptTimerRef = useRef<number | null>(null);
   const startContinuousRecognitionInstanceRef = useRef<() => void>(() => {});
+  const [scannerActiveMainView, setScannerActiveMainView] = useState<
+    'OFERTA_ATUAL' | 'DIVIDIDO_PESO'
+  >('OFERTA_ATUAL');
+  const [autoOfferDetectorEnabled, setAutoOfferDetectorEnabled] =
+    useState<boolean>(true);
+  const [lastAutoDetectedOfferBanner, setLastAutoDetectedOfferBanner] =
+    useState<AutoDetectedOfferBannerState | null>(null);
+  const autoOfferBannerTimerRef = useRef<number | null>(null);
 
-  const showLiveMicTranscriptFeedback = useCallback((heardText: string) => {
-    const trimmed = heardText.trim();
-    if (!trimmed) return;
-    setLastHeardLiveTranscript(trimmed);
-    if (lastHeardTranscriptTimerRef.current !== null) {
-      window.clearTimeout(lastHeardTranscriptTimerRef.current);
+  // Auto-enable Night Mode between 20:00 and 07:00 unless user manually changed theme in this session
+  useEffect(() => {
+    try {
+      const manualChoice = sessionStorage.getItem('buddy_manual_theme_choice');
+      if (manualChoice) return;
+      const curHour = new Date().getHours();
+      if (curHour >= 20 || curHour < 7) {
+        setState((prev) =>
+          prev.themeMode !== 'NIGHT' ? { ...prev, themeMode: 'NIGHT' } : prev
+        );
+      }
+    } catch {
+      // ignore
     }
-    lastHeardTranscriptTimerRef.current = window.setTimeout(() => {
-      setLastHeardLiveTranscript(null);
-      lastHeardTranscriptTimerRef.current = null;
-    }, 4500);
   }, []);
+
+  const showLiveMicTranscriptFeedback = useCallback(
+    (heardText: string, spokenOverride?: string, executedOverride?: string) => {
+      const trimmed = heardText.trim();
+      if (!trimmed) return;
+      setLastHeardLiveTranscript(trimmed);
+      if (spokenOverride !== undefined) {
+        setLastHeardSpokenText(spokenOverride);
+      }
+      if (executedOverride !== undefined) {
+        setLastExecutedVoiceActionText(executedOverride);
+      }
+      if (lastHeardTranscriptTimerRef.current !== null) {
+        window.clearTimeout(lastHeardTranscriptTimerRef.current);
+      }
+      // Keep the transcription box visible for 4.2 seconds after recognition finishes
+      lastHeardTranscriptTimerRef.current = window.setTimeout(() => {
+        setLastHeardLiveTranscript(null);
+        setLastHeardSpokenText(null);
+        setLastExecutedVoiceActionText(null);
+        lastHeardTranscriptTimerRef.current = null;
+      }, 4200);
+    },
+    []
+  );
 
   const [sosPendingConfirmation, setSosPendingConfirmation] =
     useState<SosPendingConfirmationState>({
@@ -7080,6 +7149,179 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   }, [state.aiAgentConfig.supabaseUrl, state.aiAgentConfig.supabaseAnonKey]);
 
   // =========================================================================
+  // AUTOMATIC INCOMING ORDER DETECTION & INSTANT CALCULATION ENGINE
+  // =========================================================================
+  const dismissAutoDetectedOfferBanner = useCallback(() => {
+    setLastAutoDetectedOfferBanner(null);
+    if (autoOfferBannerTimerRef.current !== null) {
+      window.clearTimeout(autoOfferBannerTimerRef.current);
+      autoOfferBannerTimerRef.current = null;
+    }
+  }, []);
+
+  const openAndroidAccessibilitySettings = useCallback(() => {
+    setAutoOfferDetectorEnabled(true);
+    if (typeof window !== 'undefined') {
+      const winAny = window as unknown as {
+        BuddyNativeOverlay?: {
+          openAccessibilitySettings?: () => void;
+        };
+      };
+      if (
+        typeof winAny.BuddyNativeOverlay?.openAccessibilitySettings ===
+        'function'
+      ) {
+        try {
+          winAny.BuddyNativeOverlay.openAccessibilitySettings();
+          speakTextPt(
+            'A abrir definições de Acessibilidade do Android. Ative o Auto-Detetor Delivery Buddy.'
+          );
+          return;
+        } catch {
+          // ignore
+        }
+      }
+    }
+    speakTextPt(
+      'Auto-Detetor de Pedidos Uber e Glovo ativo em segundo plano.'
+    );
+  }, [speakTextPt]);
+
+  const triggerAutoDetectedOffer = useCallback(
+    (euros: number, km: number, platformRaw = 'Glovo') => {
+      const safeEuros = Number(
+        Math.max(1.5, Math.min(150, Number(euros) || 5.5)).toFixed(2)
+      );
+      const safeKm = Number(
+        Math.max(0.3, Math.min(90, Number(km) || 3.1)).toFixed(1)
+      );
+      const rawPlatLower = (platformRaw || '').toLowerCase();
+      const normalizedPlatform: PlatformName = rawPlatLower.includes('uber')
+        ? 'Uber Eats'
+        : rawPlatLower.includes('bolt')
+          ? 'Bolt Food'
+          : 'Glovo';
+
+      // Fuel + wear + tax/fleet cost so 5.50€ for 3.1km yields ~4.70€ net (1.51€/km)
+      const effectiveCostPerKm = Math.max(0.258, totalCostPerKm);
+      const netProfitEur = Number(
+        Math.max(0.2, safeEuros - safeKm * effectiveCostPerKm).toFixed(2)
+      );
+      const netEurPerKm = Number((netProfitEur / safeKm).toFixed(2));
+      const minTargetPerKm = Math.max(
+        1.0,
+        state.userPrefs.minNetProfitPerKmEur || 1.15
+      );
+      const minTargetGross = Math.max(
+        3.5,
+        state.userPrefs.minGrossOrderValueEur || 4.0
+      );
+      const passes =
+        netEurPerKm >= minTargetPerKm && safeEuros >= minTargetGross;
+      const verdictLabel: 'COMPENSA ACEITAR' | 'RECUSAR OFERTA' = passes
+        ? 'COMPENSA ACEITAR'
+        : 'RECUSAR OFERTA';
+
+      const spokenPlat =
+        normalizedPlatform === 'Uber Eats'
+          ? 'Uber Eats'
+          : normalizedPlatform === 'Bolt Food'
+            ? 'Bolt Food'
+            : 'Glovo';
+
+      const eurosSpoken = safeEuros.toFixed(2).replace('.', ',');
+      const kmSpoken = safeKm.toFixed(1).replace('.', ',');
+      const netSpoken = netProfitEur.toFixed(2).replace('.', ',');
+      const perKmSpoken = netEurPerKm.toFixed(2).replace('.', ',');
+
+      const spokenSummary = `Nova oferta ${spokenPlat}: ${eurosSpoken}€ para ${kmSpoken} km. Lucro líquido: ${netSpoken}€ (${perKmSpoken}€/km). ${
+        passes ? 'Compensa aceitar!' : 'Abaixo da meta, recusar!'
+      }`;
+
+      const nowTime = new Date().toLocaleTimeString('pt-PT', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+
+      const autoOrderId = `#AUTO-${Date.now().toString().slice(-4)}`;
+
+      setActiveScannedOffer((prev) => ({
+        ...prev,
+        id: `SCAN-AUTO-${Date.now()}`,
+        orderId: autoOrderId,
+        platform: normalizedPlatform,
+        grossAmountEur: safeEuros,
+        appAnnouncedKm: safeKm,
+        estimatedMinutes: Math.max(6, Math.round(safeKm * 3.8)),
+        originName: `${normalizedPlatform} • Amarante Centro`,
+        destinationName: 'Cliente Amarante (Deteção Automática)',
+        segmentText: `${normalizedPlatform} (${safeEuros.toFixed(2)} € / ${safeKm.toFixed(1)} km)`,
+      }));
+
+      const bannerObj: AutoDetectedOfferBannerState = {
+        id: `AUTO-BANNER-${Date.now()}`,
+        platform: normalizedPlatform,
+        grossEur: safeEuros,
+        realKm: safeKm,
+        netProfitEur,
+        netEurPerKm,
+        verdictLabel,
+        passes,
+        spokenSummary,
+        detectedAt: nowTime,
+      };
+      setLastAutoDetectedOfferBanner(bannerObj);
+      if (autoOfferBannerTimerRef.current !== null) {
+        window.clearTimeout(autoOfferBannerTimerRef.current);
+      }
+      autoOfferBannerTimerRef.current = window.setTimeout(() => {
+        setLastAutoDetectedOfferBanner(null);
+        autoOfferBannerTimerRef.current = null;
+      }, 9500);
+
+      showLiveMicTranscriptFeedback(
+        `⚡ Auto-Oferta ${normalizedPlatform}: ${safeEuros.toFixed(2)}€ / ${safeKm.toFixed(1)}km → Líq: ${netProfitEur.toFixed(2)}€ (${netEurPerKm.toFixed(2)}€/km)`,
+        `Oferta ${normalizedPlatform} (${safeEuros.toFixed(2)}€ • ${safeKm.toFixed(1)} km)`,
+        `${verdictLabel} • Lucro Líquido: +${netProfitEur.toFixed(2)}€ (${netEurPerKm.toFixed(2)}€/km)`
+      );
+
+      speakTextPt(spokenSummary);
+    },
+    [
+      totalCostPerKm,
+      state.userPrefs.minNetProfitPerKmEur,
+      state.userPrefs.minGrossOrderValueEur,
+      showLiveMicTranscriptFeedback,
+      speakTextPt,
+    ]
+  );
+
+  // Register global window.onAutoOfferDetected(euros, km, platform) from Android AccessibilityService / Screenshot Watcher
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const winAny = window as unknown as {
+      onAutoOfferDetected?: (
+        euros: number,
+        km: number,
+        platform: string
+      ) => void;
+    };
+    winAny.onAutoOfferDetected = (
+      euros: number,
+      km: number,
+      platform: string
+    ) => {
+      triggerAutoDetectedOffer(euros, km, platform);
+    };
+    return () => {
+      if (winAny.onAutoOfferDetected) {
+        delete winAny.onAutoOfferDetected;
+      }
+    };
+  }, [triggerAutoDetectedOffer]);
+
+  // =========================================================================
   // STEP 12 & 13 COMPLETE VOICE COMMAND TREE ("COMANDOS BUDDY" VS "COMANDOS UBER / GLOVO / BOLT")
   // =========================================================================
   const executeVoiceCommandPt = useCallback(
@@ -7099,18 +7341,23 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '');
 
-      // Normalize custom trigger word & Portuguese/Android phonetic aliases ("badi", "budi", "body", "bady", "bode", "bad", "bade", "bud", "bandi", "buney", "buni", "boni", "bunny", "bani") to "buddy"
+      // Normalize custom trigger word & Portuguese/Android phonetic aliases ("badi", "budi", "body", "bady", "bode", "bad", "bade", "bud", "bandi", "buney", "buni", "boni", "bunny", "bani", "bari", "pare") to "buddy"
       let lower =
         triggerLower && triggerLower !== 'buddy' && rawLower.includes(triggerLower)
           ? rawLower.replace(triggerLower, 'buddy')
           : rawLower;
       lower = lower
         .replace(
-          /\b(badi|budi|body|bady|bode|bad|bade|bud|bandi|buney|buni|boni|bunny|bani)\b/gi,
+          /\b(badi|budi|body|bady|bode|bad|bade|bud|bandi|buney|buni|boni|bunny|bani|bari|pare)\b/gi,
           'buddy'
         )
         .replace(/\bminimizer\b/gi, 'minimizar')
         .replace(/\bmaximizer\b/gi, 'maximizar');
+
+      // Strip leading wake-word so no "Buddy" wake-word is ever required
+      const intentLower = lower
+        .replace(/^(ei\s+|oi\s+|ola\s+|hey\s+)?(buddy\s*)+/i, '')
+        .trim();
 
       const nowStr = new Date().toLocaleTimeString('pt-BR', {
         hour: '2-digit',
@@ -7122,12 +7369,101 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       let actionSummary = '';
 
       // ---------------------------------------------------------------------
+      // 0A. VOICE OFFER CALCULATION WHEN NUMBERS ARE SPOKEN (e.g. "5 euros 3 km" or "oferta 6 por 4")
+      // ---------------------------------------------------------------------
+      const numberMatches = intentLower.match(/\d+(?:[.,]\d+)?/g);
+      if (
+        numberMatches &&
+        numberMatches.length >= 2 &&
+        (intentLower.includes('euro') ||
+          intentLower.includes('km') ||
+          intentLower.includes('quilometro') ||
+          intentLower.includes('oferta') ||
+          intentLower.includes('calcul') ||
+          intentLower.includes('por') ||
+          intentLower.includes('para'))
+      ) {
+        const parsedEuros = parseFloat(numberMatches[0].replace(',', '.'));
+        const parsedKm = parseFloat(numberMatches[1].replace(',', '.'));
+        if (
+          Number.isFinite(parsedEuros) &&
+          Number.isFinite(parsedKm) &&
+          parsedEuros > 0 &&
+          parsedKm > 0
+        ) {
+          const plat = lower.includes('uber')
+            ? 'Uber Eats'
+            : lower.includes('bolt')
+              ? 'Bolt Food'
+              : lower.includes('glovo')
+                ? 'Glovo'
+                : activeScannedOffer.platform;
+          triggerAutoDetectedOffer(parsedEuros, parsedKm, plat);
+          commandMatched = `"Calcular Oferta (${parsedEuros.toFixed(2)}€ / ${parsedKm.toFixed(1)}km)"`;
+          actionSummary = `Oferta calculada automaticamente: ${parsedEuros.toFixed(2)}€ para ${parsedKm.toFixed(1)} km.`;
+          const resultObj = {
+            phrase: clean,
+            commandMatched,
+            actionSummary,
+            timestamp: nowStr,
+          };
+          setLastVoiceCommandResult(resultObj);
+          return { commandMatched, actionSummary };
+        }
+      }
+
+      // ---------------------------------------------------------------------
+      // 0B. MODO NOTURNO / ESCURO / CLARO VOICE COMMAND
+      // ---------------------------------------------------------------------
+      if (
+        /noturno|escuro|noite|modo claro|tema claro|modo dia/.test(lower)
+      ) {
+        const wantLight =
+          lower.includes('claro') || lower.includes('modo dia');
+        const nextMode: AppThemeMode = wantLight
+          ? 'DAYLIGHT'
+          : lower.includes('noturno') ||
+              lower.includes('escuro') ||
+              lower.includes('noite')
+            ? 'NIGHT'
+            : state.themeMode === 'DAYLIGHT'
+              ? 'NIGHT'
+              : 'DAYLIGHT';
+        try {
+          sessionStorage.setItem('buddy_manual_theme_choice', nextMode);
+        } catch {
+          // ignore
+        }
+        setState((prev) => ({ ...prev, themeMode: nextMode }));
+        const tts =
+          nextMode === 'NIGHT'
+            ? 'Modo noturno ativado.'
+            : 'Modo claro ativado.';
+        commandMatched =
+          nextMode === 'NIGHT' ? '"Modo Noturno"' : '"Modo Claro"';
+        actionSummary = tts;
+        showLiveMicTranscriptFeedback(
+          `✅ Comando: "${clean}" → ${tts}`,
+          clean,
+          tts
+        );
+        speakTextPt(tts);
+        const resultObj = {
+          phrase: clean,
+          commandMatched,
+          actionSummary,
+          timestamp: nowStr,
+        };
+        setLastVoiceCommandResult(resultObj);
+        return { commandMatched, actionSummary };
+      }
+
+      // ---------------------------------------------------------------------
       // 0. INSTANT ALERT & AUDIO DISMISSAL ("Cancelar alerta" / "Cancelar" / "Limpar")
       // ---------------------------------------------------------------------
       if (
         lower.includes('cancelar alerta') ||
         lower === 'cancelar' ||
-        lower === 'fechar' ||
         lower.includes('fechar alerta') ||
         lower.includes('parar áudio') ||
         lower.includes('parar audio')
@@ -7183,44 +7519,59 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       }
 
       // ---------------------------------------------------------------------
-      // 0B. HIGHEST-PRIORITY MINIMIZE & MAXIMIZE / RESTORE APP SCREEN COMMANDS
+      // 0C. HIGHEST-PRIORITY MINIMIZE & MAXIMIZE / RESTORE APP SCREEN COMMANDS
       // ---------------------------------------------------------------------
       const isSpecificSubPageOpenCommand =
         lower.includes('mapa') ||
+        lower.includes('zona') ||
+        lower.includes('radar') ||
         lower.includes('estatistica') ||
         lower.includes('chat') ||
         lower.includes('social') ||
         lower.includes('radio') ||
         lower.includes('buddys') ||
-        lower.includes('ajustes') ||
+        lower.includes('comunidade') ||
+        lower.includes('colega') ||
+        lower.includes('ajust') ||
+        lower.includes('config') ||
+        lower.includes('defin') ||
         lower.includes('inicio') ||
         lower.includes('início') ||
+        lower.includes('home') ||
+        lower.includes('oferta') ||
         lower.includes('clima') ||
         lower.includes('tempo') ||
         lower.includes('meteorologia') ||
+        lower.includes('temperatura') ||
+        lower.includes('graus') ||
         lower.includes('chuva') ||
         lower.includes('acordo') ||
         lower.includes('prova') ||
         lower.includes('dossie') ||
         lower.includes('scanner') ||
         lower.includes('finan') ||
+        lower.includes('ganho') ||
+        lower.includes('lucro') ||
+        lower.includes('dinheiro') ||
         lower.includes('carteira') ||
         lower.includes('predefini') ||
         lower.includes('calculadora');
 
       if (
-        lower.includes('maximizar') ||
-        lower.includes('maximizer') ||
-        lower.includes('maximiz') ||
-        lower.includes('restaurar') ||
-        lower.includes('voltar') ||
-        lower.includes('mostrar tela') ||
-        lower.includes('mostrar ecra') ||
-        lower.includes('sair do modo invisivel') ||
-        lower.includes('sair modo invisivel') ||
-        lower.includes('ecra inteiro') ||
-        lower.includes('tela inteira') ||
-        (lower.includes('abrir') && !isSpecificSubPageOpenCommand)
+        (lower.includes('maximizar') ||
+          lower.includes('maximizer') ||
+          lower.includes('maximiz') ||
+          lower.includes('restaurar') ||
+          lower.includes('voltar') ||
+          lower.includes('mostrar') ||
+          lower.includes('sair do modo invisivel') ||
+          lower.includes('sair modo invisivel') ||
+          lower.includes('ecra') ||
+          lower.includes('tela') ||
+          lower.includes('abrir')) &&
+        !isSpecificSubPageOpenCommand &&
+        !lower.includes('bloquear') &&
+        !lower.includes('desbloquear')
       ) {
         stopAllLiveVoiceTimersAndRec();
         setEphemeralVoiceOverlay(null);
@@ -7229,10 +7580,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         if (state.isAppPaused) {
           toggleAppPauseMode();
         }
-        commandMatched = '"Buddy maximizar" (Tela Aberta)';
+        commandMatched = '"Maximizar" (Tela Aberta)';
         actionSummary = 'Tela aberta.';
         showLiveMicTranscriptFeedback(
-          `✅ Comando: "${clean}" → A abrir Delivery Buddy`
+          `✅ Comando: "${clean}" → Tela aberta`,
+          clean,
+          'Maximizar → Tela aberta.'
         );
         speakTextPt('Tela aberta.');
         const resultObj = {
@@ -7249,21 +7602,25 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         lower.includes('minimizar') ||
         lower.includes('minimizer') ||
         lower.includes('minimiz') ||
+        lower.includes('fechar') ||
         lower.includes('modo invisivel') ||
         lower.includes('esconder') ||
         lower.includes('ocultar') ||
+        lower.includes('bolinha') ||
         lower.includes('bolha')
       ) {
         stopAllLiveVoiceTimersAndRec();
         setEphemeralVoiceOverlay(null);
         setLiveVoiceTranscription(null);
         showLiveMicTranscriptFeedback(
-          `✅ Comando: "${clean}" → A minimizar para Bolha DB`
+          `✅ Comando: "${clean}" → A minimizar.`,
+          clean,
+          'Minimizar → A minimizar para Bolha DB.'
         );
         setIsBubbleMinimized(true);
-        commandMatched = '"Buddy minimizar" (Modo Minimizado Ativo)';
-        actionSummary = 'Modo minimizado.';
-        speakTextPt('Modo minimizado.');
+        commandMatched = '"Minimizar" (Modo Minimizado Ativo)';
+        actionSummary = 'A minimizar.';
+        speakTextPt('A minimizar.');
         const resultObj = {
           phrase: clean,
           commandMatched,
@@ -7352,7 +7709,13 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       } else if (
         lower.includes('ativar sos') ||
         lower.includes('emergência sos') ||
-        lower === 'sos'
+        lower.includes('emergencia') ||
+        lower.includes('emerg') ||
+        lower.includes('socorro') ||
+        lower.includes('acidente') ||
+        lower.includes('ajuda') ||
+        lower === 'sos' ||
+        lower.includes('sos')
       ) {
         commandMatched = '"Ativar SOS" (1.ª Etapa — Aguardando Confirmação)';
         requestOrConfirmSosActivation('Acidente na Via');
@@ -7360,35 +7723,86 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           "Janela de segurança de 5s aberta: Diga 'Confirmar SOS' ou toque novamente para abrir o microfone de emergência.";
       }
       // ---------------------------------------------------------------------
-      // 2. DEEP-LINK VOICE OPENING ("Abrir Buddy em [Local Específico]")
+      // 1B. CLIMA / TEMPO / CHUVA / METEOROLOGIA / TEMPERATURA / GRAUS (HIGH PRIORITY)
+      // ---------------------------------------------------------------------
+      else if (
+        lower.includes('modo chuva') ||
+        lower.includes('proteção chuva') ||
+        lower.includes('protecao chuva') ||
+        lower.includes('bloquear ecrã') ||
+        lower.includes('bloquear tela')
+      ) {
+        commandMatched = '"Modo Chuva" (Escudo Anti-Gotas Ativo)';
+        setRainLockActive(true);
+        const tts =
+          'Modo Chuva ativado. Ecrã bloqueado contra toques de água. Toque 3 vezes no canto superior direito para desbloquear.';
+        speakTextPt(tts);
+        actionSummary = tts;
+      } else if (
+        /clima|tempo|chuva|meteorologia|temperatura|graus/.test(lower)
+      ) {
+        commandMatched = '"Clima de Amarante"';
+        actionSummary = `A abrir Clima de Amarante (${amaranteLiveWeather.temperatureC.toFixed(1)} °C, ${amaranteLiveWeather.conditionLabel}, chuva ${amaranteLiveWeather.rainMm.toFixed(1)} mm).`;
+        showLiveMicTranscriptFeedback(
+          `✅ Comando: "${clean}" → A abrir Clima de Amarante`,
+          clean,
+          `Clima de Amarante → ${amaranteLiveWeather.temperatureC.toFixed(1)}°C, ${amaranteLiveWeather.conditionLabel}`
+        );
+        void openAndFetchAmaranteWeather(true);
+      }
+      // ---------------------------------------------------------------------
+      // 1C. DIVIDIR PEDIDO / PESO / QUILOS / KG / SUPORTE (HIGH PRIORITY)
+      // ---------------------------------------------------------------------
+      else if (
+        /dividir|peso|pesado|quilos|\bkg\b|suporte/.test(lower) &&
+        !lower.includes('reportar problema')
+      ) {
+        const targetPlatform: PlatformName = lower.includes('uber')
+          ? 'Uber Eats'
+          : lower.includes('glovo')
+            ? 'Glovo'
+            : activeScannedOffer.platform ||
+              state.activeDeliveryLifecycle.platform ||
+              'Glovo';
+
+        commandMatched = '"Dividir Pedido & Peso"';
+        setIsBubbleMinimized(false);
+        setCourierWorkspaceSection('AREA_PRIVADA');
+        setActiveTab('scanner');
+        setScannerActiveMainView('DIVIDIDO_PESO');
+        triggerSupportSplitOrderMacro(targetPlatform);
+
+        const realOrderId =
+          activeScannedOffer.orderId ||
+          state.activeDeliveryLifecycle.orderId ||
+          `#410${activeScannedOffer.presetNumber || 1}`;
+        const realKg = Number(Math.max(14.8, totalAuditedWeightKg).toFixed(1));
+
+        actionSummary = `A calcular peso do pedido (${realKg.toFixed(1)} kg). Mensagem de divisão (${targetPlatform} ${realOrderId}) copiada para o suporte.`;
+        showLiveMicTranscriptFeedback(
+          `✅ Comando: "${clean}" → Dividido & Peso (${realKg.toFixed(1)} kg)`,
+          clean,
+          actionSummary
+        );
+      }
+      // ---------------------------------------------------------------------
+      // 2. DEEP-LINK VOICE OPENING ("Mapa", "Finanças", "Buddys", "Ajustes", "Início")
       // ---------------------------------------------------------------------
       else if (
         lower.includes('abrir buddy no mapa') ||
         lower.includes('abrir no mapa') ||
         lower.includes('abrir mapa') ||
+        lower.includes('radar') ||
         lower === 'mapa' ||
-        lower === 'buddy mapa'
+        lower === 'buddy mapa' ||
+        (lower.includes('mapa') && !lower.includes('perigo'))
       ) {
-        commandMatched = '"Abrir Buddy no Mapa"';
+        commandMatched = '"Abrir Mapa de Amarante"';
         setIsBubbleMinimized(false);
         setCourierWorkspaceSection('AREA_PUBLICA_SOCIAL');
         setActiveTab('radar');
-        actionSummary =
-          'Interface completa aberta diretamente em Área Pública -> Mapa de Amarante (25 km).';
-        triggerEphemeralOverlayCard({
-          cardCategory: 'TRANSITO',
-          commandSpoken: clean,
-          title: 'Mapa de Amarante (25 km) Aberto',
-          subtitle: 'Navegação por Voz Mãos-Livres',
-          primaryMetricLabel: 'Ecrã Ativo',
-          primaryMetricValue: 'Mapa Amarante (60% Ecrã)',
-          secondaryDetails: [
-            'Marcadores circulares ativos em Amarante Centro, Freixo e Vila Meã',
-            'Assistente de toque Waze / Google Maps pronto na área inferior',
-          ],
-          spokenTextPtBr:
-            'Abrindo o Delivery Buddy diretamente no Mapa de Amarante.',
-        });
+        actionSummary = 'A abrir Mapa de Amarante (25 km).';
+        speakTextPt('A abrir Mapa de Amarante.');
       } else if (
         lower.includes('abrir buddy nas estatísticas') ||
         lower.includes('abrir buddy nas estatisticas') ||
@@ -7421,27 +7835,15 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         lower.includes('abrir chat') ||
         lower.includes('abrir social') ||
         lower.includes('abrir rádio') ||
-        lower.includes('abrir radio')
+        lower.includes('abrir radio') ||
+        lower.includes('colega')
       ) {
-        commandMatched = '"Abrir Buddy no Chat"';
+        commandMatched = '"Abrir Social Buddys & Chat"';
         setIsBubbleMinimized(false);
         setCourierWorkspaceSection('AREA_PUBLICA_SOCIAL');
         setActiveTab('walkietalkie');
-        actionSummary =
-          'Interface completa aberta diretamente em Área Pública -> Social Buddys & Chat.';
-        triggerEphemeralOverlayCard({
-          cardCategory: 'MENSAGEM_AMIZADE',
-          commandSpoken: clean,
-          title: 'Buddys: Chat, Walkie & Blog Aberto',
-          subtitle: 'Comunidade Amarante (25 km)',
-          primaryMetricLabel: 'Estafetas Online na Região',
-          primaryMetricValue: `${state.onlineDirectoryCouriers.length} Buddys Ativos`,
-          secondaryDetails: [
-            'Toque no microfone de qualquer amigo para ditar mensagem ao vivo',
-            'Pop-up de perfil 45%/80% e desafios rápidos disponíveis',
-          ],
-          spokenTextPtBr: 'Abrindo o Delivery Buddy no Chat e Social Buddys.',
-        });
+        actionSummary = 'A abrir Comunidade Buddys e Rádio.';
+        speakTextPt('A abrir Comunidade Buddys.');
       } else if (
         lower.includes('acordos de zona') ||
         lower.includes('acordo de zona') ||
@@ -7667,34 +8069,6 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           spokenTextPtBr: tts,
         });
         actionSummary = tts;
-      } else if (
-        lower.includes('modo chuva') ||
-        lower.includes('proteção chuva') ||
-        lower.includes('protecao chuva') ||
-        lower.includes('bloquear ecrã') ||
-        lower.includes('bloquear tela')
-      ) {
-        commandMatched = '"Buddy modo chuva" (Escudo Anti-Gotas Ativo)';
-        setRainLockActive(true);
-        const tts =
-          'Modo Chuva ativado. Ecrã bloqueado contra toques de água. Toque 3 vezes no canto superior direito para desbloquear.';
-        speakTextPt(tts);
-        actionSummary = tts;
-      } else if (
-        lower.includes('clima') ||
-        lower.includes('tempo') ||
-        lower.includes('meteorologia') ||
-        lower.includes('como está o tempo') ||
-        lower.includes('como esta o tempo') ||
-        lower.includes('vai chover') ||
-        lower.includes('chuva')
-      ) {
-        commandMatched = '"Buddy clima" (Clima Atual em Amarante)';
-        showLiveMicTranscriptFeedback(
-          `✅ Comando: "${clean}" → A abrir Clima de Amarante`
-        );
-        void openAndFetchAmaranteWeather(true);
-        actionSummary = `Clima Atual em Amarante: ${amaranteLiveWeather.temperatureC.toFixed(1)} °C, ${amaranteLiveWeather.conditionLabel}, chuva ${amaranteLiveWeather.rainMm.toFixed(1)} mm e vento ${amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h.`;
       } else if (
         lower.includes('enviar mensagem para') ||
         lower.includes('mandar mensagem para')
@@ -7942,51 +8316,6 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           actionSummary = tts;
         }
       } else if (
-        lower.includes('dividir pedido') ||
-        lower.includes('pedir divisão') ||
-        lower.includes('pedir divisao') ||
-        lower.includes('dividir no suporte') ||
-        lower.includes('excesso de peso')
-      ) {
-        const targetPlatform: PlatformName = lower.includes('uber')
-          ? 'Uber Eats'
-          : lower.includes('glovo')
-            ? 'Glovo'
-            : activeScannedOffer.platform ||
-              state.activeDeliveryLifecycle.platform ||
-              'Glovo';
-
-        commandMatched = '"Dividir pedido" / "Pedir divisão no suporte"';
-        triggerSupportSplitOrderMacro(targetPlatform);
-
-        const realOrderId =
-          activeScannedOffer.orderId ||
-          state.activeDeliveryLifecycle.orderId ||
-          `#410${activeScannedOffer.presetNumber || 1}`;
-        const realKg = Number(Math.max(2.4, totalAuditedWeightKg).toFixed(1));
-
-        triggerEphemeralOverlayCard({
-          cardCategory: 'SUPORTE_PLATAFORMA',
-          commandSpoken: '"Dividir pedido"',
-          title: `Divisão de Pedido no Suporte • ${targetPlatform}`,
-          subtitle: `Pedido ${realOrderId} • Peso Real Auditado: ${realKg.toFixed(1)} kg`,
-          primaryMetricLabel: 'Sequência de 4 Toques (%X, %Y)',
-          primaryMetricValue: `4/4 Concluída (${targetPlatform})`,
-          secondaryDetails: [
-            `Texto enviado: Pedido ${realOrderId} com ${realKg.toFixed(1)} kg`,
-            'Solicitação de segundo entregador submetida sem tocar na tela',
-          ],
-          spokenTextPtBr: `Acionando suporte da ${
-            targetPlatform === 'Uber Eats' ? 'Uber' : 'Glovo'
-          } para dividir o pedido ${realOrderId} com ${realKg
-            .toFixed(1)
-            .replace('.', ' vírgula ')} quilos.`,
-        });
-
-        actionSummary = `Macro de Suporte (${targetPlatform}) executada para o pedido ${realOrderId} (${realKg.toFixed(
-          1
-        )} kg).`;
-      } else if (
         lower.includes('pedido recolhido') ||
         lower.includes('iniciar entrega') ||
         lower.includes('recolhido') ||
@@ -8039,58 +8368,55 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           2
         )} € líq. e +${realKm.toFixed(1)} km sincronizados nas Metas.`;
       } else if (lower.includes('minimizar') || lower.includes('bolha')) {
-        commandMatched = '"Minimizar" (Modo Micro-Logo Invisível)';
-        actionSummary =
-          'Interface recolhida para Micro-Logo discreto (36x36px). Tela 100% livre para Uber/Glovo/Bolt.';
+        commandMatched = '"Minimizar"';
+        actionSummary = 'A minimizar.';
         setIsBubbleMinimized(true);
-        speakTextPt('Modo invisível ativado. Tela livre.');
+        speakTextPt('A minimizar.');
       } else if (
-        lower.includes('calculadora') ||
-        lower.includes('predefini') ||
-        lower.includes('config') ||
-        lower.includes('seguran') ||
-        lower.includes('ajustes') ||
-        lower.includes('definicoes') ||
-        lower.includes('definições')
+        /calculadora|predefini|config|seguran|ajust|defin/.test(lower)
       ) {
-        commandMatched = '"Buddy ajustes" (Abrir Ajustes)';
+        commandMatched = '"Ajustes" (Abrir Ajustes)';
         actionSummary = 'A abrir Ajustes e Predefinições.';
         setIsBubbleMinimized(false);
         setActiveTab('menu_mais');
-        speakTextPt('Abrindo Ajustes.');
+        speakTextPt('A abrir Ajustes.');
       } else if (
-        lower.includes('scanner') ||
-        lower.includes('inicio') ||
-        lower.includes('início')
+        /scanner|inicio|início|\bhome\b|oferta/.test(lower)
       ) {
-        commandMatched = '"Buddy início" (Abrir Início)';
+        commandMatched = '"Início" (Abrir Início)';
         actionSummary = 'A abrir Início e Scanner de Ofertas.';
         setIsBubbleMinimized(false);
         setCourierWorkspaceSection('AREA_PRIVADA');
         setActiveTab('scanner');
-        speakTextPt('Abrindo Início.');
+        setScannerActiveMainView('OFERTA_ATUAL');
+        speakTextPt('A abrir Início.');
       } else if (
-        lower.includes('buddys') ||
-        lower.includes('amigos') ||
-        lower.includes('comunidade')
+        /buddys|amigos|comunidade|colega/.test(lower)
       ) {
-        commandMatched = '"Buddy buddys" (Abrir Social Buddys)';
+        commandMatched = '"Buddys" (Abrir Social Buddys)';
         actionSummary = 'A abrir Comunidade Buddys e Rádio.';
         setIsBubbleMinimized(false);
         setCourierWorkspaceSection('AREA_PUBLICA_SOCIAL');
         setActiveTab('walkietalkie');
-        speakTextPt('Abrindo Social Buddys.');
+        speakTextPt('A abrir Comunidade Buddys.');
       } else if (
-        lower.includes('finan') ||
-        lower.includes('carteira') ||
-        lower.includes('recompensa')
+        /finan|ganho|lucro|dinheiro|carteira|recompensa/.test(lower)
       ) {
-        commandMatched = '"Buddy finanças" (Abrir Finanças)';
+        commandMatched = '"Finanças" (Abrir Finanças)';
         actionSummary = 'A abrir Finanças e Metas.';
         setIsBubbleMinimized(false);
         setCourierWorkspaceSection('AREA_PRIVADA');
         setActiveTab('financas');
-        speakTextPt('Abrindo Finanças e Metas.');
+        speakTextPt('A abrir Finanças e Metas.');
+      } else if (
+        /zona|onde/.test(lower)
+      ) {
+        commandMatched = '"Mapa de Amarante"';
+        actionSummary = 'A abrir Mapa de Amarante (25 km).';
+        setIsBubbleMinimized(false);
+        setCourierWorkspaceSection('AREA_PUBLICA_SOCIAL');
+        setActiveTab('radar');
+        speakTextPt('A abrir Mapa de Amarante.');
       } else if (lower.includes('pausar') || lower.includes('retomar')) {
         commandMatched = '"Pausar Aplicativo"';
         const nextPaused = !state.isAppPaused;
@@ -8098,7 +8424,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         actionSummary = nextPaused
           ? 'Aplicativo colocado em Pausa de Turno.'
           : 'Turno retomado!';
-      } else if (lower.includes('aceitar pedido')) {
+      } else if (lower.includes('aceitar')) {
         commandMatched = '"Aceitar pedido"';
         const gross = activeScannedOffer.grossAmountEur;
         const km = Math.max(0.1, activeScannedOffer.appAnnouncedKm);
@@ -8120,7 +8446,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           spokenTextPtBr: tts,
         });
         actionSummary = tts;
-      } else if (lower.includes('recusar pedido')) {
+      } else if (lower.includes('recusar') || lower.includes('rejeitar')) {
         commandMatched = '"Recusar pedido"';
         const gross = activeScannedOffer.grossAmountEur;
         const km = Math.max(0.1, activeScannedOffer.appAnnouncedKm);
@@ -8384,18 +8710,6 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         speakTextPt(tts);
         actionSummary = tts;
       } else if (
-        lower.includes('modo chuva') ||
-        lower.includes('protecao de chuva') ||
-        lower.includes('bloquear tela') ||
-        lower.includes('bloquear ecra')
-      ) {
-        commandMatched = '"Modo Chuva" (Proteção Anti-Toque Fantasma Ativa)';
-        setRainLockActive(true);
-        const tts =
-          'Modo Chuva ativado. Ecrã protegido contra gotas de água. Diga desbloquear tela ou toque 3 vezes no canto.';
-        speakTextPt(tts);
-        actionSummary = tts;
-      } else if (
         lower.includes('estou bem') ||
         lower.includes('cancelar queda')
       ) {
@@ -8412,49 +8726,33 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       ) {
         commandMatched = '"Buddy" (Escuta Mãos-Livres Ativa)';
         const tts =
-          'Estou na escuta. Diga aceitar, recusar, dividir pedido ou modo chuva.';
-        triggerEphemeralOverlayCard({
-          cardCategory: 'TRANSITO',
-          commandSpoken: clean,
-          title: '🎙️ Buddy na Escuta (Mãos-Livres)',
-          subtitle: 'Microfone Aberto Contínuo • Diga o seu comando',
-          primaryMetricLabel: 'Comandos Rápidos de Rua',
-          primaryMetricValue: '"Aceitar" • "Recusar" • "Modo Chuva"',
-          secondaryDetails: [
-            '"Dividir pedido" • "Iniciar entrega" • "Finalizar entrega"',
-            '"Quantos estafetas" • "Quanto tá pagando"',
-          ],
-          spokenTextPtBr: tts,
-        });
+          'Estou na escuta. Diga clima, minimizar, dividir pedido ou finanças.';
+        speakTextPt(tts);
         actionSummary = tts;
       } else {
         setEphemeralVoiceOverlay(null);
         setLiveVoiceTranscription(null);
         commandMatched = `Comando não reconhecido: "${clean}"`;
         actionSummary =
-          "Comando não reconhecido — tente 'Buddy clima', 'Aceitar', 'Minimizar', 'Maximizar' ou 'Mapa'";
-        showLiveMicTranscriptFeedback(`⚠️ ${actionSummary}`);
+          "Diga 'Clima', 'Minimizar', 'Maximizar', 'Dividir pedido', 'Finanças' ou 'Mapa'.";
+        showLiveMicTranscriptFeedback(
+          `⚠️ Ouvido: "${clean}" → ${actionSummary}`,
+          clean,
+          actionSummary
+        );
         speakTextPt('Não entendi, repita o comando.');
       }
 
       if (!commandMatched.startsWith('Comando não reconhecido')) {
-        const shortLabel = lower.includes('clima') ||
-          lower.includes('tempo') ||
-          lower.includes('meteorologia') ||
-          lower.includes('chuva')
-          ? 'A abrir Clima de Amarante'
-          : lower.includes('mapa')
-            ? 'A abrir Mapa de Amarante'
-            : lower.includes('finan')
-              ? 'A abrir Finanças'
-              : lower.includes('inicio') || lower.includes('início') || lower.includes('scanner')
-                ? 'A abrir Início'
-                : lower.includes('buddys') || lower.includes('chat')
-                  ? 'A abrir Social Buddys'
-                  : lower.includes('ajustes')
-                    ? 'A abrir Ajustes'
-                    : commandMatched.replace(/^["“]|["”]$/g, '');
-        showLiveMicTranscriptFeedback(`✅ Comando: "${clean}" → ${shortLabel}`);
+        const cleanTitle = commandMatched.replace(/^["“]|["”]$/g, '');
+        const actionText = actionSummary
+          ? `${cleanTitle} — ${actionSummary}`
+          : cleanTitle;
+        showLiveMicTranscriptFeedback(
+          `✅ Comando: "${clean}" → ${cleanTitle}`,
+          clean,
+          actionText
+        );
       }
 
       const resultObj = {
@@ -8468,6 +8766,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     },
     [
       state.isAppPaused,
+      state.themeMode,
       state.personalGoals,
       state.activeDeliveryLifecycle,
       state.roadHazards,
@@ -8509,6 +8808,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       amaranteLiveWeather.conditionLabel,
       amaranteLiveWeather.rainMm,
       amaranteLiveWeather.windSpeedKmh,
+      triggerAutoDetectedOffer,
     ]
   );
 
@@ -8543,7 +8843,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
       // 1. Show real-time partial words inside the floating transcription HUD
       showLiveMicTranscriptFeedback(
-        isFinal ? `🗣️ Ouvido: "${latestRaw}"` : `🗣️ Ouvindo: "${latestRaw}..."`
+        isFinal ? `🗣️ Ouvido: "${latestRaw}"` : `🗣️ Ouvindo: "${latestRaw}..."`,
+        latestRaw,
+        isFinal ? 'A processar comando...' : 'A escutar em tempo real...'
       );
 
       // Also update the 45% live voice transcription drawer if open
@@ -8564,104 +8866,17 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         .replace(/[\u0300-\u036f]/g, '')
         .trim();
 
-      const phoneticWakeAliases = [
-        'buddy',
-        'badi',
-        'budi',
-        'body',
-        'bady',
-        'bode',
-        'bad',
-        'bade',
-        'bud',
-        'bandi',
-        'buney',
-        'buni',
-        'boni',
-        'bunny',
-        'bani',
-      ];
-      const customTrigNorm = (
-        state.voiceActivationConfig.customTriggerWord || 'buddy'
-      )
-        .trim()
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '');
-      if (customTrigNorm && !phoneticWakeAliases.includes(customTrigNorm)) {
-        phoneticWakeAliases.push(customTrigNorm);
-      }
+      const directInstantIntentRegex =
+        /clima|tempo|chuva|meteorologia|temperatura|graus|minimiz|fechar|esconder|bolinha|maximiz|abrir|mostrar|voltar|ecra|tela|dividir|peso|pesado|quilos|\bkg\b|suporte|finan|ganho|lucro|dinheiro|mapa|zona|onde|radar|comunidade|colega|ajust|config|defin|inicio|home|oferta|noturno|escuro|noite|claro|dia|\bsos\b|emerg|socorro|ajuda|acidente|aceitar|recusar|rejeitar/;
 
-      const directHighPriorityCommands = [
-        'maximizar',
-        'maximizer',
-        'maximiz',
-        'minimizar',
-        'minimizer',
-        'minimiz',
-        'modo invisivel',
-        'restaurar',
-        'voltar',
-        'abrir',
-        'mostrar tela',
-        'mostrar ecra',
-        'sair do modo invisivel',
-        'ecra inteiro',
-        'tela inteira',
-        'esconder',
-        'ocultar',
-        'clima',
-        'tempo',
-        'meteorologia',
-        'como esta o tempo',
-        'vai chover',
-        'chuva',
-        'aceitar',
-        'recusar',
-        'rejeitar',
-        'modo chuva',
-        'desbloquear tela',
-        'desbloquear ecra',
-        'dividir pedido',
-        'iniciar entrega',
-        'pedido recolhido',
-        'finalizar entrega',
-        'entrega concluida',
-        'mapa',
-        'financas',
-        'finanças',
-        'inicio',
-        'início',
-        'buddys',
-        'ajustes',
-        'quantos estafetas',
-        'estafetas online',
-        'quanto ta pagando',
-        'quanto esta a pagar',
-        'pagando por km',
-        'pagando por quilometro',
-        'cancelar alerta',
-        'confirmar sos',
-        'ativar sos',
-        'estou bem',
-      ];
-
-      const hasWakeWord = phoneticWakeAliases.some((alias) => {
-        const re = new RegExp(`\\b${alias}\\b`, 'i');
-        return re.test(norm) || norm.includes(alias);
-      });
-
-      const matchedDirectCmd = directHighPriorityCommands.find((cmd) =>
-        norm.includes(
-          cmd
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-        )
-      );
+      const hasInstantKeyword = directInstantIntentRegex.test(norm);
+      const hasSpokenNumbers =
+        (norm.match(/\d+(?:[.,]\d+)?/g) || []).length >= 2;
 
       const shouldExecuteNow =
-        Boolean(matchedDirectCmd) ||
-        (isFinal && (hasWakeWord || norm.length >= 3));
+        isFinal ||
+        (hasInstantKeyword && norm.length >= 4 && !norm.endsWith('buddy')) ||
+        (hasSpokenNumbers && isFinal);
 
       if (shouldExecuteNow) {
         const nowMs = Date.now();
@@ -8687,9 +8902,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
             // ignore
           }
         }
-        executeVoiceCommandPt(
-          hasWakeWord || matchedDirectCmd ? latestRaw : `Buddy ${latestRaw}`
-        );
+        executeVoiceCommandPt(latestRaw);
         return true;
       }
       if (isFinal) {
@@ -8698,11 +8911,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       }
       return false;
     },
-    [
-      executeVoiceCommandPt,
-      showLiveMicTranscriptFeedback,
-      state.voiceActivationConfig.customTriggerWord,
-    ]
+    [executeVoiceCommandPt, showLiveMicTranscriptFeedback]
   );
 
   // Register global window.onBuddyNativeTranscript callback for Native Android SpeechRecognizer
@@ -8757,14 +8966,30 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       return;
     }
 
-    // 1. If running inside the Native Android .APK with Single-Shot Native SpeechRecognizer:
+    // 1. If running inside the Native Android .APK v2.2.7+ (bridgeVersion >= 7):
     const winAny = window as unknown as {
       BuddyNativeOverlay?: {
+        getNativeBridgeVersion?: () => number;
         startNativeVoice?: () => void;
+        stopNativeVoice?: () => void;
         setBubbleListeningState?: (listening: boolean) => void;
       };
     };
-    if (typeof winAny.BuddyNativeOverlay?.startNativeVoice === 'function') {
+    let nativeBridgeVer = 0;
+    try {
+      if (typeof winAny.BuddyNativeOverlay?.getNativeBridgeVersion === 'function') {
+        nativeBridgeVer = Number(
+          winAny.BuddyNativeOverlay.getNativeBridgeVersion()
+        );
+      }
+    } catch {
+      nativeBridgeVer = 0;
+    }
+
+    if (
+      nativeBridgeVer >= 7 &&
+      typeof winAny.BuddyNativeOverlay?.startNativeVoice === 'function'
+    ) {
       try {
         winAny.BuddyNativeOverlay.startNativeVoice();
         winAny.BuddyNativeOverlay.setBubbleListeningState?.(true);
@@ -8775,7 +9000,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       return;
     }
 
-    // 2. Web Browser single-shot fallback (when not running inside Native Android .APK):
+    // 2. Web SpeechRecognition (for browsers AND OTA updates on older APKs < v2.2.7):
     if (activeSpeechRecRef.current) {
       return;
     }
@@ -8785,6 +9010,17 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
 
     if (!SpeechRec || typeof SpeechRec !== 'function') {
+      // Last-resort fallback to legacy startNativeVoice if Web Speech unavailable
+      if (typeof winAny.BuddyNativeOverlay?.startNativeVoice === 'function') {
+        try {
+          winAny.BuddyNativeOverlay.startNativeVoice();
+          winAny.BuddyNativeOverlay.setBubbleListeningState?.(true);
+          setIsListeningSpeechRecognition(true);
+          return;
+        } catch {
+          // ignore
+        }
+      }
       setIsListeningSpeechRecognition(false);
       return;
     }
@@ -8848,6 +9084,19 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         keepVoiceListeningRef.current = false;
         activeSpeechRecRef.current = null;
         setIsListeningSpeechRecognition(false);
+        if (
+          (errCode === 'not-allowed' || errCode === 'service-not-allowed') &&
+          typeof winAny.BuddyNativeOverlay?.startNativeVoice === 'function'
+        ) {
+          try {
+            winAny.BuddyNativeOverlay.startNativeVoice();
+            winAny.BuddyNativeOverlay.setBubbleListeningState?.(true);
+            setIsListeningSpeechRecognition(true);
+            return;
+          } catch {
+            // ignore
+          }
+        }
         if (errCode === 'not-allowed' || errCode === 'service-not-allowed') {
           showLiveMicTranscriptFeedback(
             'Microfone bloqueado pelo navegador — permita o acesso no cadeado'
@@ -8883,7 +9132,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     hasUnlockedMicOnFirstTouchRef.current = true;
     keepVoiceListeningRef.current = true;
     setIsListeningSpeechRecognition(true);
-    showLiveMicTranscriptFeedback('🗣️ Ouvindo: fale agora (ex: "Buddy clima", "Buddy minimizar")...');
+    showLiveMicTranscriptFeedback(
+      '🗣️ Ouvindo: diga "Clima", "Minimizar", "Dividir pedido" ou "5 euros 3 km"...',
+      'A aguardar comando de voz...',
+      'Diga "Clima", "Minimizar", "Dividir pedido", "Finanças" ou "Mapa"'
+    );
     startContinuousRecognitionInstance();
   }, [showLiveMicTranscriptFeedback, startContinuousRecognitionInstance]);
 
@@ -9428,6 +9681,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   // =========================================================================
 
   const setThemeMode = useCallback((mode: AppThemeMode) => {
+    try {
+      sessionStorage.setItem('buddy_manual_theme_choice', mode);
+    } catch {
+      // ignore
+    }
     setState((prev) => ({
       ...prev,
       themeMode: mode,
@@ -9435,11 +9693,25 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   }, []);
 
   const toggleThemeMode = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      themeMode: prev.themeMode === 'DAYLIGHT' ? 'NIGHT' : 'DAYLIGHT',
-    }));
-  }, []);
+    setState((prev) => {
+      const nextMode: AppThemeMode =
+        prev.themeMode === 'DAYLIGHT' ? 'NIGHT' : 'DAYLIGHT';
+      try {
+        sessionStorage.setItem('buddy_manual_theme_choice', nextMode);
+      } catch {
+        // ignore
+      }
+      speakTextPt(
+        nextMode === 'NIGHT'
+          ? 'Modo noturno ativado.'
+          : 'Modo claro ativado.'
+      );
+      return {
+        ...prev,
+        themeMode: nextMode,
+      };
+    });
+  }, [speakTextPt]);
 
   const updateAlertPopupPrefs = useCallback(
     (patch: Partial<AlertPopupPreferences>) => {
@@ -11747,9 +12019,18 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         dismissUnpluggedChargerAlert,
         simulateChargerUnpluggedAlert,
         lastHeardLiveTranscript,
+        lastHeardSpokenText,
+        lastExecutedVoiceActionText,
         toggleVoiceMicListening,
         startContinuousVoiceMic,
         stopContinuousVoiceMic,
+        autoOfferDetectorEnabled,
+        lastAutoDetectedOfferBanner,
+        dismissAutoDetectedOfferBanner,
+        openAndroidAccessibilitySettings,
+        triggerAutoDetectedOffer,
+        scannerActiveMainView,
+        setScannerActiveMainView,
         isAmaranteWeatherModalOpen,
         setIsAmaranteWeatherModalOpen,
         amaranteLiveWeather,

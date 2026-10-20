@@ -79,11 +79,12 @@ export const ScannerAndSplitModule: React.FC = () => {
     realCompletedDeliveries,
     amaranteLiveWeather,
     openAndFetchAmaranteWeather,
+    scannerActiveMainView: activeView,
+    setScannerActiveMainView: setActiveView,
+    openAndroidAccessibilitySettings,
+    triggerAutoDetectedOffer,
   } = useEstafetas();
 
-  const [activeView, setActiveView] = useState<'OFERTA_ATUAL' | 'DIVIDIDO_PESO'>(
-    'OFERTA_ATUAL'
-  );
   const [isAlertExpanded, setIsAlertExpanded] = useState<boolean>(false);
   const [isScenarioPickerOpen, setIsScenarioPickerOpen] =
     useState<boolean>(false);
@@ -471,6 +472,46 @@ export const ScannerAndSplitModule: React.FC = () => {
           ===================================================================== */}
       {activeView === 'OFERTA_ATUAL' && (
         <div className="space-y-2.5">
+          {/* 0. Auto-Detetor de Pedidos (Uber / Glovo): ATIVO Status Bar */}
+          <div className="rounded-xl bg-zinc-900/95 border border-emerald-500/40 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-xs font-extrabold text-zinc-100 block truncate">
+                    Auto-Detetor de Pedidos (Uber / Glovo): ATIVO
+                  </span>
+                  <span className="text-[10px] text-zinc-400 block truncate">
+                    Lê automaticamente o valor (€) e distância (km) no ecrã / print e fala o lucro líquido
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={openAndroidAccessibilitySettings}
+                className="shrink-0 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1.5 text-[10px] font-extrabold text-zinc-100 cursor-pointer transition whitespace-nowrap"
+              >
+                ⚙️ Acessibilidade
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <button
+                type="button"
+                onClick={() => triggerAutoDetectedOffer(5.5, 3.1, 'Glovo')}
+                className="flex-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[11px] py-1.5 px-2.5 cursor-pointer transition whitespace-nowrap"
+              >
+                ⚡ Testar Deteção Automática (Glovo 5,50€ • 3,1 km)
+              </button>
+              <button
+                type="button"
+                onClick={() => triggerAutoDetectedOffer(3.1, 4.8, 'Uber Eats')}
+                className="rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 font-bold text-[10px] py-1.5 px-2.5 cursor-pointer transition whitespace-nowrap"
+              >
+                Simular Uber (3,10€ • 4,8 km)
+              </button>
+            </div>
+          </div>
+
           {/* 1. Clean Offer Analyzer & Today's Real Shift Summary */}
           {!isOfferAccepted &&
             aiAgentConfig.productionModeRealOnly &&
@@ -483,7 +524,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                       <span className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                         Ganhos Hoje ({realCompletedDeliveries.length} ent.)
                       </span>
-                      <span className="text-lg font-black text-emerald-400">
+                      <span className="text-lg font-black text-emerald-500">
                         €
                         {realCompletedDeliveries
                           .reduce((acc, d) => acc + (d.netProfitEur || 0), 0)
@@ -497,16 +538,19 @@ export const ScannerAndSplitModule: React.FC = () => {
                     onClick={() => void openAndFetchAmaranteWeather(true)}
                     className="rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 p-3 flex items-center justify-between text-left cursor-pointer transition"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <span className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                         Clima Amarante
                       </span>
-                      <span className="text-sm font-black text-white">
-                        {amaranteLiveWeather.conditionEmoji}{' '}
-                        {amaranteLiveWeather.temperatureC.toFixed(1)} °C
+                      <span className="mt-0.5 inline-flex items-center gap-1 rounded-md bg-emerald-500/15 border border-emerald-500/40 px-2 py-0.5 text-xs font-black text-slate-900 dark:text-slate-50">
+                        <span>{amaranteLiveWeather.conditionEmoji}</span>
+                        <span>
+                          {amaranteLiveWeather.temperatureC.toFixed(1)}°C •{' '}
+                          {amaranteLiveWeather.rainMm.toFixed(1)}mm
+                        </span>
                       </span>
                     </div>
-                    <span className="text-[10px] font-bold text-emerald-400">
+                    <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 shrink-0 ml-1">
                       Ver →
                     </span>
                   </button>
