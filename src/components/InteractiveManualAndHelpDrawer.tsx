@@ -754,7 +754,7 @@ export const InteractiveManualAndHelpDrawer: React.FC = () => {
 
             <div className="rounded-lg bg-zinc-950 border border-zinc-800 p-3 space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-300">
+                <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300">
                   {currentSlide.badge}
                 </span>
                 <button
@@ -1164,7 +1164,7 @@ const OfficialManualAndCommandsModal: React.FC<{
               <BookOpen className="h-5 w-5" />
             </div>
             <div>
-              <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-400 block">
+              <span className="text-[10px] uppercase tracking-wider text-indigo-400 block">
                 DOCUMENTAÇÃO OFICIAL • PT-PT &amp; VOZ PT-BR
               </span>
               <h2 className="text-sm font-black text-zinc-100">
@@ -1263,7 +1263,7 @@ const OfficialManualAndCommandsModal: React.FC<{
                     Tabela Completa de Comandos de Voz Mãos-Livres (pt-BR)
                   </span>
                 </span>
-                <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono text-emerald-300">
+                <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">
                   {filteredVoiceCommands.length} Comandos
                 </span>
               </div>
@@ -1280,7 +1280,7 @@ const OfficialManualAndCommandsModal: React.FC<{
                   <tbody className="divide-y divide-zinc-800/60">
                     {filteredVoiceCommands.map((cmd) => (
                       <tr key={cmd.phrase} className="hover:bg-zinc-900/60">
-                        <td className="py-2 pr-2 font-mono font-bold text-emerald-300">
+                        <td className="py-2 pr-2 font-bold text-emerald-300">
                           {cmd.phrase}
                         </td>
                         <td className="py-2 px-2 text-zinc-300 whitespace-nowrap">
@@ -1288,7 +1288,7 @@ const OfficialManualAndCommandsModal: React.FC<{
                         </td>
                         <td className="py-2 px-2 text-zinc-400">{cmd.action}</td>
                         <td className="py-2 pl-2 text-right whitespace-nowrap">
-                          <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-emerald-400">
+                          <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-emerald-400">
                             {cmd.cost}
                           </span>
                         </td>
@@ -1307,7 +1307,7 @@ const OfficialManualAndCommandsModal: React.FC<{
                 className="rounded-xl bg-zinc-950/90 border border-zinc-800 p-3.5 space-y-2"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="rounded-md bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-mono font-bold text-indigo-300">
+                  <span className="rounded-md bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-bold text-indigo-300">
                     {sec.badge}
                   </span>
                   <button
@@ -1697,8 +1697,8 @@ export const MenuMaisHubView: React.FC = () => {
       PERSONALIZAR_ALERTAS_VOZ: 'Personalizar Alertas (±45%), Voz & Mensagens',
       ARQUIVO_PROVAS: 'Arquivo de Provas (Dossiê Legal)',
       ACORDOS_ZONA: 'Acordos de Zona (Piso Mínimo)',
-      PERIGOS_VIA: 'Perigos na Via (Amarante 25 km)',
-      RAIO_MAPA: 'Raio do Mapa (km) & Região',
+      PERIGOS_VIA: 'Perigos na Via (Amarante — Raio 35 km)',
+      RAIO_MAPA: 'Centro Operacional & Raio 35 km',
     };
 
     return (
@@ -2038,7 +2038,7 @@ export const MenuMaisHubView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-mono text-zinc-400">1.00x</span>
+          <span className="text-[10px] text-zinc-400">1.00x</span>
           <input
             type="range"
             min="1.0"
@@ -2049,12 +2049,12 @@ export const MenuMaisHubView: React.FC = () => {
             aria-label="Velocidade da Voz do Buddy"
             className="flex-1 accent-indigo-500 cursor-pointer"
           />
-          <span className="text-[10px] font-mono text-zinc-400">1.50x</span>
+          <span className="text-[10px] text-zinc-400">1.50x</span>
           {Math.abs(buddyVoiceRate - 1.3) >= 0.01 && (
             <button
               type="button"
               onClick={() => setBuddyVoiceRate(1.3)}
-              className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 px-2 py-0.5 text-[10px] font-mono font-bold cursor-pointer"
+              className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 px-2 py-0.5 text-[10px] font-bold cursor-pointer"
             >
               Repor 1.30x
             </button>
@@ -2068,7 +2068,7 @@ export const MenuMaisHubView: React.FC = () => {
           <span className="text-xs font-extrabold text-zinc-100">
             🛡️ Proteção de Rua, Chuva, Queda &amp; Bateria
           </span>
-          <span className="text-[10px] font-mono text-emerald-400">
+          <span className="text-[10px] text-emerald-400">
             {batteryLevelPct}% {isBatteryCharging ? '⚡ A Carregar' : '🔋 Bateria'}
           </span>
         </div>
@@ -2362,7 +2362,7 @@ export const MenuMaisHubView: React.FC = () => {
             <Smartphone className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
             <span>Auto-Detetor de Pedidos (Acessibilidade)</span>
           </span>
-          <span className="rounded bg-emerald-500/15 border border-emerald-500/35 px-2 py-0.5 text-[10px] font-mono text-emerald-300 shrink-0">
+          <span className="rounded bg-emerald-500/15 border border-emerald-500/35 px-2 py-0.5 text-[10px] text-emerald-300 shrink-0">
             Configurar
           </span>
         </button>
@@ -2404,7 +2404,7 @@ export const MenuMaisHubView: React.FC = () => {
             <RefreshCw className="h-3.5 w-3.5 text-sky-400 shrink-0" />
             <span>Atualizar App Agora (OTA)</span>
           </span>
-          <span className="rounded bg-sky-500/15 border border-sky-500/35 px-2 py-0.5 text-[10px] font-mono text-sky-300 shrink-0">
+          <span className="rounded bg-sky-500/15 border border-sky-500/35 px-2 py-0.5 text-[10px] text-sky-300 shrink-0">
             Recarregar
           </span>
         </button>
@@ -2424,7 +2424,7 @@ export const MenuMaisHubView: React.FC = () => {
             </span>
           </span>
           <div className="flex items-center gap-1.5 shrink-0 ml-2">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-200">
+            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-200">
               {alertPopupPrefs.sizeVh.replace('VH', '%')} • &ldquo;
               {voiceActivationConfig.customTriggerWord || 'Buddy'}&rdquo;
             </span>
@@ -2473,7 +2473,7 @@ export const MenuMaisHubView: React.FC = () => {
             <span>Acordos de Zona (Piso Mínimo Coletivo)</span>
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-200">
+            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-200">
               {zonePacts.filter((p) => p.joinedByUser).length}/
               {zonePacts.length} Ativos
             </span>
@@ -2485,14 +2485,14 @@ export const MenuMaisHubView: React.FC = () => {
         <button
           type="button"
           onClick={() => setSubPage('PERIGOS_VIA')}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
+          className="w-full py-3.5 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
         >
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-            <AlertTriangle className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-            <span>Perigos na Via (Amarante 25 km)</span>
+          <span className="text-base font-bold text-zinc-100 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-zinc-400 shrink-0" />
+            <span>Perigos na Via (Amarante — Raio 35 km)</span>
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-200">
+            <span className="rounded-lg bg-zinc-800 px-2.5 py-1 text-base font-bold text-zinc-200">
               {roadHazards.filter((h) => !h.resolved).length} Alertas
             </span>
             <ChevronRight className="h-4 w-4 text-zinc-500" />
@@ -2530,7 +2530,7 @@ export const MenuMaisHubView: React.FC = () => {
             Estado do Turno (Pausa / Anónimo / Voz)
           </span>
           <div className="flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-200">
+            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-200">
               {shiftBadge}
             </span>
             <ChevronRight className="h-4 w-4 text-zinc-500" />
@@ -2585,7 +2585,7 @@ export const MenuMaisHubView: React.FC = () => {
             Veículo, Custos &amp; Impostos
           </span>
           <div className="flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
-            <span className="text-[11px] font-mono text-zinc-400">
+            <span className="text-[11px] text-zinc-400">
               &gt;= {userPrefs.minGrossOrderValueEur.toFixed(2)} €
             </span>
             <ChevronRight className="h-4 w-4 text-zinc-500" />

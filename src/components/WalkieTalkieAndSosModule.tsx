@@ -356,7 +356,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-zinc-400">Tempo na Comunidade:</span>
-                    <span className="font-mono font-bold text-emerald-400">
+                    <span className=" font-bold text-emerald-400">
                       {popupCourier.buddyTenureText ||
                         'Buddy há 1 ano e 2 meses'}
                     </span>
@@ -407,8 +407,8 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                     <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
                       Estatísticas Cruzadas: Tu vs. {popupCourier.callsign}
                     </span>
-                    <span className="text-[10px] font-mono text-zinc-400">
-                      Amarante 25 km
+                    <span className="text-[10px] text-zinc-400">
+                      Amarante 35 km
                     </span>
                   </div>
 
@@ -417,7 +417,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                       <span className="text-[10px] text-zinc-400 block">
                         Entregas Hoje
                       </span>
-                      <span className="text-xs font-mono font-bold text-white block mt-0.5">
+                      <span className="text-xs font-bold text-white block mt-0.5">
                         Tu: {userDeliveriesToday} vs. {buddyDeliveriesToday}
                       </span>
                     </div>
@@ -425,7 +425,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                       <span className="text-[10px] text-zinc-400 block">
                         Média €/km
                       </span>
-                      <span className="text-xs font-mono font-bold text-emerald-400 block mt-0.5">
+                      <span className="text-xs font-bold text-emerald-400 block mt-0.5">
                         1.62€ vs. {buddyAvgEurPerKm.toFixed(2)}€
                       </span>
                     </div>
@@ -433,7 +433,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                       <span className="text-[10px] text-zinc-400 block">
                         Reputação
                       </span>
-                      <span className="text-xs font-mono font-bold text-white block mt-0.5">
+                      <span className="text-xs font-bold text-white block mt-0.5">
                         {communityReputationPct}% vs.{' '}
                         {popupCourier.reputationPct}%
                       </span>
@@ -466,7 +466,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                     onClick={() =>
                       inviteBuddyToClosedGroup(
                         popupCourier.id,
-                        'Grupo Fechado • Amarante 25km'
+                        'Grupo Fechado • Amarante 35km'
                       )
                     }
                     className={`rounded-xl py-2 px-2.5 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition ${
@@ -534,7 +534,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                         <span className="font-bold text-emerald-400">
                           🏆 {popupCourier.activeChallenge.periodLabel}
                         </span>
-                        <span className="font-mono text-zinc-300">
+                        <span className=" text-zinc-300">
                           Tu: {popupCourier.activeChallenge.userCurrentScore}{' '}
                           vs. {popupCourier.callsign.split(' ')[0]}:{' '}
                           {popupCourier.activeChallenge.buddyCurrentScore}
@@ -602,7 +602,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                             <span className="font-bold">
                               {dm.sender === 'EU' ? 'Tu' : popupCourier.callsign}
                             </span>
-                            <span className="font-mono">{dm.timestamp}</span>
+                            <span className="">{dm.timestamp}</span>
                           </div>
                           <p className="leading-snug">{dm.text}</p>
                         </div>
@@ -657,7 +657,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
               <strong>&ldquo;Maximizar&rdquo;</strong> ou{' '}
               <strong>&ldquo;Retrair&rdquo;</strong>
             </span>
-            <span className="font-mono">
+            <span className="">
               {isExpanded80 ? '80% Tela' : '45% Tela'}
             </span>
           </div>
@@ -973,7 +973,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                         {/* Line 3: Connection Badge + Active Platforms + Cross-Stats / Tenure */}
                         <div className="flex items-center gap-1.5 text-[10px]">
                           <span
-                            className={`rounded px-1.5 py-0.5 font-mono shrink-0 ${
+                            className={`rounded px-1.5 py-0.5 shrink-0 ${
                               isSelf
                                 ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold'
                                 : 'bg-zinc-950 border border-zinc-800 text-zinc-300'
@@ -983,7 +983,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                               ? '● Online'
                               : getConnectionStateLabel(courier)}
                           </span>
-                          <span className="rounded bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 font-mono text-zinc-300 shrink-0">
+                          <span className="rounded bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 text-zinc-300 shrink-0">
                             {courierPlatforms
                               .map((p) =>
                                 p === 'Uber Eats'
@@ -1108,7 +1108,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                           ? 'Tu'
                           : activeDirectCourier.callsign}
                       </span>
-                      <span className="font-mono">{dm.timestamp}</span>
+                      <span className="">{dm.timestamp}</span>
                     </div>
                     <p>{dm.text}</p>
                   </div>
@@ -1156,7 +1156,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                 <div className="bg-zinc-950 p-1 rounded-lg grid grid-cols-2 gap-1 border border-zinc-800/80">
                   {(
                     [
-                      { id: 'RADIO_ZONA_LOCAL', label: 'Rádio Amarante 25km' },
+                      { id: 'RADIO_ZONA_LOCAL', label: 'Rádio Amarante 35km' },
                       {
                         id: 'PARCEIRO_PEDIDO_DIVIDIDO',
                         label: 'Pedido Dividido',
@@ -1191,7 +1191,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                         recipientName:
                           activeWalkieChannel === 'PARCEIRO_PEDIDO_DIVIDIDO'
                             ? 'Parceiro de Pedido Dividido'
-                            : 'Rádio Amarante 25km',
+                            : 'Rádio Amarante 35km',
                         initialPhrase:
                           activeWalkieChannel === 'PARCEIRO_PEDIDO_DIVIDIDO'
                             ? 'Estou a chegar ao restaurante em Amarante para dividirmos os sacos pesados!'
@@ -1272,8 +1272,8 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                     <Radio className="h-3.5 w-3.5 text-zinc-400" />
                     <span>Últimas Transmissões</span>
                   </span>
-                  <span className="text-[10px] font-mono text-zinc-500">
-                    Amarante 25km
+                  <span className="text-[10px] text-zinc-500">
+                    Amarante 35km
                   </span>
                 </div>
 
@@ -1298,7 +1298,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                             {msg.senderName} ({msg.senderVehicle})
                           </span>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[10px] font-mono text-zinc-500">
+                            <span className="text-[10px] text-zinc-500">
                               {msg.timestamp}
                             </span>
                             {msg.senderId !== 'SELF-COURIER' && (
@@ -1334,13 +1334,13 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xs font-bold text-zinc-100">
-                Blog da Comunidade Buddys (Amarante 25 km)
+                Blog da Comunidade Buddys (Amarante 35 km)
               </h2>
               <p className="text-[10px] text-zinc-400">
                 Dicas de rua, alertas e entreajuda
               </p>
             </div>
-            <span className="rounded bg-zinc-950 border border-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-300">
+            <span className="rounded bg-zinc-950 border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300">
               Público
             </span>
           </div>
@@ -1409,7 +1409,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                         {post.authorVehicle} • {post.zoneName}
                       </span>
                     </div>
-                    <span className="text-[10px] font-mono text-zinc-500 shrink-0">
+                    <span className="text-[10px] text-zinc-500 shrink-0">
                       {post.timestamp}
                     </span>
                   </div>

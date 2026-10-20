@@ -9,7 +9,7 @@ import { AppTabId } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
 import { playBuddyOpenChime } from '../services/voiceEngine';
 
-const CURRENT_OTA_BUILD_VERSION = 'v2.8.0-glovo-typo-35km-apk';
+const CURRENT_OTA_BUILD_VERSION = 'v2.8.1-glovo-typo-35km-apk';
 const LAST_SEEN_OTA_BUILD_KEY = 'buddy_last_seen_ota_build_v1';
 const PENDING_OTA_TOAST_KEY = 'buddy_pending_ota_toast_v1';
 
@@ -196,7 +196,7 @@ export const CockpitNavigation: React.FC = () => {
                     <span className="text-xs font-black tracking-tight text-white flex items-center gap-1.5">
                       <span>🤖 ✅ Aplicativo atualizado!</span>
                     </span>
-                    <span className="text-[9px] font-mono text-emerald-200">
+                    <span className="text-[9px] text-emerald-200">
                       {CURRENT_OTA_BUILD_VERSION} • Pronto
                     </span>
                     <div

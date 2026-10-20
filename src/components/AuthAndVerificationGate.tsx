@@ -257,7 +257,7 @@ export const RealTimeSupportPanel: React.FC<{
             </h2>
           </div>
         </div>
-        <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2 py-1 text-[10px] font-mono font-bold text-emerald-400">
+        <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2 py-1 text-[10px] font-bold text-emerald-400">
           24/7 Ativo
         </span>
       </div>
@@ -325,7 +325,7 @@ export const RealTimeSupportPanel: React.FC<{
                 )}
                 <p>{m.text}</p>
               </div>
-              <span className="text-[9px] font-mono text-zinc-500 mt-0.5 px-1">
+              <span className="text-[9px] text-zinc-500 mt-0.5 px-1">
                 {isUser ? 'Tu' : 'Suporte Buddy'} • {m.timestamp}
               </span>
             </div>
@@ -768,7 +768,7 @@ export const AuthAndVerificationGate: React.FC = () => {
                       isDay ? 'text-slate-700' : 'text-zinc-300'
                     }`}
                   >
-                    Zona Principal (Amarante 25 km)
+                    Zona Principal (Amarante — Raio 35 km)
                   </label>
                   <select
                     value={selectedZone}

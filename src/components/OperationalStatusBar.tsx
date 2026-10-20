@@ -96,7 +96,7 @@ export const OperationalStatusBar: React.FC = () => {
             <span>Finalizar Entrega</span>
           </button>
         ) : (
-          <span className="text-[10px] font-mono text-zinc-500 shrink-0">
+          <span className="text-[10px] text-zinc-500 shrink-0">
             Sync Auto
           </span>
         )}

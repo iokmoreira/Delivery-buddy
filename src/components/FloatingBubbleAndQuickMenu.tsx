@@ -552,7 +552,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
             />
           </div>
           <span
-            className={`absolute -bottom-1.5 rounded-full px-1.5 py-0.5 text-[8px] font-mono font-extrabold leading-none shadow-md pointer-events-none z-20 border whitespace-nowrap ${
+            className={`absolute -bottom-1.5 rounded-full px-1.5 py-0.5 text-[8px] font-extrabold leading-none shadow-md pointer-events-none z-20 border whitespace-nowrap ${
               isListeningSpeechRecognition
                 ? 'bg-emerald-500 text-slate-950 border-white'
                 : currentMascotState === 'DELIVERY'
@@ -668,7 +668,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                 <p className="text-[9px] font-bold uppercase text-zinc-300">
                   Oferta Bruta
                 </p>
-                <p className="text-sm font-black text-white font-mono">
+                <p className="text-sm font-black text-white">
                   {lastAutoDetectedOfferBanner.grossEur.toFixed(2)} € •{' '}
                   {lastAutoDetectedOfferBanner.realKm.toFixed(1)} km
                 </p>
@@ -677,7 +677,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                 <p className="text-[9px] font-bold uppercase text-zinc-300">
                   Lucro Líquido
                 </p>
-                <p className="text-sm font-black text-emerald-300 font-mono">
+                <p className="text-sm font-black text-emerald-300">
                   +{lastAutoDetectedOfferBanner.netProfitEur.toFixed(2)} €
                 </p>
               </div>
@@ -685,7 +685,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                 <p className="text-[9px] font-bold uppercase text-zinc-300">
                   Tarifa Real
                 </p>
-                <p className="text-sm font-black text-amber-300 font-mono">
+                <p className="text-sm font-black text-amber-300">
                   {lastAutoDetectedOfferBanner.netEurPerKm.toFixed(2)} €/km
                 </p>
               </div>
@@ -721,7 +721,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                   MICROFONE ATIVO • TRANSCRIÇÃO EM TEMPO REAL
                 </span>
               </div>
-              <span className="text-[10px] font-mono font-bold text-zinc-300">
+              <span className="text-[10px] font-bold text-zinc-300">
                 PT-PT
               </span>
             </div>
@@ -926,7 +926,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                   : triggerSourceLabel}
               </span>
               <span
-                className={`text-[11px] font-mono shrink-0 ${
+                className={`text-[11px] shrink-0 ${
                   isDaylight ? 'text-slate-500' : 'text-slate-400'
                 }`}
               >
@@ -1094,7 +1094,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                           ? 'A captar ditado palavra a palavra...'
                           : `Pronto para enviar para ${recipientLabel}`}
                     </span>
-                    <span className="font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-300">
+                    <span className=" text-[11px] font-bold text-indigo-600 dark:text-indigo-300">
                       {recipientLabel}
                     </span>
                   </div>
@@ -1249,7 +1249,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                         (stepText, sIdx) => (
                           <div
                             key={sIdx}
-                            className={`text-[11px] font-mono rounded-lg px-2 py-1 ${
+                            className={`text-[11px] rounded-lg px-2 py-1 ${
                               isDaylight
                                 ? 'bg-white text-slate-800 border border-indigo-100'
                                 : 'bg-slate-900 text-slate-200 border border-slate-800'
@@ -1447,7 +1447,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
             />
           </div>
           <span
-            className={`absolute -top-1.5 -right-1.5 rounded-full px-1.5 py-0.5 text-[7px] font-mono font-extrabold leading-none shadow-sm pointer-events-none z-20 border ${
+            className={`absolute -top-1.5 -right-1.5 rounded-full px-1.5 py-0.5 text-[7px] font-extrabold leading-none shadow-sm pointer-events-none z-20 border ${
               isListeningSpeechRecognition
                 ? 'bg-emerald-950 text-emerald-300 border-emerald-300'
                 : currentMascotState === 'DELIVERY'
@@ -1555,7 +1555,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                 <span className="text-[10px] font-medium uppercase text-zinc-500 block">
                   Meta Diária
                 </span>
-                <div className="text-xs font-mono font-bold text-zinc-100 mt-0.5">
+                <div className="text-xs font-bold text-zinc-100 mt-0.5">
                   {dailyPct}% ({personalGoals.currentDailyNetEarnedEur.toFixed(0)}€)
                 </div>
               </div>
@@ -1564,7 +1564,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                 <span className="text-[10px] font-medium uppercase text-zinc-500 block">
                   Reputação
                 </span>
-                <div className="text-xs font-mono font-bold text-zinc-100 mt-0.5">
+                <div className="text-xs font-bold text-zinc-100 mt-0.5">
                   {communityReputationPct}%
                 </div>
               </div>
@@ -1573,7 +1573,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                 <span className="text-[10px] font-medium uppercase text-zinc-500 block">
                   Acordo Ativo
                 </span>
-                <div className="text-xs font-mono font-bold text-zinc-100 mt-0.5">
+                <div className="text-xs font-bold text-zinc-100 mt-0.5">
                   {activeJoinedZonePact
                     ? `>= ${activeJoinedZonePact.minCollectiveOrderEur.toFixed(2)}€`
                     : 'Livre'}
@@ -1690,7 +1690,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                         <div className="p-1 rounded-lg bg-zinc-900 border border-zinc-800 shrink-0">
                           {card.icon}
                         </div>
-                        <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[9px] font-mono font-semibold text-zinc-300">
+                        <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-300">
                           {card.badge}
                         </span>
                       </div>

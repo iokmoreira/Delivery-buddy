@@ -127,7 +127,7 @@ export const CalculatorAndCostsModule: React.FC = () => {
                       ),
                     })
                   }
-                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs font-mono font-semibold text-zinc-100"
+                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-100"
                 />
               </div>
 
@@ -148,7 +148,7 @@ export const CalculatorAndCostsModule: React.FC = () => {
                       ),
                     })
                   }
-                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs font-mono font-semibold text-zinc-100"
+                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-100"
                 />
               </div>
             </div>
@@ -276,7 +276,7 @@ export const CalculatorAndCostsModule: React.FC = () => {
                     ),
                   })
                 }
-                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs font-mono text-zinc-100"
+                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-100"
               />
             </div>
 
@@ -296,7 +296,7 @@ export const CalculatorAndCostsModule: React.FC = () => {
                     ),
                   })
                 }
-                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs font-mono text-zinc-100"
+                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-100"
               />
             </div>
           </div>
@@ -305,7 +305,7 @@ export const CalculatorAndCostsModule: React.FC = () => {
             <span className="text-xs text-zinc-400">
               Custo Real Operacional / KM:
             </span>
-            <span className="text-sm font-mono font-semibold text-zinc-100">
+            <span className="text-sm font-semibold text-zinc-100">
               {totalCostPerKm.toFixed(2)} €/km
             </span>
           </div>
@@ -382,7 +382,7 @@ export const CalculatorAndCostsModule: React.FC = () => {
                     ),
                   })
                 }
-                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-100"
+                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100"
               />
             </div>
 
@@ -402,7 +402,7 @@ export const CalculatorAndCostsModule: React.FC = () => {
                     ),
                   })
                 }
-                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-100"
+                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100"
               />
             </div>
           </div>

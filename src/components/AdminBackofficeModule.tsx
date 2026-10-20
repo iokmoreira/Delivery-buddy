@@ -225,7 +225,7 @@ export const AdminBackofficeModule: React.FC = () => {
       <div className="rounded-xl bg-zinc-900 border border-emerald-500/35 px-3 py-2.5 space-y-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="min-w-0">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 block">
+            <span className="text-[10px] uppercase tracking-wider text-emerald-400 block">
               {isAppInstalledStandalone
                 ? '✓ MODO NATIVO ECRÃ INTEIRO ATIVO'
                 : canPromptNativeInstall
@@ -350,7 +350,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   </h3>
                   <span className="text-[10px] text-zinc-400 block">
                     Modelo Ativo:{' '}
-                    <strong className="font-mono text-indigo-300">
+                    <strong className=" text-indigo-300">
                       {aiAgentConfig.activeResolvedModelName ||
                         'gemini-pro-latest'}
                     </strong>
@@ -424,7 +424,7 @@ export const AdminBackofficeModule: React.FC = () => {
                     }
                     placeholder="Ex: gemini-2.5-pro-preview, gemini-exp-1206..."
                     aria-label="Código do Modelo Experimental no AI Studio"
-                    className="w-full rounded-xl bg-zinc-900 border border-indigo-500/50 px-3 py-2 text-xs font-mono text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
+                    className="w-full rounded-xl bg-zinc-900 border border-indigo-500/50 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
                   />
                 </div>
               )}
@@ -445,7 +445,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   }
                   placeholder="AIzaSy... (Guardado em localStorage)"
                   aria-label="GEMINI_API_KEY"
-                  className="flex-1 rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs font-mono text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
+                  className="flex-1 rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
                 />
                 <button
                   type="button"
@@ -466,7 +466,7 @@ export const AdminBackofficeModule: React.FC = () => {
               <div className="rounded-lg bg-zinc-900/90 border border-zinc-800/80 px-2.5 py-1.5 flex items-center justify-between gap-2 flex-wrap text-[10px]">
                 <span className="text-zinc-300 font-medium">
                   Modelo:{' '}
-                  <strong className="font-mono text-zinc-100">
+                  <strong className=" text-zinc-100">
                     {aiAgentConfig.activeResolvedModelName ||
                       'gemini-pro-latest'}
                   </strong>{' '}
@@ -476,7 +476,7 @@ export const AdminBackofficeModule: React.FC = () => {
                       '200 OK • Motor gemini-pro-latest Ativo'}
                   </strong>
                 </span>
-                <span className="font-mono text-zinc-400">
+                <span className=" text-zinc-400">
                   Latência: {aiAgentConfig.lastLatencyMs ?? 142} ms • Leituras:{' '}
                   {aiAgentConfig.dailyApiCallsUsed}/
                   {aiAgentConfig.dailyApiCallsMax}
@@ -546,7 +546,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   <Activity className="h-3.5 w-3.5 text-emerald-400" />
                   <span>Velocidade de Sincronização de Rede (Fase 1)</span>
                 </label>
-                <span className="text-[10px] font-mono text-emerald-400">
+                <span className="text-[10px] text-emerald-400">
                   Heartbeat GPS: {heartbeatSecondsLeft}s
                 </span>
               </div>
@@ -621,7 +621,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   }
                   placeholder="https://xxxxxxxxxxxx.supabase.co"
                   aria-label="1. URL DO PROJETO SUPABASE (Project URL)"
-                  className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs font-mono text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
+                  className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
                 />
               </div>
 
@@ -637,7 +637,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   }
                   placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                   aria-label="2. CHAVE API PÚBLICA (anon / public key)"
-                  className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs font-mono text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
+                  className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
                 />
               </div>
 
@@ -687,7 +687,7 @@ export const AdminBackofficeModule: React.FC = () => {
 
                 {isManualSqlOpen && (
                   <div className="p-2.5 border-t border-zinc-800 bg-zinc-950">
-                    <pre className="text-[10px] font-mono text-zinc-300 overflow-x-auto max-h-56 whitespace-pre-wrap select-all leading-relaxed">
+                    <pre className="text-[10px] text-zinc-300 overflow-x-auto max-h-56 whitespace-pre-wrap select-all leading-relaxed">
                       {SUPABASE_COMPLETE_SQL_SCHEMA_SCRIPT}
                     </pre>
                   </div>
@@ -760,7 +760,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   </span>
                   <span>
                     {deviceScreenProfile.deviceModel} • Tela{' '}
-                    <strong className="text-emerald-400 font-mono">
+                    <strong className="text-emerald-400">
                       {deviceScreenProfile.screenAspectRatio}
                     </strong>{' '}
                     ({deviceScreenProfile.screenWidthPx}x
@@ -852,13 +852,13 @@ export const AdminBackofficeModule: React.FC = () => {
                       <div className="flex items-start justify-between gap-2">
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="rounded bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 text-[9px] font-mono font-bold text-indigo-300">
+                            <span className="rounded bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 text-[9px] font-bold text-indigo-300">
                               {log.platformOrApp} • {log.zoneContext}
                             </span>
                             <span className="text-[10px] font-semibold text-zinc-400">
                               {getCategoryBadgeLabel(log.category)}
                             </span>
-                            <span className="text-[10px] font-mono text-emerald-400">
+                            <span className="text-[10px] text-emerald-400">
                               • Confiança: {log.confidenceScorePct.toFixed(1)}%
                             </span>
                             {log.learningOrigin === 'ENSINO_VOZ_GUIADO' && (
@@ -892,7 +892,7 @@ export const AdminBackofficeModule: React.FC = () => {
 
                       {/* Device Model & Screen Aspect Ratio Compatibility Strip */}
                       <div className="flex items-center justify-between gap-2 flex-wrap rounded-lg bg-zinc-900/90 border border-zinc-800 px-2.5 py-1.5">
-                        <span className="text-[10px] font-mono text-zinc-300 flex items-center gap-1">
+                        <span className="text-[10px] text-zinc-300 flex items-center gap-1">
                           <Smartphone className="h-3 w-3 text-zinc-400 shrink-0" />
                           <span>
                             {logDevice} • Tela <strong>{logRatio}</strong>
@@ -915,7 +915,7 @@ export const AdminBackofficeModule: React.FC = () => {
                       </p>
 
                       <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-900 flex-wrap">
-                        <span className="text-[10px] font-mono text-zinc-500">
+                        <span className="text-[10px] text-zinc-500">
                           {log.timestamp} • {log.learnedFromCourierTag}
                         </span>
 
@@ -996,7 +996,7 @@ export const AdminBackofficeModule: React.FC = () => {
                 className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-3 flex items-center justify-between gap-2"
               >
                 <div className="min-w-0">
-                  <span className="text-[10px] font-mono text-zinc-400 block">
+                  <span className="text-[10px] text-zinc-400 block">
                     {camp.category} • {camp.placement}
                   </span>
                   <span className="text-xs font-semibold text-zinc-100 block truncate">
@@ -1124,7 +1124,7 @@ export const AdminBackofficeModule: React.FC = () => {
               </span>
               <span className="text-[10px] text-zinc-400 block mt-0.5">
                 Sincronizado dinamicamente com a tabela{' '}
-                <code className="text-emerald-300 font-mono">
+                <code className="text-emerald-300">
                   public.couriers
                 </code>{' '}
                 do Supabase (Amarante 25km).
@@ -1176,10 +1176,10 @@ export const AdminBackofficeModule: React.FC = () => {
                           <span className="text-xs font-extrabold text-zinc-100">
                             {c.fullName}
                           </span>
-                          <span className="rounded px-1.5 py-0.5 text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          <span className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                             ● ONLINE NO MAPA ({c.lastActiveText})
                           </span>
-                          <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[9px] font-mono text-zinc-300">
+                          <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-300">
                             KYC: {c.kycStatus}
                           </span>
                         </div>
@@ -1187,7 +1187,7 @@ export const AdminBackofficeModule: React.FC = () => {
                           {c.vehicle || 'Mota 125cc'} • Zona:{' '}
                           {c.activeAmaranteZone || c.cityZone}
                         </span>
-                        <span className="text-[10px] font-mono text-zinc-400 block">
+                        <span className="text-[10px] text-zinc-400 block">
                           {c.joinedAt} • {c.courierTag} • Rep: {c.reputationPct}
                           %
                         </span>
@@ -1219,7 +1219,7 @@ export const AdminBackofficeModule: React.FC = () => {
                       </div>
                     </div>
 
-                    <p className="text-[10px] text-zinc-400 bg-zinc-900/80 border border-zinc-800/80 rounded-lg px-2.5 py-1.5 font-mono">
+                    <p className="text-[10px] text-zinc-400 bg-zinc-900/80 border border-zinc-800/80 rounded-lg px-2.5 py-1.5">
                       {c.kycProofSummary}
                     </p>
                   </div>

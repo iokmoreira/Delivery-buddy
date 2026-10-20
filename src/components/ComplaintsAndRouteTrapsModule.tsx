@@ -290,7 +290,7 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
                 onChange={(e) =>
                   setNewDaysUnresolved(parseInt(e.target.value, 10) || 1)
                 }
-                className="w-10 bg-transparent text-right font-mono font-bold text-zinc-100 focus:outline-none"
+                className="w-10 bg-transparent text-right font-bold text-zinc-100 focus:outline-none"
               />
             </label>
           </div>
@@ -358,7 +358,7 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
                   value={newOrderCode}
                   onChange={(e) => setNewOrderCode(e.target.value)}
                   placeholder="Código Pedido (#4829)"
-                  className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-100"
+                  className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100"
                 />
               )}
             </div>
@@ -370,7 +370,7 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
               value={newOrderCode}
               onChange={(e) => setNewOrderCode(e.target.value)}
               placeholder="Apenas Código do Pedido (#4829) — Proibido Nomes Pessoais (Zero-PII)"
-              className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-100"
+              className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100"
             />
           )}
 
@@ -429,15 +429,15 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
               >
                 {/* Protocol Badge + Unresolved Days + Confirmations Count */}
                 <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                  <span className="rounded bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-200">
+                  <span className="rounded bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-bold text-zinc-200">
                     {rec.protocolId} • 1.º Registo: {rec.firstReportedDate}
                   </span>
                   <div className="flex items-center gap-1.5">
-                    <span className="rounded bg-zinc-900 border border-zinc-700 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-100 flex items-center gap-1">
+                    <span className="rounded bg-zinc-900 border border-zinc-700 px-2 py-0.5 text-[10px] font-bold text-zinc-100 flex items-center gap-1">
                       <Clock className="h-3 w-3 text-zinc-400" />
                       <span>Há {rec.daysUnresolved} dias sem solução</span>
                     </span>
-                    <span className="rounded bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-300 flex items-center gap-1">
+                    <span className="rounded bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300 flex items-center gap-1">
                       <Users className="h-3 w-3 text-zinc-400" />
                       <span>{rec.confirmationsCount} conf.</span>
                     </span>
@@ -471,7 +471,7 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
                       </span>
                     )}
                     {rec.platformName && (
-                      <span className="rounded-md bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-200">
+                      <span className="rounded-md bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-200">
                         Plataforma: {rec.platformName}
                       </span>
                     )}
@@ -481,7 +481,7 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
                       </span>
                     )}
                     {rec.orderCodeRef && (
-                      <span className="rounded-md bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-300">
+                      <span className="rounded-md bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300">
                         Pedido {rec.orderCodeRef} (Zero-PII)
                       </span>
                     )}
@@ -554,7 +554,7 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
               Fechar Pré-visualização
             </button>
           </div>
-          <pre className="text-[10px] font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto bg-zinc-900 p-2.5 rounded-lg border border-zinc-800">
+          <pre className="text-[10px] text-zinc-300 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto bg-zinc-900 p-2.5 rounded-lg border border-zinc-800">
             {formalPreviewReport}
           </pre>
         </div>

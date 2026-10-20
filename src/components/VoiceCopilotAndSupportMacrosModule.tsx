@@ -256,7 +256,7 @@ export const TriggerWordGuideCard: React.FC<{
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">
             Guia Rápido de Comandos de Voz (&ldquo;{triggerWord}&rdquo;):
           </span>
-          <span className="text-[10px] font-mono text-zinc-500">
+          <span className="text-[10px] text-zinc-500">
             Toque ou fale
           </span>
         </div>
@@ -756,7 +756,7 @@ export const AlertVoiceMessagesCustomizationPanel: React.FC = () => {
                     <span className="text-xs font-bold text-zinc-100 truncate">
                       {msg.title}
                     </span>
-                    <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[9px] font-mono text-zinc-400 shrink-0">
+                    <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-400 shrink-0">
                       Voz: &ldquo;{msg.voiceTriggerPhrase}&rdquo;
                     </span>
                   </div>
@@ -1033,7 +1033,7 @@ export const VoiceCopilotAndSupportMacrosModule: React.FC = () => {
 
             {lastVoiceCommandResult && (
               <div className="rounded-lg bg-zinc-950 border border-zinc-800 p-2.5 space-y-1 text-xs">
-                <span className="text-[10px] font-mono text-zinc-400 block">
+                <span className="text-[10px] text-zinc-400 block">
                   {lastVoiceCommandResult.commandMatched} •{' '}
                   {lastVoiceCommandResult.timestamp}
                 </span>
@@ -1096,7 +1096,7 @@ export const VoiceCopilotAndSupportMacrosModule: React.FC = () => {
                       } de 4...`
                     : 'Sequência Completa (4/4 Toques Simulados)'}
                 </span>
-                <span className="font-mono text-zinc-200">
+                <span className=" text-zinc-200">
                   {((activeSupportSplitMacro.currentStepIndex + 1) * 25).toFixed(
                     0
                   )}
@@ -1183,7 +1183,7 @@ export const VoiceCopilotAndSupportMacrosModule: React.FC = () => {
               <div className="absolute top-3/4 left-0 right-0 border-t border-dashed border-zinc-700" />
             </div>
 
-            <div className="absolute top-1.5 left-2 text-[9px] font-mono text-zinc-500 pointer-events-none">
+            <div className="absolute top-1.5 left-2 text-[9px] text-zinc-500 pointer-events-none">
               ECRÃ VIRTUAL 100% x 100% ({mapperPlatform}) — Clique para posicionar{' '}
               &ldquo;{selectedPoint.label}&rdquo;
             </div>
@@ -1213,7 +1213,7 @@ export const VoiceCopilotAndSupportMacrosModule: React.FC = () => {
                       left: `${pt.xPct}%`,
                       top: `${pt.yPct}%`,
                     }}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full px-1.5 py-0.5 text-[9px] font-mono font-semibold flex items-center gap-1 cursor-pointer transition ${
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full px-1.5 py-0.5 text-[9px] font-semibold flex items-center gap-1 cursor-pointer transition ${
                       isSelected
                         ? 'bg-white text-zinc-950 ring-2 ring-zinc-400 z-10'
                         : 'bg-zinc-800 text-zinc-200 border border-zinc-600 opacity-85'
@@ -1246,7 +1246,7 @@ export const VoiceCopilotAndSupportMacrosModule: React.FC = () => {
                     <span className="text-[11px] font-semibold text-zinc-100 truncate">
                       {index + 1}. {pt.label}
                     </span>
-                    <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[9px] font-mono text-zinc-300 shrink-0">
+                    <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-300 shrink-0">
                       {pt.gestureType}
                     </span>
                   </div>
@@ -1266,7 +1266,7 @@ export const VoiceCopilotAndSupportMacrosModule: React.FC = () => {
                             { xPct: Number(e.target.value) }
                           )
                         }
-                        className="w-10 bg-transparent text-right font-mono font-semibold text-zinc-100 focus:outline-none"
+                        className="w-10 bg-transparent text-right font-semibold text-zinc-100 focus:outline-none"
                       />
                     </label>
 
@@ -1284,7 +1284,7 @@ export const VoiceCopilotAndSupportMacrosModule: React.FC = () => {
                             { yPct: Number(e.target.value) }
                           )
                         }
-                        className="w-10 bg-transparent text-right font-mono font-semibold text-zinc-100 focus:outline-none"
+                        className="w-10 bg-transparent text-right font-semibold text-zinc-100 focus:outline-none"
                       />
                     </label>
 
@@ -1303,7 +1303,7 @@ export const VoiceCopilotAndSupportMacrosModule: React.FC = () => {
                             { delayMs: Number(e.target.value) }
                           )
                         }
-                        className="w-12 bg-transparent text-right font-mono font-semibold text-zinc-100 focus:outline-none"
+                        className="w-12 bg-transparent text-right font-semibold text-zinc-100 focus:outline-none"
                       />
                     </label>
                   </div>

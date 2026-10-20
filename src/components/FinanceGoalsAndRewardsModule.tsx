@@ -422,16 +422,16 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
     Boolean(aiAgentConfig.productionModeRealOnly) && !hasRealActiveDelivery;
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       {/* Strict 2-Tab Segmented Pill Switcher (Estatísticas & Metas | Finanças & Caixa) */}
-      <div className="bg-zinc-900 p-1 rounded-lg grid grid-cols-2 gap-1 border border-zinc-800/80">
+      <div className="bg-zinc-900 p-1.5 rounded-xl grid grid-cols-2 gap-1.5 border border-zinc-800/80">
         <button
           type="button"
           onClick={() => setSubTab('METAS')}
-          className={`rounded-md py-1.5 text-xs transition cursor-pointer ${
+          className={`rounded-lg py-2 text-base font-bold transition cursor-pointer ${
             subTab === 'METAS'
-              ? 'bg-white text-zinc-950 font-semibold'
-              : 'text-zinc-400 hover:text-zinc-100'
+              ? 'bg-white text-zinc-950 font-extrabold'
+              : 'text-zinc-300 hover:text-zinc-100'
           }`}
         >
           Estatísticas &amp; Metas
@@ -439,10 +439,10 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
         <button
           type="button"
           onClick={() => setSubTab('CAIXA')}
-          className={`rounded-md py-1.5 text-xs transition cursor-pointer ${
+          className={`rounded-lg py-2 text-base font-bold transition cursor-pointer ${
             subTab === 'CAIXA'
-              ? 'bg-white text-zinc-950 font-semibold'
-              : 'text-zinc-400 hover:text-zinc-100'
+              ? 'bg-white text-zinc-950 font-extrabold'
+              : 'text-zinc-300 hover:text-zinc-100'
           }`}
         >
           Finanças &amp; Caixa
@@ -453,21 +453,21 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
           VIEW 1: MINHAS ESTATÍSTICAS & METAS (GLOBAL CRUZADO + POR PLATAFORMA)
           ===================================================================== */}
       {subTab === 'METAS' && (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {/* Platform Switcher in Minhas Estatísticas (Metas) — Hidden when only 1 single platform is active to maximize screen space */}
           {!isSinglePlatformMode && (
-            <div className="border border-zinc-800/80 rounded-xl bg-zinc-900/95 p-2 space-y-1.5">
+            <div className="border border-zinc-800/80 rounded-2xl bg-zinc-900/95 p-3 space-y-2">
               <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-                  <Layers className="h-3 w-3 text-zinc-300" />
-                  <span>Filtro de Estatísticas &amp; Metas por Plataforma</span>
+                <span className="text-base font-bold text-zinc-300 flex items-center gap-1.5">
+                  <Layers className="h-4 w-4 text-zinc-300" />
+                  <span>Filtro por Plataforma</span>
                 </span>
-                <span className="text-[10px] font-mono text-emerald-500 font-semibold">
+                <span className="text-base text-emerald-400 font-bold">
                   {scopedStats.scopeLabel}
                 </span>
               </div>
               <div
-                className={`grid gap-1 ${
+                className={`grid gap-1.5 ${
                   visiblePlatformScopes.length === 3
                     ? 'grid-cols-3'
                     : visiblePlatformScopes.length === 4
@@ -482,10 +482,10 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                       key={scope.id}
                       type="button"
                       onClick={() => setActivePlatformScope(scope.id)}
-                      className={`rounded-lg py-1.5 px-2 text-[11px] font-semibold transition cursor-pointer truncate ${
+                      className={`rounded-xl py-2 px-2.5 text-base font-bold transition cursor-pointer truncate ${
                         active
                           ? 'bg-white text-zinc-950 shadow-xs'
-                          : 'bg-zinc-950 text-zinc-400 hover:text-zinc-100 border border-zinc-800/80'
+                          : 'bg-zinc-950 text-zinc-300 hover:text-zinc-100 border border-zinc-800/80'
                       }`}
                     >
                       {scope.label}
@@ -497,25 +497,25 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
           )}
 
           {/* CARD 1: Goals & Projections (Daily, Weekly, Monthly) */}
-          <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 space-y-3">
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <Lock className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-                <span className="text-xs font-semibold text-zinc-100 truncate">
-                  Metas &amp; Projeções ({scopedStats.scopeLabel})
+          <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3.5">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <Lock className="h-4 w-4 text-zinc-400 shrink-0" />
+                <span className="text-xl font-bold text-zinc-100 truncate">
+                  Metas &amp; Projeções
                 </span>
               </div>
-              <span className="rounded bg-zinc-950 border border-zinc-800 px-2 py-0.5 text-[11px] font-mono font-bold text-emerald-500 shrink-0 whitespace-nowrap">
+              <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1 text-lg font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
                 +{scopedStats.netPerHourEur.toFixed(2)}{'\u00A0'}€/h •{' '}
                 {scopedStats.netPerKmEur.toFixed(2)}{'\u00A0'}€/km
               </span>
             </div>
 
             {/* Daily Goal */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-100">Meta Diária</span>
-                <div className="flex items-center gap-1.5 font-mono text-zinc-300">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-lg">
+                <span className="font-bold text-zinc-100">Meta Diária</span>
+                <div className="flex items-center gap-1.5 font-bold text-zinc-200">
                   <span className="whitespace-nowrap">{scopedStats.currentDaily.toFixed(2)}{'\u00A0'}€ /</span>
                   <input
                     type="number"
@@ -527,24 +527,24 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                     onChange={(e) =>
                       handleGoalChange('DAILY', parseFloat(e.target.value) || 50)
                     }
-                    className="w-14 rounded bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 text-right text-xs font-mono text-zinc-100"
+                    className="w-20 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-right text-lg font-extrabold text-zinc-100"
                   />
                   <span className="whitespace-nowrap">€ ({scopedStats.dailyPct}%)</span>
                 </div>
               </div>
-              <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
+              <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden">
                 <div
-                  className="h-full bg-zinc-100 rounded-full transition-all"
+                  className="h-full bg-emerald-400 rounded-full transition-all"
                   style={{ width: `${scopedStats.dailyPct}%` }}
                 />
               </div>
             </div>
 
             {/* Weekly Goal */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-100">Meta Semanal</span>
-                <div className="flex items-center gap-1.5 font-mono text-zinc-300">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-lg">
+                <span className="font-bold text-zinc-100">Meta Semanal</span>
+                <div className="flex items-center gap-1.5 font-bold text-zinc-200">
                   <span className="whitespace-nowrap">{scopedStats.currentWeekly.toFixed(2)}{'\u00A0'}€ /</span>
                   <input
                     type="number"
@@ -559,24 +559,24 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                         parseFloat(e.target.value) || 300
                       )
                     }
-                    className="w-16 rounded bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 text-right text-xs font-mono text-zinc-100"
+                    className="w-20 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-right text-lg font-extrabold text-zinc-100"
                   />
                   <span className="whitespace-nowrap">€ ({scopedStats.weeklyPct}%)</span>
                 </div>
               </div>
-              <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
+              <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden">
                 <div
-                  className="h-full bg-zinc-100 rounded-full transition-all"
+                  className="h-full bg-emerald-400 rounded-full transition-all"
                   style={{ width: `${scopedStats.weeklyPct}%` }}
                 />
               </div>
             </div>
 
             {/* Monthly Goal */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-100">Meta Mensal</span>
-                <div className="flex items-center gap-1.5 font-mono text-zinc-300">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-lg">
+                <span className="font-bold text-zinc-100">Meta Mensal</span>
+                <div className="flex items-center gap-1.5 font-bold text-zinc-200">
                   <span className="whitespace-nowrap">{scopedStats.currentMonthly.toFixed(2)}{'\u00A0'}€ /</span>
                   <input
                     type="number"
@@ -591,50 +591,50 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                         parseFloat(e.target.value) || 1200
                       )
                     }
-                    className="w-16 rounded bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 text-right text-xs font-mono text-zinc-100"
+                    className="w-24 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-right text-lg font-extrabold text-zinc-100"
                   />
                   <span className="whitespace-nowrap">€ ({scopedStats.monthlyPct}%)</span>
                 </div>
               </div>
-              <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
+              <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden">
                 <div
-                  className="h-full bg-zinc-100 rounded-full transition-all"
+                  className="h-full bg-emerald-400 rounded-full transition-all"
                   style={{ width: `${scopedStats.monthlyPct}%` }}
                 />
               </div>
             </div>
 
             {/* KPI Summary Row: Entregas Concluídas, KM Rodados, Média Líquida €/km, Quanto Falta */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2">
-                <span className="text-[10px] text-zinc-400 block">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
+                <span className="text-base font-medium text-zinc-400 block">
                   Entregas Concluídas
                 </span>
-                <span className="text-xs font-mono font-bold text-zinc-100 whitespace-nowrap">
+                <span className="text-xl font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
                   {scopedStats.deliveriesToday} entregas
                 </span>
               </div>
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2">
-                <span className="text-[10px] text-zinc-400 block">
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
+                <span className="text-base font-medium text-zinc-400 block">
                   KM Rodados
                 </span>
-                <span className="text-xs font-mono font-bold text-zinc-100 whitespace-nowrap">
+                <span className="text-xl font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
                   {scopedStats.kmToday.toFixed(1)} km
                 </span>
               </div>
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2">
-                <span className="text-[10px] text-zinc-400 block">
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
+                <span className="text-base font-medium text-zinc-400 block">
                   Média Líquida €/km
                 </span>
-                <span className="text-xs font-mono font-bold text-emerald-500 whitespace-nowrap">
+                <span className="text-xl font-extrabold text-emerald-400 whitespace-nowrap mt-0.5 block">
                   {scopedStats.netPerKmEur.toFixed(2)}{'\u00A0'}€/km
                 </span>
               </div>
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2">
-                <span className="text-[10px] text-zinc-400 block">
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
+                <span className="text-base font-medium text-zinc-400 block">
                   Quanto Falta p/ Meta
                 </span>
-                <span className="text-xs font-mono font-bold text-zinc-100 whitespace-nowrap">
+                <span className="text-xl font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
                   {scopedStats.remainingDailyEur > 0
                     ? `${scopedStats.remainingDailyEur.toFixed(2)}\u00A0€ (${scopedStats.remainingOrders} ped.)`
                     : 'Concluída!'}
@@ -643,29 +643,29 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
             </div>
 
             {/* Entrega Atual & Última Entrega */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2.5 space-y-0.5">
-                <span className="text-[10px] uppercase tracking-wider text-zinc-500 block">
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-1">
+                <span className="text-base font-bold text-zinc-400 block">
                   {isProdWithoutActiveDelivery
                     ? 'Entrega Atual'
                     : `Entrega Atual (${activeDeliveryLifecycle.orderId})`}
                 </span>
                 {isProdWithoutActiveDelivery ? (
                   <>
-                    <span className="text-xs font-bold text-zinc-100 block">
+                    <span className="text-lg font-extrabold text-zinc-100 block">
                       Nenhuma entrega ativa
                     </span>
-                    <span className="text-[10px] font-mono text-zinc-400 block truncate whitespace-nowrap">
+                    <span className="text-base font-medium text-zinc-400 block truncate whitespace-nowrap">
                       0.00{'\u00A0'}€ líq. • 0.0 km
                     </span>
                   </>
                 ) : (
                   <>
-                    <span className="text-xs font-mono font-bold text-zinc-100 block whitespace-nowrap">
+                    <span className="text-xl font-extrabold text-zinc-100 block whitespace-nowrap">
                       +{activeDeliveryLifecycle.netProfitEur.toFixed(2)}{'\u00A0'}€ líq. •{' '}
                       {activeDeliveryLifecycle.realKm.toFixed(1)} km
                     </span>
-                    <span className="text-[10px] text-zinc-400 block truncate">
+                    <span className="text-base font-medium text-zinc-400 block truncate">
                       {activeDeliveryLifecycle.platform} •{' '}
                       {activeDeliveryLifecycle.originName}
                     </span>
@@ -673,26 +673,26 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                 )}
               </div>
 
-              <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2.5 space-y-0.5">
-                <span className="text-[10px] uppercase tracking-wider text-zinc-500 block">
+              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-1">
+                <span className="text-base font-bold text-zinc-400 block">
                   Última Entrega
                 </span>
                 {!lastCompletedDecision ? (
                   <>
-                    <span className="text-xs font-bold text-zinc-100 block">
+                    <span className="text-lg font-extrabold text-zinc-100 block">
                       Sem registos hoje
                     </span>
-                    <span className="text-[10px] font-mono text-zinc-400 block truncate whitespace-nowrap">
+                    <span className="text-base font-medium text-zinc-400 block truncate whitespace-nowrap">
                       0.00{'\u00A0'}€ líq. • 0.0 km
                     </span>
                   </>
                 ) : (
                   <>
-                    <span className="text-xs font-mono font-bold text-zinc-100 block whitespace-nowrap">
+                    <span className="text-xl font-extrabold text-zinc-100 block whitespace-nowrap">
                       +{lastCompletedDecision.netProfitEur.toFixed(2)}{'\u00A0'}€ líq. •{' '}
                       {lastCompletedDecision.realKm.toFixed(1)} km
                     </span>
-                    <span className="text-[10px] text-zinc-400 block truncate">
+                    <span className="text-base font-medium text-zinc-400 block truncate">
                       {lastCompletedDecision.platform} •{' '}
                       {lastCompletedDecision.segment}
                     </span>
@@ -702,49 +702,49 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
             </div>
 
             {financeActionFeedback && (
-              <div className="rounded-lg bg-emerald-950/70 border border-emerald-500/40 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-300 flex items-center justify-between gap-2">
+              <div className="rounded-xl bg-emerald-950/70 border border-emerald-500/40 px-3 py-2 text-base font-bold text-emerald-300 flex items-center justify-between gap-2">
                 <span>{financeActionFeedback}</span>
                 <button
                   type="button"
                   onClick={() => setFinanceActionFeedback(null)}
-                  className="text-[10px] text-emerald-400 hover:text-white cursor-pointer"
+                  className="text-base font-extrabold text-emerald-400 hover:text-white cursor-pointer"
                 >
                   OK
                 </button>
               </div>
             )}
 
-            {/* Action Row: "+ Registar Entrega Manual" Modal Trigger + "🧹 Zerar Dados de Teste" */}
+            {/* Action Row: "+ Registar Entrega Manual" Modal Trigger */}
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <button
                 type="button"
                 onClick={() => setShowManualDeliveryModal((prev) => !prev)}
-                className="flex-1 rounded-lg py-2.5 px-3 bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+                className="flex-1 rounded-xl py-3 px-4 bg-white hover:bg-zinc-200 text-zinc-950 font-extrabold text-lg flex items-center justify-center gap-2 cursor-pointer transition whitespace-nowrap"
               >
-                <Plus className="h-4 w-4 shrink-0" />
+                <Plus className="h-5 w-5 shrink-0" />
                 <span>+ Registar Entrega Manual</span>
               </button>
             </div>
 
             {/* Inline / Modal Form for "+ Registar Entrega Manual" */}
             {showManualDeliveryModal && (
-              <div className="rounded-xl bg-zinc-950 border border-emerald-500/50 p-3 space-y-2.5">
+              <div className="rounded-2xl bg-zinc-950 border border-emerald-500/50 p-3.5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-zinc-100">
+                  <span className="text-lg font-extrabold text-zinc-100">
                     📝 Registar Entrega Real Concluída
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowManualDeliveryModal(false)}
-                    className="rounded p-1 text-zinc-400 hover:text-zinc-100 cursor-pointer"
+                    className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-100 cursor-pointer"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div>
-                    <label className="block text-[10px] text-zinc-400 mb-0.5">
+                    <label className="block text-base font-medium text-zinc-400 mb-1">
                       Plataforma
                     </label>
                     <select
@@ -756,7 +756,7 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                           setActivePlatformScope(p);
                         }
                       }}
-                      className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-xs text-zinc-100"
+                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-base font-bold text-zinc-100"
                     >
                       {enabledPlatforms.map((p) => (
                         <option key={p} value={p}>
@@ -767,7 +767,7 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] text-zinc-400 mb-0.5">
+                    <label className="block text-base font-medium text-zinc-400 mb-1">
                       Valor Bruto (€)
                     </label>
                     <input
@@ -776,12 +776,12 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                       min="1"
                       value={manualGrossEur}
                       onChange={(e) => setManualGrossEur(e.target.value)}
-                      className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-xs font-mono text-zinc-100"
+                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] text-zinc-400 mb-0.5">
+                    <label className="block text-base font-medium text-zinc-400 mb-1">
                       Distância (KM)
                     </label>
                     <input
@@ -790,12 +790,12 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                       min="0.3"
                       value={manualDistanceKm}
                       onChange={(e) => setManualDistanceKm(e.target.value)}
-                      className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-xs font-mono text-zinc-100"
+                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] text-zinc-400 mb-0.5">
+                    <label className="block text-base font-medium text-zinc-400 mb-1">
                       Tempo (min)
                     </label>
                     <input
@@ -804,7 +804,7 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                       min="3"
                       value={manualMinutes}
                       onChange={(e) => setManualMinutes(e.target.value)}
-                      className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-xs font-mono text-zinc-100"
+                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
                     />
                   </div>
                 </div>
@@ -815,7 +815,7 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                     placeholder="Restaurante / Zona (ex: Burger King Amarante)"
                     value={manualRestaurant}
                     onChange={(e) => setManualRestaurant(e.target.value)}
-                    className="flex-1 rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100"
+                    className="flex-1 rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-base font-medium text-zinc-100"
                   />
                   <button
                     type="button"
@@ -833,7 +833,7 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                         `✅ Entrega registada em ${targetPlatformForManualLog} (${gross.toFixed(2)}\u00A0€ bruto • ${km.toFixed(1)} km)!`
                       );
                     }}
-                    className="rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs px-3 py-1.5 cursor-pointer whitespace-nowrap"
+                    className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-extrabold text-base px-4 py-2 cursor-pointer whitespace-nowrap"
                   >
                     Guardar Entrega
                   </button>
@@ -848,23 +848,23 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
           VIEW 2: FINANÇAS SEGMENTADAS POR PLATAFORMA & GLOBAL CRUZADO
           ===================================================================== */}
       {subTab === 'CAIXA' && (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {/* Platform Switcher in Finanças — Hidden when only 1 single platform is active to maximize screen space */}
           {!isSinglePlatformMode && (
-            <div className="border border-zinc-800/80 rounded-xl bg-zinc-900/95 p-2 space-y-1.5">
+            <div className="border border-zinc-800/80 rounded-2xl bg-zinc-900/95 p-3 space-y-2">
               <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-                  <Wallet className="h-3 w-3 text-zinc-300" />
+                <span className="text-base font-bold text-zinc-300 flex items-center gap-1.5">
+                  <Wallet className="h-4 w-4 text-zinc-300" />
                   <span>Seletor Financeiro por Plataforma</span>
                 </span>
-                <span className="text-[10px] font-mono text-emerald-500 font-semibold">
+                <span className="text-base text-emerald-400 font-bold">
                   {effectiveScope === 'GLOBAL_CRUZADO'
                     ? `Visão Cruzada (${enabledPlatforms.length} Plataformas)`
                     : `Conta Individual: ${effectiveScope}`}
                 </span>
               </div>
               <div
-                className={`grid gap-1 ${
+                className={`grid gap-1.5 ${
                   visiblePlatformScopes.length === 3
                     ? 'grid-cols-3'
                     : visiblePlatformScopes.length === 4
@@ -879,10 +879,10 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                       key={scope.id}
                       type="button"
                       onClick={() => setActivePlatformScope(scope.id)}
-                      className={`rounded-lg py-1.5 px-2 text-[11px] font-semibold transition cursor-pointer truncate ${
+                      className={`rounded-xl py-2 px-2.5 text-base font-bold transition cursor-pointer truncate ${
                         active
                           ? 'bg-white text-zinc-950 shadow-xs'
-                          : 'bg-zinc-950 text-zinc-400 hover:text-zinc-100 border border-zinc-800/80'
+                          : 'bg-zinc-950 text-zinc-300 hover:text-zinc-100 border border-zinc-800/80'
                       }`}
                     >
                       {scope.label}
@@ -896,52 +896,52 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
           {effectiveScope === 'GLOBAL_CRUZADO' && !isSinglePlatformMode ? (
             <>
               {/* GLOBAL CARD 1: Total Combined Net Profit (€ Líquido Global) */}
-              <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 space-y-2.5">
+              <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className="text-xs font-bold text-zinc-100">
+                    <h3 className="text-xl font-bold text-zinc-100">
                       1. Lucro Real Combinado (€ Líquido Global)
                     </h3>
-                    <p className="text-[10px] text-zinc-400">
+                    <p className="text-base font-medium text-zinc-400">
                       Soma cruzada de {enabledPlatforms.join(' + ')} após frotas,
                       impostos e desgaste
                     </p>
                   </div>
-                  <span className="rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1 text-sm font-mono font-bold text-emerald-500 shrink-0 whitespace-nowrap">
+                  <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-3xl font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
                     +{crossRefMetrics.globalNetDayEur.toFixed(2)}{'\u00A0'}€
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                  <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2">
-                    <span className="text-[10px] text-zinc-400 block">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
+                    <span className="text-base font-medium text-zinc-400 block">
                       Bruto Global Hoje
                     </span>
-                    <span className="text-xs font-mono font-semibold text-zinc-100 whitespace-nowrap">
+                    <span className="text-xl font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
                       {crossRefMetrics.globalGrossDayEur.toFixed(2)}{'\u00A0'}€
                     </span>
                   </div>
-                  <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2">
-                    <span className="text-[10px] text-zinc-400 block">
+                  <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
+                    <span className="text-base font-medium text-zinc-400 block">
                       Comissões Frota
                     </span>
-                    <span className="text-xs font-mono font-semibold text-zinc-300 whitespace-nowrap">
+                    <span className="text-xl font-bold text-zinc-300 whitespace-nowrap mt-0.5 block">
                       -{crossRefMetrics.globalFleetCutEur.toFixed(2)}{'\u00A0'}€
                     </span>
                   </div>
-                  <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2">
-                    <span className="text-[10px] text-zinc-400 block">
+                  <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
+                    <span className="text-base font-medium text-zinc-400 block">
                       Reserva Impostos/SS
                     </span>
-                    <span className="text-xs font-mono font-semibold text-zinc-300 whitespace-nowrap">
+                    <span className="text-xl font-bold text-zinc-300 whitespace-nowrap mt-0.5 block">
                       -{crossRefMetrics.globalTaxReserveEur.toFixed(2)}{'\u00A0'}€
                     </span>
                   </div>
-                  <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2">
-                    <span className="text-[10px] text-zinc-400 block">
+                  <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
+                    <span className="text-base font-medium text-zinc-400 block">
                       Custo Veículo ({crossRefMetrics.globalKmToday} km)
                     </span>
-                    <span className="text-xs font-mono font-semibold text-zinc-300 whitespace-nowrap">
+                    <span className="text-xl font-bold text-zinc-300 whitespace-nowrap mt-0.5 block">
                       -{crossRefMetrics.globalVehicleCostEur.toFixed(2)}{'\u00A0'}€
                     </span>
                   </div>
@@ -949,22 +949,22 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
               </section>
 
               {/* GLOBAL CARD 2: Cross-Platform Efficiency Comparison Card (ONLY for enabledPlatforms) */}
-              <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 space-y-2.5">
+              <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <TrendingUp className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                    <h3 className="text-xs font-bold text-zinc-100 truncate">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <TrendingUp className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <h3 className="text-xl font-bold text-zinc-100 truncate">
                       2. Comparativo de Eficiência Cruzada (€/h e €/km)
                     </h3>
                   </div>
-                  <span className="rounded bg-zinc-950 border border-zinc-800 px-2 py-0.5 text-[10px] font-mono text-emerald-500 shrink-0 whitespace-nowrap">
+                  <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-1 text-base font-bold text-emerald-400 shrink-0 whitespace-nowrap">
                     Melhor: {crossRefMetrics.bestHourlyPlatform.ledger.platform}{' '}
                     ({crossRefMetrics.bestHourlyPlatform.netPerHourEur.toFixed(2)}{'\u00A0'}€/h)
                   </span>
                 </div>
 
                 <div
-                  className={`grid gap-2 ${
+                  className={`grid gap-2.5 ${
                     enabledPlatforms.length === 2
                       ? 'grid-cols-2'
                       : 'grid-cols-3'
@@ -979,23 +979,23 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                       <div
                         key={platform}
                         onClick={() => setActivePlatformScope(platform)}
-                        className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-3 space-y-1 cursor-pointer hover:border-zinc-700 transition"
+                        className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3.5 space-y-1 cursor-pointer hover:border-zinc-700 transition"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-extrabold text-zinc-100 truncate">
+                          <span className="text-lg font-extrabold text-zinc-100 truncate">
                             {platform}
                           </span>
                           {isBest && (
-                            <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0" />
                           )}
                         </div>
-                        <div className="text-sm font-mono font-bold text-emerald-500 whitespace-nowrap">
+                        <div className="text-2xl font-extrabold text-emerald-400 whitespace-nowrap">
                           {m.netPerHourEur.toFixed(2)}{'\u00A0'}€/h
                         </div>
-                        <div className="text-xs font-mono text-zinc-300 whitespace-nowrap">
+                        <div className="text-lg font-bold text-zinc-200 whitespace-nowrap">
                           {m.netPerKmEur.toFixed(2)}{'\u00A0'}€/km líq.
                         </div>
-                        <div className="text-[10px] text-zinc-400 truncate whitespace-nowrap">
+                        <div className="text-base font-medium text-zinc-400 truncate whitespace-nowrap">
                           Líq: +{m.netDayEur.toFixed(2)}{'\u00A0'}€ • Frota:{' '}
                           {m.ledger.fleetCommissionPct}%
                         </div>
@@ -1006,40 +1006,40 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
               </section>
 
               {/* GLOBAL CARD 3: Global Payout Calendar (ONLY for enabledPlatforms) */}
-              <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 space-y-2.5">
+              <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <Calendar className="h-3.5 w-3.5 text-zinc-300 shrink-0" />
-                    <h3 className="text-xs font-bold text-zinc-100 truncate">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Calendar className="h-4 w-4 text-zinc-300 shrink-0" />
+                    <h3 className="text-xl font-bold text-zinc-100 truncate">
                       3. Calendário de Repasses ({enabledPlatforms.join(' + ')})
                     </h3>
                   </div>
-                  <span className="text-[11px] font-mono font-semibold text-zinc-200 shrink-0 whitespace-nowrap">
+                  <span className="text-lg font-extrabold text-zinc-200 shrink-0 whitespace-nowrap">
                     Semana: +{crossRefMetrics.globalNetWeekEur.toFixed(2)}{'\u00A0'}€ líq.
                   </span>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {enabledPlatforms.map((platform) => {
                     const m = crossRefMetrics.byPlatform[platform];
                     return (
                       <div
                         key={platform}
-                        className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2.5 flex items-center justify-between gap-2"
+                        className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 flex items-center justify-between gap-2"
                       >
                         <div className="min-w-0">
-                          <span className="text-xs font-semibold text-zinc-100 block truncate">
+                          <span className="text-lg font-bold text-zinc-100 block truncate">
                             {platform} • {m.ledger.payoutMethodology}
                           </span>
-                          <span className="text-[10px] text-zinc-400 block truncate">
+                          <span className="text-base font-medium text-zinc-400 block truncate">
                             {m.ledger.nextPayoutDateLabel}
                           </span>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="text-xs font-mono font-bold text-emerald-500 block whitespace-nowrap">
+                          <span className="text-xl font-extrabold text-emerald-400 block whitespace-nowrap">
                             +{m.netWeekEur.toFixed(2)}{'\u00A0'}€
                           </span>
-                          <span className="text-[10px] font-mono text-zinc-400 block whitespace-nowrap">
+                          <span className="text-base font-medium text-zinc-400 block whitespace-nowrap">
                             Hoje: +{m.netDayEur.toFixed(2)}{'\u00A0'}€
                           </span>
                         </div>
@@ -1059,26 +1059,26 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
               const m = crossRefMetrics.byPlatform[selectedPlat];
               const ledger = m.ledger;
               return (
-                <section className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3.5 space-y-3">
-                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2 gap-2">
+                <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5 gap-2">
                     <div className="min-w-0">
-                      <h3 className="text-xs font-bold text-zinc-100">
+                      <h3 className="text-xl font-bold text-zinc-100">
                         Perfil &amp; Conta Individual: {selectedPlat}
                       </h3>
-                      <p className="text-[10px] text-zinc-400">
+                      <p className="text-base font-medium text-zinc-400">
                         Taxas, comissão de frota e metodologia de repasse
                         específicas desta app
                       </p>
                     </div>
-                    <span className="rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1 text-xs font-mono font-bold text-emerald-500 shrink-0 whitespace-nowrap">
+                    <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-2xl font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
                       Líq. Hoje: +{m.netDayEur.toFixed(2)}{'\u00A0'}€
                     </span>
                   </div>
 
                   {/* Platform Specific Editable Inputs */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2.5">
                     <div>
-                      <label className="block text-[10px] text-zinc-400 mb-1">
+                      <label className="block text-base font-medium text-zinc-400 mb-1">
                         Ganhos Brutos Hoje (€)
                       </label>
                       <input
@@ -1094,12 +1094,12 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                             updateGlovoWallet({ dailyGrossGlovoEur: val });
                           }
                         }}
-                        className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-100"
+                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] text-zinc-400 mb-1">
+                      <label className="block text-base font-medium text-zinc-400 mb-1">
                         Impostos / Taxas (%)
                       </label>
                       <input
@@ -1113,12 +1113,12 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                             specificTaxAndSsPct: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-100"
+                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] text-zinc-400 mb-1">
+                      <label className="block text-base font-medium text-zinc-400 mb-1">
                         Comissão Frota (%)
                       </label>
                       <input
@@ -1132,15 +1132,15 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                             fleetCommissionPct: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-100"
+                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
                       />
                     </div>
                   </div>
 
                   {/* Payout Methodology & Schedule */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
-                      <label className="block text-[10px] text-zinc-400 mb-1">
+                      <label className="block text-base font-medium text-zinc-400 mb-1">
                         Metodologia de Repasse
                       </label>
                       <input
@@ -1151,11 +1151,11 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                             payoutMethodology: e.target.value,
                           })
                         }
-                        className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100"
+                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-base font-bold text-zinc-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-zinc-400 mb-1">
+                      <label className="block text-base font-medium text-zinc-400 mb-1">
                         Data / Calendário de Pagamento
                       </label>
                       <input
@@ -1166,29 +1166,29 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                             nextPayoutDateLabel: e.target.value,
                           })
                         }
-                        className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100"
+                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-base font-bold text-zinc-100"
                       />
                     </div>
                   </div>
 
                   {/* Glovo Specific Nightly Cash Reconciler */}
                   {selectedPlat === 'Glovo' && (
-                    <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2.5 space-y-2">
+                    <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-semibold text-zinc-200">
+                        <span className="text-lg font-bold text-zinc-200">
                           Reconciliação de Dinheiro na Mão (Glovo)
                         </span>
                         <button
                           type="button"
                           onClick={closeGlovoDailyAudit}
-                          className="rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2 py-0.5 text-[10px] font-medium cursor-pointer"
+                          className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1 text-base font-bold cursor-pointer"
                         >
                           Fechar Dia Glovo
                         </button>
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-3 gap-2.5">
                         <div>
-                          <label className="block text-[10px] text-zinc-400 mb-0.5">
+                          <label className="block text-base font-medium text-zinc-400 mb-1">
                             Saldo Inicial (€)
                           </label>
                           <input
@@ -1201,11 +1201,11 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                                   parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full rounded bg-zinc-900 border border-zinc-800 px-2 py-1 text-xs font-mono text-zinc-100"
+                            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-lg font-extrabold text-zinc-100"
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] text-zinc-400 mb-0.5">
+                          <label className="block text-base font-medium text-zinc-400 mb-1">
                             Dinheiro Mão (€)
                           </label>
                           <input
@@ -1216,11 +1216,11 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                               const val = parseFloat(e.target.value) || 0;
                               updateGlovoWallet({ cashReceivedHandsEur: val });
                             }}
-                            className="w-full rounded bg-zinc-900 border border-zinc-800 px-2 py-1 text-xs font-mono text-zinc-100"
+                            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-lg font-extrabold text-zinc-100"
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] text-zinc-400 mb-0.5">
+                          <label className="block text-base font-medium text-zinc-400 mb-1">
                             Pago Restaur. (€)
                           </label>
                           <input
@@ -1233,15 +1233,15 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                                 cashPaidAtRestaurantsEur: val,
                               });
                             }}
-                            className="w-full rounded bg-zinc-900 border border-zinc-800 px-2 py-1 text-xs font-mono text-zinc-100"
+                            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-lg font-extrabold text-zinc-100"
                           />
                         </div>
                       </div>
-                      <div className="flex items-center justify-between text-xs pt-1 border-t border-zinc-800">
-                        <span className="text-zinc-400">
+                      <div className="flex items-center justify-between text-lg pt-1.5 border-t border-zinc-800">
+                        <span className="text-zinc-400 font-medium">
                           Saldo Digital Noturno Glovo:
                         </span>
-                        <span className="font-mono font-bold text-zinc-100">
+                        <span className="font-extrabold text-zinc-100">
                           {m.cashDiffEur.toFixed(2)} €
                         </span>
                       </div>
@@ -1249,37 +1249,37 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                   )}
 
                   {/* Platform Net Breakdown */}
-                  <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-3 space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-zinc-400">
+                  <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between text-lg">
+                      <span className="text-zinc-400 font-medium">
                         Comissão de Frota ({ledger.fleetCommissionPct}%):
                       </span>
-                      <span className="font-mono text-zinc-300">
+                      <span className="font-bold text-zinc-200">
                         -{m.fleetCutEur.toFixed(2)} €
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-zinc-400">
+                    <div className="flex items-center justify-between text-lg">
+                      <span className="text-zinc-400 font-medium">
                         Reserva Impostos / SS ({ledger.specificTaxAndSsPct}%):
                       </span>
-                      <span className="font-mono text-zinc-300">
+                      <span className="font-bold text-zinc-200">
                         -{m.taxReserveEur.toFixed(2)} €
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-zinc-400">
+                    <div className="flex items-center justify-between text-lg">
+                      <span className="text-zinc-400 font-medium">
                         Desgaste &amp; Combustível (
                         {ledger.completedKmToday.toFixed(1)} km):
                       </span>
-                      <span className="font-mono text-zinc-300">
+                      <span className="font-bold text-zinc-200">
                         -{m.vehicleCostEur.toFixed(2)} €
                       </span>
                     </div>
-                    <div className="pt-1.5 border-t border-zinc-800 flex items-center justify-between text-xs font-semibold">
+                    <div className="pt-2 border-t border-zinc-800 flex items-center justify-between text-xl font-extrabold">
                       <span className="text-zinc-100">
                         Lucro Líquido Real ({selectedPlat}):
                       </span>
-                      <span className="font-mono text-sm text-emerald-500">
+                      <span className="text-2xl font-extrabold text-emerald-400">
                         +{m.netDayEur.toFixed(2)} € ({m.netPerHourEur.toFixed(2)}{' '}
                         €/h)
                       </span>

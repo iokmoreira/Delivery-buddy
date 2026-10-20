@@ -1106,7 +1106,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 <span className="text-zinc-400 font-semibold">
                   Tempo Estimado:
                 </span>
-                <span className="font-mono font-bold text-zinc-100">
+                <span className=" font-bold text-zinc-100">
                   ~{auditMetrics.realTotalMinutes} min
                 </span>
               </div>
@@ -1123,7 +1123,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase text-zinc-400 block">
                   VALOR BRUTO
                 </span>
-                <span className="text-sm font-mono font-bold text-zinc-100 mt-0.5 block">
+                <span className="text-sm font-bold text-zinc-100 mt-0.5 block">
                   {auditMetrics.grossEur.toFixed(2)} €
                 </span>
               </div>
@@ -1132,7 +1132,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase text-zinc-400 block">
                   CUSTO DA ROTA
                 </span>
-                <span className="text-sm font-mono font-bold text-rose-500 mt-0.5 block">
+                <span className="text-sm font-bold text-rose-500 mt-0.5 block">
                   -{auditMetrics.realTripCostEur.toFixed(2)} €
                 </span>
               </div>
@@ -1141,7 +1141,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 <span className="text-[10px] font-extrabold uppercase text-emerald-500 block">
                   LUCRO LÍQUIDO
                 </span>
-                <span className="text-sm font-mono font-black text-emerald-500 mt-0.5 block">
+                <span className="text-sm font-black text-emerald-500 mt-0.5 block">
                   +{auditMetrics.realNetProfitEur.toFixed(2)} €
                 </span>
               </div>
@@ -1150,7 +1150,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase text-zinc-400 block">
                   PROJEÇÃO €/HORA
                 </span>
-                <span className="text-sm font-mono font-bold text-amber-500 mt-0.5 block">
+                <span className="text-sm font-bold text-amber-500 mt-0.5 block">
                   {auditMetrics.projectedHourlyNetEur.toFixed(2)} €/h
                 </span>
               </div>
@@ -1183,7 +1183,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 <span className="text-[9px] font-bold uppercase text-zinc-400 block leading-tight">
                   DISTÂNCIA TOTAL
                 </span>
-                <span className="text-sm font-mono font-extrabold text-zinc-100 mt-1 block">
+                <span className="text-sm font-extrabold text-zinc-100 mt-1 block">
                   {auditMetrics.activeTotalKm.toFixed(1)} km
                 </span>
               </div>
@@ -1192,7 +1192,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 <span className="text-[9px] font-bold uppercase text-zinc-400 block leading-tight">
                   € / KM BRUTO
                 </span>
-                <span className="text-sm font-mono font-bold text-zinc-100 mt-1 block">
+                <span className="text-sm font-bold text-zinc-100 mt-1 block">
                   {auditMetrics.grossEurPerKm.toFixed(2)} €/km
                 </span>
               </div>
@@ -1201,7 +1201,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 <span className="text-[9px] font-extrabold uppercase text-emerald-500 block leading-tight">
                   € / KM LÍQUIDO
                 </span>
-                <span className="text-sm font-mono font-black text-emerald-500 mt-1 block">
+                <span className="text-sm font-black text-emerald-500 mt-1 block">
                   {auditMetrics.effectiveAuditedEurPerKm.toFixed(2)} €/km
                 </span>
               </div>
@@ -1352,7 +1352,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                             >
                               <Minus className="h-3 w-3" />
                             </button>
-                            <span className="w-5 text-center font-mono text-xs font-semibold text-zinc-100">
+                            <span className="w-5 text-center text-xs font-semibold text-zinc-100">
                               {qty}
                             </span>
                             <button

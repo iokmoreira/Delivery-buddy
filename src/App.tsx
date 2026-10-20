@@ -52,7 +52,7 @@ class CockpitErrorBoundary extends React.Component<
             <h1 className="text-lg font-bold text-slate-900">
               Delivery Buddy — Recuperação Rápida
             </h1>
-            <p className="text-xs text-slate-500 font-mono">
+            <p className="text-xs text-slate-500">
               {this.state.errorMessage}
             </p>
             <button
@@ -315,7 +315,7 @@ const AppCockpitShell: React.FC = () => {
                 🔋 Modo Sobrevivência de Bateria Ativo ({batteryLevelPct}% • Poupança Extrema)
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span className="font-mono">OLED Eco</span>
+                <span className="">OLED Eco</span>
                 <button
                   type="button"
                   onClick={() => {

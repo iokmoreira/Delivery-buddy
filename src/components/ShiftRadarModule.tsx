@@ -342,11 +342,11 @@ export const RoadHazardsSettingsSection: React.FC = () => {
     <div className="space-y-3">
       <section className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
-            <AlertTriangle className="h-3.5 w-3.5 text-zinc-300" />
-            <span>Reportar Perigo na Via em 1 Toque (Amarante 25 km)</span>
+          <span className="text-lg font-bold text-zinc-100 flex items-center gap-1.5">
+            <AlertTriangle className="h-4 w-4 text-zinc-300" />
+            <span>Reportar Perigo na Via em 1 Toque (Amarante 35 km)</span>
           </span>
-          <span className="text-[10px] font-mono text-emerald-500 font-semibold">
+          <span className="text-base text-emerald-500 font-bold">
             +15 Coins
           </span>
         </div>
@@ -499,13 +499,13 @@ export const ZoneAgreementsSettingsSection: React.FC = () => {
                       estafetas aderiram
                     </span>
                   </div>
-                  <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-200 shrink-0">
+                  <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-200 shrink-0">
                     &gt;= {agreement.minCollectiveOrderEur.toFixed(2)} €
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-[11px] font-mono text-zinc-400">
+                  <span className="text-[11px] text-zinc-400">
                     Mínimo coletivo: {agreement.minCollectivePerKmEur.toFixed(2)}{' '}
                     €/km
                   </span>
@@ -575,7 +575,7 @@ export const ZoneAgreementsSettingsSection: React.FC = () => {
                     onChange={(e) =>
                       setNewAgreementMinEur(parseFloat(e.target.value) || 5.0)
                     }
-                    className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs font-mono text-zinc-100"
+                    className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
                   />
                 </div>
                 <div>
@@ -1359,7 +1359,7 @@ export const ShiftRadarModule: React.FC = () => {
                   : 'GPS Ativo (Toque 🎯 Centrar p/ seguir)'
                 : 'A obter sinal GPS do telemóvel...'}
             </span>
-            <span className="rounded-lg bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-400 shrink-0">
+            <span className="rounded-lg bg-zinc-800 px-2 py-0.5 text-[10px] font-bold text-emerald-400 shrink-0">
               {totalOnlineCouriersCount} online
             </span>
           </div>
