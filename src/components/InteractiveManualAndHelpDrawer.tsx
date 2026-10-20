@@ -1369,6 +1369,7 @@ export const MenuMaisHubView: React.FC = () => {
     simulateChargerUnpluggedAlert,
     setIsBubbleMinimized,
     isListeningSpeechRecognition,
+    requestOrConfirmSosActivation,
   } = useEstafetas();
 
   const [subPage, setSubPage] = useState<AjustesSubPageId>('LISTA_PRINCIPAL');
@@ -1847,6 +1848,16 @@ export const MenuMaisHubView: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Direct SOS Emergency Trigger inside Ajustes */}
+        <button
+          type="button"
+          onClick={() => requestOrConfirmSosActivation('Acidente na Via')}
+          style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+          className="w-full rounded-xl border border-red-400 py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition hover:opacity-95"
+        >
+          <span>🆘 Acionar Alerta SOS de Emergência (ou diga &ldquo;Buddy SOS&rdquo;)</span>
+        </button>
       </div>
 
       {/* Top Bar: Courier Identity, Zero-AI Photo & Active Platforms Quick Access */}

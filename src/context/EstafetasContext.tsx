@@ -7770,6 +7770,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         setCourierWorkspaceSection('AREA_PRIVADA');
         setActiveTab('scanner');
         setScannerActiveMainView('DIVIDIDO_PESO');
+        if (totalAuditedWeightKg <= state.backpackWeightLimitKg) {
+          setAuditedOrderItemsPreset('OVERWEIGHT_27KG');
+        }
         triggerSupportSplitOrderMacro(targetPlatform);
 
         const realOrderId =

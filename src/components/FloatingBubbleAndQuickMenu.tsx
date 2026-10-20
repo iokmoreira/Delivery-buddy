@@ -613,7 +613,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                 </span>
               </div>
               <div className="font-bold text-zinc-200">
-                ⚡ Ação executada:{' '}
+                ✅ Comando executado:{' '}
                 <span className="text-amber-300 font-extrabold">
                   {lastExecutedVoiceActionText ||
                     (isListeningSpeechRecognition
