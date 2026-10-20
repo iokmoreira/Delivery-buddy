@@ -51,7 +51,9 @@ import { useEstafetas } from '../context/EstafetasContext';
 import { AlertVoiceMessagesCustomizationPanel } from './VoiceCopilotAndSupportMacrosModule';
 import { EvidentiaryArchiveVaultSection } from './ComplaintsAndRouteTrapsModule';
 import {
+  DirectApkShareModal,
   MapRadiusSettingsSection,
+  OperationalHubSelectorModal,
   RoadHazardsSettingsSection,
   ZoneAgreementsSettingsSection,
 } from './ShiftRadarModule';
@@ -1623,6 +1625,10 @@ export const MenuMaisHubView: React.FC = () => {
   const [subPage, setSubPage] = useState<AjustesSubPageId>('LISTA_PRINCIPAL');
   const [isLiveSupportModalOpen, setIsLiveSupportModalOpen] =
     useState<boolean>(false);
+  const [isDirectApkShareModalOpen, setIsDirectApkShareModalOpen] =
+    useState<boolean>(false);
+  const [isHubSelectorModalOpen, setIsHubSelectorModalOpen] =
+    useState<boolean>(false);
   const [isShiftDrawerOpen, setIsShiftDrawerOpen] = useState<boolean>(false);
   const [isSimulatorOpen, setIsSimulatorOpen] = useState<boolean>(false);
   const [isDeviceProfileOpen, setIsDeviceProfileOpen] =
@@ -2276,35 +2282,60 @@ export const MenuMaisHubView: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsOfficialManualModalOpen(true)}
-            className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow"
+            className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-3 text-base font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow"
           >
-            <BookOpen className="h-3.5 w-3.5 shrink-0" />
+            <BookOpen className="h-4 w-4 shrink-0" />
             <span>📘 Manual de Uso &amp; Lista de Comandos</span>
           </button>
 
           <button
             type="button"
             onClick={toggleWakeLock}
-            className={`rounded-xl py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
+            className={`rounded-xl py-2.5 px-3 text-base font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
               wakeLockEnabled
                 ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
                 : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
             }`}
           >
             {wakeLockEnabled ? (
-              <Lock className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <Lock className="h-4 w-4 text-emerald-400 shrink-0" />
             ) : (
-              <Unlock className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+              <Unlock className="h-4 w-4 text-zinc-500 shrink-0" />
             )}
             <span>
               🔒 Manter Ecrã Ligado na Mota: {wakeLockEnabled ? 'ON' : 'OFF'}
             </span>
           </button>
         </div>
+
+        {/* Prominent 1-Tap Direct APK Share & QR Code Button */}
+        <button
+          type="button"
+          onClick={() => setIsDirectApkShareModalOpen(true)}
+          style={{ backgroundColor: '#059669', color: '#ffffff' }}
+          className="w-full rounded-xl border border-emerald-300/60 py-3 px-4 text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-lg transition hover:opacity-95"
+        >
+          <Download className="h-5 w-5 shrink-0" />
+          <span>📲 Enviar App a um Colega / Baixar APK Direto (QR Code)</span>
+        </button>
       </div>
 
       {/* Compact Soft Clean Settings List */}
       <div className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 overflow-hidden">
+        {/* Enviar App a um Colega / Baixar APK Direto (Sem .ZIP) */}
+        <button
+          type="button"
+          onClick={() => setIsDirectApkShareModalOpen(true)}
+          className="w-full py-3.5 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
+        >
+          <span className="text-base font-bold text-emerald-300 flex items-center gap-2">
+            <Download className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span>📲 Enviar App a um Colega / Baixar APK Direto</span>
+          </span>
+          <span className="rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 text-base font-bold text-emerald-300 shrink-0">
+            QR &amp; Link
+          </span>
+        </button>
         {/* Auto-Detetor de Pedidos (Acessibilidade) */}
         <button
           type="button"
@@ -2401,19 +2432,19 @@ export const MenuMaisHubView: React.FC = () => {
           </div>
         </button>
 
-        {/* 2. Raio do Mapa (km) & Região Ativa (Moved from Mapa to Ajustes) */}
+        {/* 2. Centro Operacional & Raio 35 km (Amarante) */}
         <button
           type="button"
-          onClick={() => setSubPage('RAIO_MAPA')}
-          className="w-full py-3 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
+          onClick={() => setIsHubSelectorModalOpen(true)}
+          className="w-full py-3.5 px-4 flex justify-between items-center border-b border-zinc-800 text-left hover:bg-zinc-800/50 transition cursor-pointer"
         >
-          <span className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-            <Compass className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-            <span>Raio do Mapa (km) &amp; Região</span>
+          <span className="text-base font-bold text-zinc-100 flex items-center gap-2">
+            <Compass className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span>📍 Centro: Amarante (Raio 35 km)</span>
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-200">
-              {selectedRegionName} • {mapRadiusKm} km
+            <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-1 text-base font-bold text-emerald-300">
+              Ativo • 35 km
             </span>
             <ChevronRight className="h-4 w-4 text-zinc-500" />
           </div>
@@ -2579,12 +2610,22 @@ export const MenuMaisHubView: React.FC = () => {
         <button
           type="button"
           onClick={resetAllToSeed}
-          className="text-[11px] text-zinc-400 hover:text-zinc-200 flex items-center gap-1 cursor-pointer"
+          className="text-base text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 cursor-pointer"
         >
-          <RotateCcw className="h-3 w-3" />
+          <RotateCcw className="h-4 w-4" />
           <span>Repor Dados</span>
         </button>
       </div>
+
+      <DirectApkShareModal
+        isOpen={isDirectApkShareModalOpen}
+        onClose={() => setIsDirectApkShareModalOpen(false)}
+      />
+
+      <OperationalHubSelectorModal
+        isOpen={isHubSelectorModalOpen}
+        onClose={() => setIsHubSelectorModalOpen(false)}
+      />
     </div>
   );
 };

@@ -629,8 +629,8 @@ export const ScannerAndSplitModule: React.FC = () => {
           ===================================================================== */}
       {!hasActiveOrder && (
         <>
-          <div className="grid grid-cols-2 gap-2.5">
-            {/* LEFT COMPACT CARD (GANHOS): ONLY €0,00 and 0 ent. badge — Click opens Detailed Earnings Modal */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* LEFT COMPACT CARD (GANHOS): Hero Number + Deliveries Badge — Click opens Detailed Earnings Modal */}
             <button
               type="button"
               onClick={() => {
@@ -640,17 +640,17 @@ export const ScannerAndSplitModule: React.FC = () => {
                 );
               }}
               title="Toque para abrir Resumo de Ganhos & Estatísticas de Hoje"
-              className={`rounded-2xl border px-3.5 py-3 flex items-center justify-between cursor-pointer transition shadow-xs ${
+              className={`rounded-3xl border px-4 py-3.5 flex items-center justify-between gap-2 cursor-pointer transition shadow-sm ${
                 isDaylight
                   ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900'
                   : 'bg-slate-800/95 hover:bg-slate-800 border-slate-700 text-slate-100'
               }`}
             >
-              <span className="text-xl font-black text-emerald-500 tracking-tight font-mono leading-none">
+              <span className="text-2xl font-extrabold text-emerald-500 tracking-tight leading-none">
                 {formatEurPt(earningsTodayByApp.total)}
               </span>
               <span
-                className={`text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-lg shrink-0 ${
+                className={`text-sm font-bold px-2.5 py-1 rounded-xl shrink-0 ${
                   isDaylight
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                     : 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/30'
@@ -660,31 +660,31 @@ export const ScannerAndSplitModule: React.FC = () => {
               </span>
             </button>
 
-            {/* RIGHT COMPACT CARD (CLIMA): ONLY weather icon + temperature + city — Click opens Weather Modal */}
+            {/* RIGHT COMPACT CARD (CLIMA): Weather icon + Hero Temperature + City — Click opens Weather Modal */}
             <button
               type="button"
               onClick={() => void openAndFetchAmaranteWeather(true)}
               title="Toque para abrir Clima Atual em Amarante e ouvir previsão"
-              className={`rounded-2xl border px-3.5 py-2.5 flex items-center justify-between gap-2 cursor-pointer transition shadow-xs ${
+              className={`rounded-3xl border px-4 py-3 flex items-center justify-between gap-2.5 cursor-pointer transition shadow-sm ${
                 isDaylight
                   ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900'
                   : 'bg-slate-800/95 hover:bg-slate-800 border-slate-700 text-slate-100'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <span className="text-2xl leading-none select-none shrink-0">
+                <span className="text-3xl leading-none select-none shrink-0">
                   {amaranteLiveWeather.conditionEmoji}
                 </span>
                 <div className="flex flex-col items-start text-left leading-tight">
                   <span
                     style={{ color: isDaylight ? '#0f172a' : '#f8fafc' }}
-                    className="text-base font-black tracking-tight font-mono leading-none whitespace-nowrap"
+                    className="text-xl font-extrabold tracking-tight leading-none whitespace-nowrap"
                   >
                     {amaranteLiveWeather.temperatureC.toFixed(1)} °C
                   </span>
                   <span
                     style={{ color: isDaylight ? '#334155' : '#cbd5e1' }}
-                    className="text-[11px] font-extrabold whitespace-nowrap mt-0.5"
+                    className="text-sm font-bold whitespace-nowrap mt-0.5"
                   >
                     Amarante
                   </span>
@@ -693,48 +693,48 @@ export const ScannerAndSplitModule: React.FC = () => {
             </button>
           </div>
 
-          {/* TOP SECTION: ÚLTIMA ENTREGA */}
-          <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800 p-3.5 space-y-2.5 shadow-sm">
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
-                <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-100">
-                  ÚLTIMA ENTREGA
+          {/* TOP SECTION: Última Entrega (Glovo Rider Rounded Style) */}
+          <section className="rounded-3xl bg-zinc-900/95 border border-zinc-800 p-4 space-y-3 shadow-sm">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+              <div className="flex items-center gap-2.5">
+                <span className="h-3 w-3 rounded-full bg-emerald-400 shrink-0" />
+                <h2 className="text-xl font-bold text-zinc-100">
+                  Última Entrega
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 text-[10px] font-bold text-zinc-100 flex items-center gap-1 cursor-pointer transition whitespace-nowrap"
+                className="rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 text-sm font-bold text-zinc-100 flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap"
               >
-                <Camera className="h-3 w-3 text-emerald-400 shrink-0" />
+                <Camera className="h-4 w-4 text-emerald-400 shrink-0" />
                 <span>📷 Ler Pedido</span>
               </button>
             </div>
 
             {earningsTodayByApp.lastDelivery ? (
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-2">
+              <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-3.5 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-extrabold text-emerald-300">
+                  <span className="inline-flex items-center rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 text-base font-bold text-emerald-300">
                     {earningsTodayByApp.lastDelivery.platform}
                   </span>
-                  <span className="text-sm font-mono font-black text-emerald-400">
+                  <span className="text-2xl font-extrabold text-emerald-400">
                     +{formatEurPt(earningsTodayByApp.lastDelivery.netProfitEur)}
                   </span>
                 </div>
-                <div className="text-xs font-bold text-zinc-100 truncate">
+                <div className="text-lg font-bold text-zinc-100 truncate">
                   {earningsTodayByApp.lastDelivery.segment}
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-900 font-mono">
+                <div className="flex items-center justify-between text-base text-zinc-400 pt-1.5 border-t border-zinc-900">
                   <span>
                     Distância:{' '}
-                    <strong className="text-zinc-200">
+                    <strong className="text-zinc-100 font-bold">
                       {earningsTodayByApp.lastDelivery.realKm.toFixed(1)} km
                     </strong>
                   </span>
                   <span>
-                    Rentabilidade:{' '}
-                    <strong className="text-emerald-400">
+                    Líquido:{' '}
+                    <strong className="text-emerald-400 font-bold">
                       {earningsTodayByApp.lastDelivery.netEurPerKm.toFixed(2)} €/km
                     </strong>
                   </span>
@@ -742,12 +742,12 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3.5 flex items-center justify-between gap-3">
+              <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-4 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold text-zinc-200">
+                  <p className="text-lg font-bold text-zinc-100">
                     Nenhuma entrega registada hoje
                   </p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                  <p className="text-base font-medium text-zinc-400 mt-1 leading-relaxed">
                     Assim que aceitar ou ler um pedido, entrará automaticamente em modo de entrega.
                   </p>
                 </div>
@@ -755,72 +755,72 @@ export const ScannerAndSplitModule: React.FC = () => {
             )}
           </section>
 
-          {/* BOTTOM SECTION: RESUMO DA ESTATÍSTICA DIÁRIA */}
-          <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800 p-3.5 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2">
-              <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-100">
-                RESUMO DA ESTATÍSTICA DIÁRIA
+          {/* BOTTOM SECTION: Estatística Diária (Glovo Rider Rounded Style) */}
+          <section className="rounded-3xl bg-zinc-900/95 border border-zinc-800 p-4 space-y-3.5 shadow-sm">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+              <h2 className="text-xl font-bold text-zinc-100">
+                Estatística Diária
               </h2>
               <button
                 type="button"
                 onClick={() => setIsEarningsModalOpen(true)}
-                className="text-[10px] font-extrabold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                className="text-base font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
               >
                 Ver por App →
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
-                <span className="text-[10px] font-bold uppercase text-zinc-400 block">
-                  ENTREGAS CONCLUÍDAS
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-3.5">
+                <span className="text-base font-medium text-zinc-400 block">
+                  Entregas concluídas
                 </span>
-                <span className="text-sm font-mono font-extrabold text-zinc-100 mt-0.5 block">
+                <span className="text-xl font-extrabold text-zinc-100 mt-1 block">
                   {realCompletedDeliveries.length} entregas
                 </span>
               </div>
 
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
-                <span className="text-[10px] font-bold uppercase text-zinc-400 block">
-                  KM RODADOS HOJE
+              <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-3.5">
+                <span className="text-base font-medium text-zinc-400 block">
+                  Distância hoje
                 </span>
-                <span className="text-sm font-mono font-extrabold text-zinc-100 mt-0.5 block">
+                <span className="text-xl font-extrabold text-zinc-100 mt-1 block">
                   {earningsTodayByApp.totalKm.toFixed(1)} km
                 </span>
               </div>
 
-              <div className="rounded-xl bg-zinc-950 border border-emerald-500/30 p-2.5">
-                <span className="text-[10px] font-extrabold uppercase text-emerald-400 block">
-                  MÉDIA LÍQUIDA € / KM
+              <div className="rounded-2xl bg-zinc-950 border border-emerald-500/30 p-3.5">
+                <span className="text-base font-bold text-emerald-400 block">
+                  Média líquida €/km
                 </span>
-                <span className="text-sm font-mono font-black text-emerald-400 mt-0.5 block">
+                <span className="text-xl font-extrabold text-emerald-400 mt-1 block">
                   {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')} €/km
                 </span>
               </div>
 
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-2.5">
-                <span className="text-[10px] font-bold uppercase text-zinc-400 block">
-                  MÉDIA € / HORA
+              <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-3.5">
+                <span className="text-base font-medium text-zinc-400 block">
+                  Média por hora
                 </span>
-                <span className="text-sm font-mono font-extrabold text-amber-400 mt-0.5 block">
+                <span className="text-xl font-extrabold text-amber-400 mt-1 block">
                   {earningsTodayByApp.avgHourlyEur.toFixed(2).replace('.', ',')} €/h
                 </span>
               </div>
             </div>
 
             {/* Progresso da Meta Diária */}
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-zinc-300">
-                  Progresso da Meta Diária
+            <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-3.5 space-y-2">
+              <div className="flex items-center justify-between text-base">
+                <span className="font-bold text-zinc-200">
+                  Meta Diária
                 </span>
-                <span className="font-mono font-extrabold text-emerald-400">
+                <span className="font-extrabold text-emerald-400">
                   {formatEurPt(earningsTodayByApp.total)} /{' '}
                   {formatEurPt(earningsTodayByApp.goalTargetEur)} (
                   {earningsTodayByApp.goalProgressPct}%)
                 </span>
               </div>
-              <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+              <div className="w-full h-3 rounded-full bg-zinc-800 overflow-hidden">
                 <div
                   style={{ width: `${earningsTodayByApp.goalProgressPct}%` }}
                   className="h-full rounded-full bg-emerald-500 transition-all duration-300"
@@ -832,7 +832,7 @@ export const ScannerAndSplitModule: React.FC = () => {
       )}
 
       {/* =====================================================================
-          DETAILED EARNINGS MODAL (Full-Height 88vh–92vh + Tap-Anywhere to Mute + Large Fechar Resumo)
+          DETAILED EARNINGS MODAL (Full-Height 88vh–92vh + Glovo Typography + Tap-Anywhere to Mute)
           ===================================================================== */}
       {isEarningsModalOpen && (
         <div
@@ -844,7 +844,7 @@ export const ScannerAndSplitModule: React.FC = () => {
           }}
         >
           <div
-            className="w-full max-w-md min-h-[88vh] max-h-[92vh] overflow-y-auto rounded-3xl bg-slate-950 border-2 border-emerald-500/45 p-5 text-white shadow-2xl flex flex-col justify-between gap-3.5 cursor-pointer"
+            className="w-full max-w-md min-h-[88vh] max-h-[92vh] overflow-y-auto rounded-3xl bg-slate-950 border-2 border-emerald-500/45 p-5 text-white shadow-2xl flex flex-col justify-between gap-4 cursor-pointer"
             onClick={(e) => {
               e.stopPropagation();
               stopBuddySpeech();
@@ -852,17 +852,17 @@ export const ScannerAndSplitModule: React.FC = () => {
             }}
             title="Toque em qualquer área deste quadro para silenciar a voz imediatamente"
           >
-            <div className="space-y-3.5">
+            <div className="space-y-4">
               {/* Header */}
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                    💰 Contabilidade Diária em Tempo Real
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 text-sm font-bold text-emerald-300">
+                    💰 Contabilidade Diária
                   </span>
-                  <h3 className="text-lg font-black text-white mt-1.5 leading-snug">
-                    Resumo de Ganhos &amp; Estatísticas de Hoje
+                  <h3 className="text-2xl font-extrabold text-white mt-1.5 leading-snug">
+                    Resumo de Ganhos
                   </h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                  <p className="text-base font-medium text-slate-300 mt-0.5">
                     🔇 Toque em qualquer parte do quadro para calar a fala
                   </p>
                 </div>
@@ -874,109 +874,109 @@ export const ScannerAndSplitModule: React.FC = () => {
                     cancelSpeechNow();
                     setIsEarningsModalOpen(false);
                   }}
-                  className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 px-3 py-1.5 text-sm font-black text-slate-200 cursor-pointer shrink-0"
+                  className="rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 px-3.5 py-2 text-lg font-extrabold text-slate-200 cursor-pointer shrink-0"
                 >
                   ✕
                 </button>
               </div>
 
               {/* 1. Lucro Líquido Total + Bruto vs. Combustível/Desgaste */}
-              <div className="rounded-2xl bg-slate-900/95 border border-emerald-500/35 p-4 flex items-center justify-between gap-3 shadow-md">
+              <div className="rounded-3xl bg-slate-900/95 border border-emerald-500/35 p-4 flex items-center justify-between gap-3 shadow-md">
                 <div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-300 block">
-                    Lucro Líquido Total Hoje
+                  <span className="text-base font-bold text-emerald-300 block">
+                    Lucro Líquido Hoje
                   </span>
-                  <span className="text-3xl font-black text-emerald-400 font-mono leading-tight block mt-0.5">
+                  <span className="text-3xl font-extrabold text-emerald-400 leading-tight block mt-1">
                     {formatEurPt(earningsTodayByApp.total)}
                   </span>
                 </div>
-                <div className="text-right font-mono text-xs space-y-1">
-                  <div className="text-slate-200">
+                <div className="text-right text-base space-y-1">
+                  <div className="text-slate-200 font-medium">
                     Bruto:{' '}
-                    <strong className="text-white">
+                    <strong className="text-white font-extrabold">
                       {formatEurPt(earningsTodayByApp.totalGross)}
                     </strong>
                   </div>
-                  <div className="text-rose-400">
-                    Desgaste/Combustível:{' '}
-                    <strong>
+                  <div className="text-rose-400 font-medium">
+                    Custos:{' '}
+                    <strong className="font-extrabold">
                       -{formatEurPt(earningsTodayByApp.fuelCostDeducted)}
                     </strong>
                   </div>
                 </div>
               </div>
 
-              {/* 2. Ganhos Separados por Plataforma */}
-              <div className="rounded-2xl bg-slate-900/85 border border-slate-800 p-4 space-y-2.5 text-xs">
+              {/* 2. Ganhos por Plataforma */}
+              <div className="rounded-3xl bg-slate-900/85 border border-slate-800 p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                    Ganhos Separados por Plataforma
+                  <span className="text-lg font-bold text-slate-200">
+                    Ganhos por Plataforma
                   </span>
-                  <span className="text-[10px] font-mono font-bold text-emerald-400">
-                    Líquido Auditado
+                  <span className="text-sm font-bold text-emerald-400">
+                    Valor Líquido
                   </span>
                 </div>
-                <div className="flex items-center justify-between py-1.5 border-b border-slate-800/90">
-                  <span className="font-extrabold text-slate-100 flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                <div className="flex items-center justify-between py-2 border-b border-slate-800/90">
+                  <span className="text-lg font-bold text-slate-100 flex items-center gap-2.5">
+                    <span className="h-3 w-3 rounded-full bg-emerald-400" />
                     Uber Eats
                   </span>
-                  <span className="font-mono text-sm font-black text-white">
+                  <span className="text-xl font-extrabold text-white">
                     {formatEurPt(earningsTodayByApp.uber)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between py-1.5 border-b border-slate-800/90">
-                  <span className="font-extrabold text-slate-100 flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-amber-400" />
+                <div className="flex items-center justify-between py-2 border-b border-slate-800/90">
+                  <span className="text-lg font-bold text-slate-100 flex items-center gap-2.5">
+                    <span className="h-3 w-3 rounded-full bg-amber-400" />
                     Glovo
                   </span>
-                  <span className="font-mono text-sm font-black text-white">
+                  <span className="text-xl font-extrabold text-white">
                     {formatEurPt(earningsTodayByApp.glovo)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between py-1.5">
-                  <span className="font-extrabold text-slate-100 flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-sky-400" />
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-lg font-bold text-slate-100 flex items-center gap-2.5">
+                    <span className="h-3 w-3 rounded-full bg-sky-400" />
                     Bolt Food
                   </span>
-                  <span className="font-mono text-sm font-black text-white">
+                  <span className="text-xl font-extrabold text-white">
                     {formatEurPt(earningsTodayByApp.bolt)}
                   </span>
                 </div>
               </div>
 
               {/* 3. 4-Card KPI Grid: Entregas, KM Rodados, Média €/km, Ritmo €/h */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                    Entregas Concluídas
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3.5">
+                  <span className="text-base font-medium text-slate-400 block">
+                    Entregas hoje
                   </span>
-                  <span className="text-base font-mono font-black text-white mt-0.5 block">
+                  <span className="text-xl font-extrabold text-white mt-1 block">
                     {realCompletedDeliveries.length} entregas
                   </span>
                 </div>
-                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                    KM Rodados Hoje
+                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3.5">
+                  <span className="text-base font-medium text-slate-400 block">
+                    Distância hoje
                   </span>
-                  <span className="text-base font-mono font-black text-white mt-0.5 block">
+                  <span className="text-xl font-extrabold text-white mt-1 block">
                     {earningsTodayByApp.totalKm.toFixed(1)} km
                   </span>
                 </div>
-                <div className="rounded-2xl bg-slate-900 border border-emerald-500/35 p-3">
-                  <span className="text-[10px] font-extrabold uppercase text-emerald-400 block">
-                    Média Líquida €/km
+                <div className="rounded-2xl bg-slate-900 border border-emerald-500/35 p-3.5">
+                  <span className="text-base font-bold text-emerald-400 block">
+                    Média Líquida
                   </span>
-                  <span className="text-base font-mono font-black text-emerald-400 mt-0.5 block">
+                  <span className="text-xl font-extrabold text-emerald-400 mt-1 block">
                     {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')}{' '}
                     €/km
                   </span>
                 </div>
-                <div className="rounded-2xl bg-slate-900 border border-amber-500/30 p-3">
-                  <span className="text-[10px] font-extrabold uppercase text-amber-400 block">
-                    Ritmo €/hora
+                <div className="rounded-2xl bg-slate-900 border border-amber-500/30 p-3.5">
+                  <span className="text-base font-bold text-amber-400 block">
+                    Média por Hora
                   </span>
-                  <span className="text-base font-mono font-black text-amber-400 mt-0.5 block">
+                  <span className="text-xl font-extrabold text-amber-400 mt-1 block">
                     {earningsTodayByApp.avgHourlyEur.toFixed(2).replace('.', ',')}{' '}
                     €/h
                   </span>
@@ -984,36 +984,36 @@ export const ScannerAndSplitModule: React.FC = () => {
               </div>
 
               {/* 4. Meta Diária % + Última Entrega */}
-              <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-3.5 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-extrabold text-slate-200">
+              <div className="rounded-3xl bg-slate-900/90 border border-slate-800 p-4 space-y-2.5">
+                <div className="flex items-center justify-between text-base">
+                  <span className="font-bold text-slate-200">
                     🎯 Meta Diária ({earningsTodayByApp.goalProgressPct}%)
                   </span>
-                  <span className="font-mono font-black text-emerald-400">
+                  <span className="font-extrabold text-emerald-400">
                     {formatEurPt(earningsTodayByApp.total)} /{' '}
                     {formatEurPt(earningsTodayByApp.goalTargetEur)}
                   </span>
                 </div>
-                <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                <div className="w-full h-3 rounded-full bg-slate-800 overflow-hidden">
                   <div
                     style={{ width: `${earningsTodayByApp.goalProgressPct}%` }}
                     className="h-full rounded-full bg-emerald-500 transition-all duration-300"
                   />
                 </div>
                 {earningsTodayByApp.lastDelivery ? (
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2 text-base">
                     <span className="text-slate-300 truncate">
                       Última ({earningsTodayByApp.lastDelivery.platform}):{' '}
-                      <strong className="text-white">
+                      <strong className="text-white font-bold">
                         {earningsTodayByApp.lastDelivery.segment}
                       </strong>
                     </span>
-                    <span className="font-mono font-black text-emerald-400 shrink-0">
+                    <span className="font-extrabold text-emerald-400 shrink-0">
                       +{formatEurPt(earningsTodayByApp.lastDelivery.netProfitEur)}
                     </span>
                   </div>
                 ) : (
-                  <div className="pt-1.5 text-[11px] text-slate-400">
+                  <div className="pt-1.5 text-base font-medium text-slate-400">
                     Última entrega: Nenhuma entrega registada no turno de hoje.
                   </div>
                 )}
@@ -1029,7 +1029,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 cancelSpeechNow();
                 setIsEarningsModalOpen(false);
               }}
-              className="py-4 text-base font-bold rounded-2xl w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg cursor-pointer transition active:scale-[0.99]"
+              className="py-4 text-lg font-extrabold rounded-2xl w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg cursor-pointer transition active:scale-[0.99]"
             >
               Fechar Resumo
             </button>

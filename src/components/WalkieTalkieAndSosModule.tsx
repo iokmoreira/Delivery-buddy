@@ -23,6 +23,7 @@ import {
 import { BuddyChallengePeriod, WalkieChannelId } from '../types/models';
 import { WALKIE_QUICK_MACROS } from '../data/seedData';
 import { useEstafetas } from '../context/EstafetasContext';
+import { DirectApkShareModal } from './ShiftRadarModule';
 
 export const WalkieTalkieAndSosModule: React.FC = () => {
   const {
@@ -77,6 +78,8 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
   const [selectedChallengePeriod, setSelectedChallengePeriod] =
     useState<BuddyChallengePeriod>('PROXIMAS_3H');
+  const [isDirectApkShareModalOpen, setIsDirectApkShareModalOpen] =
+    useState<boolean>(false);
 
   const isDaylight = themeMode === 'DAYLIGHT';
 
@@ -686,22 +689,30 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
               : 'Novo Dispositivo: Toque em "Editar Meu Perfil / Registo" para entrar online'}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsDirectApkShareModalOpen(true)}
+            style={{ backgroundColor: '#0284c7', color: '#ffffff' }}
+            className="rounded-lg px-2.5 py-1.5 text-base font-extrabold flex items-center gap-1 cursor-pointer transition shadow-sm"
+          >
+            <span>📲 Enviar App a um Colega</span>
+          </button>
           <button
             type="button"
             onClick={refreshLiveGpsPosition}
-            className="rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 px-2 py-1 text-[10px] font-bold text-zinc-200 flex items-center gap-1 cursor-pointer transition"
+            className="rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 px-2.5 py-1.5 text-base font-bold text-zinc-200 flex items-center gap-1 cursor-pointer transition"
           >
-            <RefreshCw className="h-3 w-3 text-emerald-400" />
+            <RefreshCw className="h-3.5 w-3.5 text-emerald-400" />
             <span>GPS</span>
           </button>
           <button
             type="button"
             onClick={() => setIsCourierRegistrationModalOpen(true)}
-            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition"
+            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 text-base font-extrabold flex items-center gap-1 cursor-pointer transition"
           >
-            <UserCheck className="h-3 w-3" />
-            <span>Editar Meu Perfil / Registo</span>
+            <UserCheck className="h-3.5 w-3.5" />
+            <span>Editar Meu Perfil</span>
           </button>
         </div>
       </div>
@@ -1442,6 +1453,11 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
           </div>
         </section>
       )}
+
+      <DirectApkShareModal
+        isOpen={isDirectApkShareModalOpen}
+        onClose={() => setIsDirectApkShareModalOpen(false)}
+      />
     </div>
   );
 };

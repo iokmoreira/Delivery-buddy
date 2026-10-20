@@ -1739,20 +1739,19 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
             }}
             title="Toque em qualquer área deste quadro para silenciar a voz imediatamente"
           >
-            <div className="space-y-3.5">
+            <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 text-base font-bold text-emerald-300">
                     🌦️ Open-Meteo Tempo Real • Amarante
                   </span>
-                  <h3 className="text-lg font-black text-white mt-1.5">
+                  <h3 className="text-2xl font-extrabold text-white mt-2">
                     Clima Atual em Amarante
                   </h3>
-                  <p className="text-xs text-slate-400">
-                    Atualizado às {amaranteLiveWeather.updatedAt} • Lat 41.2704,
-                    Lng -8.0818
+                  <p className="text-base font-medium text-slate-300 mt-0.5">
+                    Atualizado às {amaranteLiveWeather.updatedAt} • Raio 35 km
                   </p>
-                  <p className="text-[11px] text-emerald-300/90 mt-0.5 font-semibold">
+                  <p className="text-base text-emerald-300 mt-1 font-bold">
                     🔇 Toque em qualquer parte do quadro para calar a fala
                   </p>
                 </div>
@@ -1764,10 +1763,10 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                     cancelSpeechNow();
                     setIsAmaranteWeatherModalOpen(false);
                   }}
-                  className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 text-slate-300 cursor-pointer shrink-0"
+                  className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2.5 text-slate-300 cursor-pointer shrink-0"
                   aria-label="Fechar Clima de Amarante"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
@@ -1778,43 +1777,43 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                     {amaranteLiveWeather.conditionEmoji}
                   </span>
                   <div>
-                    <div className="text-3xl font-black text-white font-mono">
+                    <div className="text-3xl font-extrabold text-white">
                       {isLoadingAmaranteWeather
                         ? '...'
                         : `${amaranteLiveWeather.temperatureC.toFixed(1)} °C`}
                     </div>
-                    <div className="text-xs font-extrabold text-emerald-300 mt-0.5">
+                    <div className="text-lg font-bold text-emerald-300 mt-0.5">
                       {amaranteLiveWeather.conditionLabel}
                     </div>
                   </div>
                 </div>
-                <div className="text-right space-y-1.5">
-                  <div className="rounded-xl bg-slate-950 border border-slate-800 px-3 py-1.5 text-xs font-bold text-sky-300">
+                <div className="text-right space-y-2">
+                  <div className="rounded-xl bg-slate-950 border border-slate-800 px-3.5 py-2 text-lg font-bold text-sky-300">
                     💧 Chuva: {amaranteLiveWeather.rainMm.toFixed(1)} mm
                   </div>
-                  <div className="rounded-xl bg-slate-950 border border-slate-800 px-3 py-1.5 text-xs font-bold text-slate-200">
+                  <div className="rounded-xl bg-slate-950 border border-slate-800 px-3.5 py-2 text-lg font-bold text-slate-100">
                     💨 Vento: {amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h
                   </div>
                 </div>
               </div>
 
               {/* Road & Safety Telemetry for Couriers in Amarante */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3.5">
+                  <span className="text-base font-bold text-slate-300 block">
                     Estado do Piso (Amarante)
                   </span>
-                  <span className="text-sm font-extrabold text-white mt-0.5 block">
+                  <span className="text-lg font-extrabold text-white mt-1 block">
                     {amaranteLiveWeather.rainMm > 0
                       ? '🌧️ Calçada Molhada / Escorregadia'
                       : '🛣️ Piso Seco • Aderência Normal'}
                   </span>
                 </div>
-                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3.5">
+                  <span className="text-base font-bold text-slate-300 block">
                     Visibilidade &amp; Vento
                   </span>
-                  <span className="text-sm font-extrabold text-emerald-400 mt-0.5 block">
+                  <span className="text-lg font-extrabold text-emerald-400 mt-1 block">
                     {amaranteLiveWeather.windSpeedKmh > 28
                       ? '⚠️ Rajadas na Ponte S. Gonçalo'
                       : '✓ Boa Visibilidade em Rota'}
@@ -1825,10 +1824,10 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
               {/* 1-Tap Rain Bonus Toggle in Finanças */}
               <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-xs font-extrabold text-white">
+                  <div className="text-lg font-extrabold text-white">
                     ☔ Modo Chuva / Bónus de Chuva (Finanças)
                   </div>
-                  <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
+                  <p className="text-base font-medium text-slate-300 leading-snug mt-1">
                     Ativa o suplemento de piso molhado nas metas e cálculos de
                     lucro €/km.
                   </p>
@@ -1841,7 +1840,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                     cancelSpeechNow();
                     toggleRainBonusFinanceActive();
                   }}
-                  className={`shrink-0 rounded-xl px-4 py-2.5 text-xs font-extrabold transition cursor-pointer border ${
+                  className={`shrink-0 rounded-xl px-4 py-3 text-base font-extrabold transition cursor-pointer border ${
                     rainBonusFinanceActive
                       ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
                       : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
@@ -1852,7 +1851,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
               </div>
 
               {/* Audio & Refresh Actions */}
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-2 gap-3">
                 {isSpeakingTts ? (
                   <button
                     type="button"
@@ -1862,9 +1861,9 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                       cancelSpeechNow();
                     }}
                     style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
-                    className="rounded-xl border border-red-400 py-3 px-3 text-xs font-black text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="rounded-xl border border-red-400 py-3.5 px-3 text-base font-extrabold text-white flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <VolumeX className="h-4 w-4" />
+                    <VolumeX className="h-5 w-5" />
                     <span>🔇 Parar Fala</span>
                   </button>
                 ) : (
@@ -1880,9 +1879,9 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                         `Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}${rainNote}.`
                       );
                     }}
-                    className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-3 px-3 text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-3.5 px-3 text-base font-bold text-white flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Volume2 className="h-4 w-4 text-emerald-400" />
+                    <Volume2 className="h-5 w-5 text-emerald-400" />
                     <span>Ouvir em Voz Alta</span>
                   </button>
                 )}
@@ -1892,7 +1891,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                     e.stopPropagation();
                     void openAndFetchAmaranteWeather(true);
                   }}
-                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-emerald-500/40 py-3 px-3 text-xs font-extrabold text-emerald-300 flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-emerald-500/40 py-3.5 px-3 text-base font-extrabold text-emerald-300 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span>🔄 Atualizar Agora</span>
                 </button>
@@ -1908,7 +1907,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                 cancelSpeechNow();
                 setIsAmaranteWeatherModalOpen(false);
               }}
-              className="py-4 text-base font-bold rounded-2xl w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg cursor-pointer transition active:scale-[0.99]"
+              className="py-4 text-lg font-extrabold rounded-2xl w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg cursor-pointer transition active:scale-[0.99]"
             >
               Fechar Clima
             </button>

@@ -14,82 +14,295 @@ import 'leaflet/dist/leaflet.css';
 import {
   MapRadiusOptionKm,
   OnlineDirectoryCourier,
-  PortugalRegionName,
   RoadHazardType,
 } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
 
-export const MapRadiusSettingsSection: React.FC = () => {
-  const {
-    mapRadiusKm,
-    setMapRadiusKm,
-    selectedRegionName,
-    setSelectedRegionName,
-    regionalExplorerList,
-  } = useEstafetas();
+const AMARANTE_HUB_CENTER = {
+  lat: 41.2704,
+  lng: -8.0818,
+};
 
-  const radiusOptions: MapRadiusOptionKm[] = [5, 15, 25, 30, 50];
+const AMARANTE_35KM_RADIUS_METERS = 35000;
+const AMARANTE_35KM_BOUNDS: [[number, number], [number, number]] = [
+  [AMARANTE_HUB_CENTER.lat - 0.315, AMARANTE_HUB_CENTER.lng - 0.42],
+  [AMARANTE_HUB_CENTER.lat + 0.315, AMARANTE_HUB_CENTER.lng + 0.42],
+];
+
+const getDistanceKmFromAmaranteHub = (lat: number, lng: number): number => {
+  const dLatRad = ((lat - AMARANTE_HUB_CENTER.lat) * Math.PI) / 180;
+  const dLngRad = ((lng - AMARANTE_HUB_CENTER.lng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
+    Math.cos((AMARANTE_HUB_CENTER.lat * Math.PI) / 180) *
+      Math.cos((lat * Math.PI) / 180) *
+      Math.sin(dLngRad / 2) *
+      Math.sin(dLngRad / 2);
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+export const OperationalHubSelectorModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+}> = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  const upcomingCenters = [
+    { name: 'Porto & Grande Porto', radius: 'Raio 35 km' },
+    { name: 'Guimarães / Braga', radius: 'Raio 35 km' },
+    { name: 'Vila Real & Douro', radius: 'Raio 35 km' },
+    { name: 'Viseu / Coimbra', radius: 'Raio 35 km' },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-[600] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-3xl bg-zinc-900 border-2 border-emerald-500/45 p-5 space-y-4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 px-3 py-1 text-base font-bold text-emerald-300">
+              📍 Raio Operacional Regional
+            </span>
+            <h3 className="text-xl font-extrabold text-white mt-2">
+              Selecionar Centro Operacional (35 km)
+            </h3>
+            <p className="text-base font-medium text-zinc-400 mt-0.5">
+              O mapa e os alertas ficam focados num raio de 35 km em redor da cidade ativa.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 p-2 text-zinc-300 cursor-pointer shrink-0"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-2.5">
+          {/* Active Hub: Amarante */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-2xl bg-emerald-500/15 border-2 border-emerald-500 p-4 text-left flex items-center justify-between gap-3 cursor-pointer shadow-md"
+          >
+            <div>
+              <div className="text-lg font-extrabold text-white flex items-center gap-2">
+                <span>🟢 Amarante &amp; Tâmega</span>
+              </div>
+              <p className="text-base font-bold text-emerald-300 mt-0.5">
+                Ativo — Raio 35 km (Bloqueio Regional)
+              </p>
+            </div>
+            <span className="rounded-xl bg-emerald-500 text-zinc-950 px-3 py-1.5 text-base font-extrabold shrink-0">
+              Ativo ✓
+            </span>
+          </button>
+
+          {/* Future Centers */}
+          {upcomingCenters.map((hub) => (
+            <div
+              key={hub.name}
+              className="w-full rounded-2xl bg-zinc-950/90 border border-zinc-800 p-3.5 text-left flex items-center justify-between gap-3 opacity-80"
+            >
+              <div>
+                <div className="text-lg font-bold text-zinc-200">
+                  🔒 {hub.name}
+                </div>
+                <p className="text-base font-medium text-zinc-400">
+                  {hub.radius} • Expansão Regional
+                </p>
+              </div>
+              <span className="rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-300 px-3 py-1 text-base font-bold shrink-0">
+                Em breve
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full rounded-2xl py-3.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-extrabold text-lg cursor-pointer transition"
+        >
+          Confirmar Centro: Amarante (35 km)
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export const DIRECT_APK_DOWNLOAD_URL =
+  'https://iokmoreira.github.io/Delivery-buddy/Delivery-Buddy-Amarante.apk';
+
+export const DirectApkShareModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+}> = ({ isOpen, onClose }) => {
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+
+  if (!isOpen) return null;
+
+  const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(
+    `🤖 Delivery Buddy (Amarante) — Clica aqui para baixar a App direta (.APK sem .ZIP) para Android: ${DIRECT_APK_DOWNLOAD_URL}`
+  )}`;
+
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=10&data=${encodeURIComponent(
+    DIRECT_APK_DOWNLOAD_URL
+  )}`;
+
+  const handleCopyDirectLink = async () => {
+    try {
+      await navigator.clipboard.writeText(DIRECT_APK_DOWNLOAD_URL);
+      setCopiedLink(true);
+      window.setTimeout(() => setCopiedLink(false), 3000);
+    } catch {
+      setCopiedLink(true);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[700] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-3xl bg-zinc-900 border-2 border-emerald-500/50 p-5 space-y-4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 px-3 py-1 text-base font-bold text-emerald-300">
+              📲 Download Direto .APK (Sem .ZIP)
+            </span>
+            <h3 className="text-xl font-extrabold text-white mt-2">
+              Enviar App a um Colega
+            </h3>
+            <p className="text-base font-medium text-zinc-400 mt-0.5">
+              Aponte a câmara para o QR Code ou envie o link direto pelo WhatsApp.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 p-2 text-zinc-300 cursor-pointer shrink-0"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Scannable QR Code Card */}
+        <div className="rounded-2xl bg-white p-4 flex flex-col items-center justify-center text-center shadow-lg">
+          <img
+            src={qrImageUrl}
+            alt="QR Code Delivery-Buddy-Amarante.apk"
+            className="w-48 h-48 object-contain rounded-xl"
+          />
+          <span className="text-base font-extrabold text-zinc-900 mt-2">
+            Delivery-Buddy-Amarante.apk
+          </span>
+          <span className="text-sm font-bold text-emerald-700">
+            1 Toque → Baixar e Instalar Direto no Android
+          </span>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="space-y-2.5">
+          <a
+            href={whatsappShareUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ backgroundColor: '#16a34a', color: '#ffffff' }}
+            className="w-full rounded-2xl py-3.5 px-4 text-lg font-extrabold flex items-center justify-center gap-2 shadow-lg cursor-pointer no-underline transition hover:opacity-95"
+          >
+            <span>🟢 Enviar pelo WhatsApp</span>
+          </a>
+
+          <a
+            href={DIRECT_APK_DOWNLOAD_URL}
+            download="Delivery-Buddy-Amarante.apk"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ backgroundColor: '#0284c7', color: '#ffffff' }}
+            className="w-full rounded-2xl py-3.5 px-4 text-lg font-extrabold flex items-center justify-center gap-2 shadow-lg cursor-pointer no-underline transition hover:opacity-95"
+          >
+            <span>⬇️ Baixar APK Direto (Sem .ZIP)</span>
+          </a>
+
+          <button
+            type="button"
+            onClick={() => void handleCopyDirectLink()}
+            className="w-full rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white py-3.5 px-4 text-lg font-bold flex items-center justify-center gap-2 cursor-pointer transition"
+          >
+            <span>
+              {copiedLink
+                ? '✅ Link Direto Copiado!'
+                : '📋 Copiar Link Direto (.APK)'}
+            </span>
+          </button>
+        </div>
+
+        <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 text-center">
+          <span className="text-sm font-bold text-emerald-400 break-all block">
+            {DIRECT_APK_DOWNLOAD_URL}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const MapRadiusSettingsSection: React.FC = () => {
+  const { setMapRadiusKm } = useEstafetas();
+  const [isHubModalOpen, setIsHubModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    setMapRadiusKm(35 as MapRadiusOptionKm);
+  }, [setMapRadiusKm]);
 
   return (
     <section className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4 space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div>
-          <h3 className="text-xs font-bold text-zinc-100">
-            Raio do Mapa (km) &amp; Região Operacional
+          <h3 className="text-lg font-extrabold text-zinc-100">
+            Centro Operacional &amp; Raio do Mapa
           </h3>
-          <p className="text-[11px] text-zinc-400">
-            Predefinição padrão bloqueada em Amarante (Raio de 25 km)
+          <p className="text-base font-medium text-zinc-400">
+            Mapa e alertas bloqueados num perímetro regional de 35 km
           </p>
         </div>
-        <span className="rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1 text-xs font-mono font-bold text-emerald-500">
-          {mapRadiusKm} km
+        <span className="rounded-xl bg-emerald-500/15 border border-emerald-500/40 px-3 py-1.5 text-base font-extrabold text-emerald-400 shrink-0">
+          35 km
         </span>
       </div>
 
-      <div>
-        <label className="text-[11px] text-zinc-400 block mb-1">
-          Região Ativa no Mapa
-        </label>
-        <select
-          aria-label="Selecionar Região"
-          value={selectedRegionName}
-          onChange={(e) =>
-            setSelectedRegionName(e.target.value as PortugalRegionName)
-          }
-          className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-100"
-        >
-          {regionalExplorerList.map((r) => (
-            <option key={r.regionName} value={r.regionName}>
-              {r.regionName} ({r.avgEurPerKm.toFixed(2)} €/km)
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <span className="text-[11px] text-zinc-400 block mb-1.5">
-          Selecionar Raio de Alcance (km)
-        </span>
-        <div className="grid grid-cols-5 gap-1.5">
-          {radiusOptions.map((km) => {
-            const active = mapRadiusKm === km;
-            return (
-              <button
-                key={km}
-                type="button"
-                onClick={() => setMapRadiusKm(km)}
-                className={`rounded-xl py-2 text-xs font-semibold transition cursor-pointer ${
-                  active
-                    ? 'bg-white text-zinc-950 shadow-xs'
-                    : 'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:text-zinc-100'
-                }`}
-              >
-                {km} km
-              </button>
-            );
-          })}
+      <button
+        type="button"
+        onClick={() => setIsHubModalOpen(true)}
+        className="w-full rounded-2xl bg-zinc-950 hover:bg-zinc-900 border-2 border-emerald-500/45 p-3.5 flex items-center justify-between gap-2 cursor-pointer transition"
+      >
+        <div className="text-left">
+          <span className="text-lg font-extrabold text-white block">
+            📍 Centro: Amarante (Raio 35 km)
+          </span>
+          <span className="text-base font-medium text-emerald-400 block mt-0.5">
+            Toque para ver centros operacionais disponíveis
+          </span>
         </div>
-      </div>
+        <span className="rounded-xl bg-emerald-500 text-zinc-950 px-3 py-1.5 text-base font-extrabold shrink-0">
+          Alterar
+        </span>
+      </button>
+
+      <OperationalHubSelectorModal
+        isOpen={isHubModalOpen}
+        onClose={() => setIsHubModalOpen(false)}
+      />
     </section>
   );
 };
@@ -429,6 +642,8 @@ export const ShiftRadarModule: React.FC = () => {
   const isDaylight = themeMode === 'DAYLIGHT';
 
   const [mapStyleMode, setMapStyleMode] = useState<'RUAS' | 'SATELITE'>('RUAS');
+  const [isHubSelectorModalOpen, setIsHubSelectorModalOpen] =
+    useState<boolean>(false);
   const [isAutoFollowActive, setIsAutoFollowActive] = useState<boolean>(true);
   const [liveAccuracyMeters, setLiveAccuracyMeters] = useState<number>(12);
   const [localLiveCoords, setLocalLiveCoords] = useState<{
@@ -718,7 +933,8 @@ export const ShiftRadarModule: React.FC = () => {
         typeof c.lat === 'number' &&
         typeof c.lng === 'number' &&
         Number.isFinite(c.lat) &&
-        Number.isFinite(c.lng)
+        Number.isFinite(c.lng) &&
+        getDistanceKmFromAmaranteHub(c.lat, c.lng) <= 35
       );
     });
   }, [onlineDirectoryCouriers, realCourierProfile?.id, realCourierProfile?.name]);
@@ -735,25 +951,44 @@ export const ShiftRadarModule: React.FC = () => {
     [setActiveBuddyPopupCourierId]
   );
 
-  // Initialize Leaflet Map once with Free Key-Free OpenStreetMap Tiles
+  // Initialize Leaflet Map once with Free Key-Free OpenStreetMap Tiles & 35 km Regional Hub Lock
   useEffect(() => {
     if (!mapContainerRef.current || leafletMapRef.current) return;
 
-    const initialCenter: [number, number] = localLiveCoords
-      ? [localLiveCoords.lat, localLiveCoords.lng]
-      : [AMARANTE_INITIAL_VIEW_CENTER.lat, AMARANTE_INITIAL_VIEW_CENTER.lng];
+    const initialCenter: [number, number] =
+      localLiveCoords &&
+      getDistanceKmFromAmaranteHub(localLiveCoords.lat, localLiveCoords.lng) <=
+        35
+        ? [localLiveCoords.lat, localLiveCoords.lng]
+        : [AMARANTE_INITIAL_VIEW_CENTER.lat, AMARANTE_INITIAL_VIEW_CENTER.lng];
 
     const map = L.map(mapContainerRef.current, {
       center: initialCenter,
-      zoom: localLiveCoords ? 17 : 15,
+      zoom: localLiveCoords ? 16 : 14,
+      minZoom: 10,
+      maxZoom: 19,
+      maxBounds: AMARANTE_35KM_BOUNDS,
+      maxBoundsViscosity: 1.0,
       zoomControl: false,
       attributionControl: false,
     });
 
     const initialTileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
     const tileLayer = L.tileLayer(initialTileUrl, {
+      minZoom: 10,
       maxZoom: 19,
       subdomains: 'abc',
+    }).addTo(map);
+
+    // Subtle emerald 35 km regional perimeter circle around Amarante Hub
+    L.circle([AMARANTE_HUB_CENTER.lat, AMARANTE_HUB_CENTER.lng], {
+      radius: AMARANTE_35KM_RADIUS_METERS,
+      color: '#10b981',
+      weight: 2,
+      dashArray: '8 6',
+      fillColor: '#10b981',
+      fillOpacity: 0.03,
+      interactive: false,
     }).addTo(map);
 
     // Fallback to direct tile.openstreetmap.org if a subdomain ever errors
@@ -1027,9 +1262,30 @@ export const ShiftRadarModule: React.FC = () => {
 
   return (
     <div className="space-y-2.5">
+      {/* ACTIVE OPERATIONAL HUB BADGE (35 KM REGIONAL LOCK) */}
+      <button
+        type="button"
+        onClick={() => setIsHubSelectorModalOpen(true)}
+        className={`w-full rounded-2xl border px-3.5 py-2.5 flex items-center justify-between gap-2 cursor-pointer transition shadow-sm ${
+          isDaylight
+            ? 'bg-white border-emerald-500/40 text-slate-900 hover:bg-emerald-50/50'
+            : 'bg-zinc-900/95 border-emerald-500/40 text-white hover:bg-zinc-900'
+        }`}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shrink-0" />
+          <span className="text-base font-extrabold truncate">
+            📍 Centro: Amarante (Raio 35 km)
+          </span>
+        </div>
+        <span className="rounded-xl bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-1 text-base font-bold text-emerald-400 shrink-0">
+          Mudar Centro
+        </span>
+      </button>
+
       {/* FULL INTERACTIVE LEAFLET MAP CONTAINER */}
       <div
-        className={`relative rounded-2xl overflow-hidden border shadow-xl h-[calc(100vh-148px)] min-h-[460px] max-h-[760px] ${
+        className={`relative rounded-2xl overflow-hidden border shadow-xl h-[calc(100vh-196px)] min-h-[440px] max-h-[740px] ${
           isDaylight
             ? 'border-slate-300 bg-slate-100'
             : 'border-zinc-800 bg-zinc-950'
@@ -1113,23 +1369,28 @@ export const ShiftRadarModule: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleOpenExternalNav('WAZE')}
-                className="rounded-xl bg-sky-600 hover:bg-sky-500 text-white px-3 py-2 text-[11px] font-black shadow-lg flex items-center gap-1 cursor-pointer"
+                className="rounded-xl bg-sky-600 hover:bg-sky-500 text-white px-3 py-2 text-base font-extrabold shadow-lg flex items-center gap-1 cursor-pointer"
               >
-                <Navigation className="h-3 w-3" />
+                <Navigation className="h-4 w-4" />
                 <span>Waze</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleOpenExternalNav('GMAPS')}
-                className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 text-[11px] font-black shadow-lg flex items-center gap-1 cursor-pointer"
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 text-base font-extrabold shadow-lg flex items-center gap-1 cursor-pointer"
               >
-                <Navigation className="h-3 w-3" />
+                <Navigation className="h-4 w-4" />
                 <span>Maps</span>
               </button>
             </div>
           )}
         </div>
       </div>
+
+      <OperationalHubSelectorModal
+        isOpen={isHubSelectorModalOpen}
+        onClose={() => setIsHubSelectorModalOpen(false)}
+      />
     </div>
   );
 };

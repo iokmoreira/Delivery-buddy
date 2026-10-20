@@ -40,14 +40,7 @@ jobs:
           npm install --legacy-peer-deps
           npm run build
 
-      - name: 6. Deploy Live OTA Web Bundle to GitHub Pages (gh-pages)
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          force_orphan: true
-
-      - name: 7. Initialize & Sync Capacitor Android Platform
+      - name: 6. Initialize & Sync Capacitor Android Platform
         run: |
           mv capacitor.config.ts capacitor.config.ts.bak || true
           npm install --no-save --legacy-peer-deps @capacitor/core@^6.0.0 @capacitor/cli@^6.0.0 @capacitor/android@^6.0.0
@@ -199,12 +192,20 @@ jobs:
           }
           EOF
 
-      - name: 9. Compile & Sign Android APK (Delivery-Buddy-Amarante.apk)
+      - name: 8. Compile & Sign Android APK (Delivery-Buddy-Amarante.apk) & Copy to dist/
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk ../Delivery-Buddy-Amarante.apk
+          cp app/build/outputs/apk/debug/app-debug.apk ../dist/Delivery-Buddy-Amarante.apk
+
+      - name: 9. Deploy Live OTA Web Bundle + Direct APK to GitHub Pages (gh-pages)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          force_orphan: true
 
       - name: 10. Upload Delivery-Buddy-Amarante.apk Artifact
         uses: actions/upload-artifact@v4
