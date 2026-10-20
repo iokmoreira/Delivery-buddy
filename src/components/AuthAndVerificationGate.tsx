@@ -1,430 +1,429 @@
 import React, { useState } from 'react';
-import {
-  ShieldCheck,
-  Lock,
-  Mail,
-  UserCheck,
-  Sparkles,
-  CheckCircle2,
-  Bike,
-  Upload,
-  KeyRound,
-  Cpu,
-  ArrowRight,
-  Layers,
-} from 'lucide-react';
 import { useEstafetas } from '../context/EstafetasContext';
 import {
-  CourierContractModel,
+  AmaranteBaseZoneOption,
+  CourierRegistrationVehicle,
   PlatformName,
-  VerificationMethodType,
 } from '../types/models';
+import { findExistingCourierByNameInSupabaseRest } from '../services/geminiAgent';
 
-const ALL_PLATFORMS: PlatformName[] = ['Uber Eats', 'Glovo', 'Bolt Food'];
+interface SavedLocalAccountRecord {
+  username: string;
+  pinOrPassword: string;
+  vehicle: CourierRegistrationVehicle;
+  platforms: PlatformName[];
+  zone: AmaranteBaseZoneOption;
+}
+
+const SAVED_ACCOUNTS_STORAGE_KEY = 'buddy_saved_accounts_v1';
+
+function loadSavedAccounts(): SavedLocalAccountRecord[] {
+  try {
+    const raw = localStorage.getItem(SAVED_ACCOUNTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveAccountLocally(record: SavedLocalAccountRecord) {
+  try {
+    const existing = loadSavedAccounts().filter(
+      (a) => a.username.toLowerCase() !== record.username.toLowerCase()
+    );
+    localStorage.setItem(
+      SAVED_ACCOUNTS_STORAGE_KEY,
+      JSON.stringify([record, ...existing])
+    );
+  } catch {
+    // ignore
+  }
+}
+
+const VEHICLE_OPTIONS: Array<{
+  id: CourierRegistrationVehicle;
+  label: string;
+  emoji: string;
+}> = [
+  { id: 'Mota 125cc', label: 'Mota 125cc', emoji: '🛵' },
+  { id: 'Scooter Elétrica', label: 'Scooter Elétrica', emoji: '⚡' },
+  { id: 'Bicicleta Elétrica', label: 'Bicicleta Elétrica', emoji: '🚲' },
+  { id: 'Carro', label: 'Carro', emoji: '🚗' },
+];
+
+const PLATFORM_OPTIONS: PlatformName[] = ['Uber Eats', 'Glovo', 'Bolt Food'];
 
 export const AuthAndVerificationGate: React.FC = () => {
   const {
-    loginWithDemoAccount,
-    loginWithCredentials,
-    completeAiMultiAppRegistration,
+    saveAndRegisterRealCourierProfile,
+    aiAgentConfig,
+    themeMode,
   } = useEstafetas();
 
-  const [activeTab, setActiveTab] = useState<'LOGIN' | 'REGISTER_AI'>('LOGIN');
-
-  // Login State
-  const [emailOrPhone, setEmailOrPhone] = useState(
-    'tiago.rocha.estafeta@pt-couriers.pt'
-  );
-  const [password, setPassword] = useState('••••••••••••');
-  const [keepConnected, setKeepConnected] = useState(true);
-  const [loginError, setLoginError] = useState('');
-
-  // Registration & AI Verification State
-  const [courierName, setCourierName] = useState('Tiago Rocha');
-  const [regEmailOrPhone, setRegEmailOrPhone] = useState('+351 914 820 391');
+  const isDay = themeMode === 'DAYLIGHT';
+  const [authMode, setAuthMode] = useState<'ENTRAR' | 'CRIAR_CONTA'>('ENTRAR');
+  const [username, setUsername] = useState<string>('');
+  const [pinOrPassword, setPinOrPassword] = useState<string>('');
+  const [selectedVehicle, setSelectedVehicle] =
+    useState<CourierRegistrationVehicle>('Mota 125cc');
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformName[]>([
     'Uber Eats',
     'Glovo',
-    'Bolt Food',
   ]);
-  const [contractModel, setContractModel] = useState<CourierContractModel>(
-    'Recibos Verdes / Independente'
+  const [selectedZone, setSelectedZone] = useState<AmaranteBaseZoneOption>(
+    'Amarante Centro / São Gonçalo'
   );
-  const [verificationMethod, setVerificationMethod] =
-    useState<VerificationMethodType>('IA_SCREENSHOT_FACIAL');
-  const [sponsorInviteCode, setSponsorInviteCode] = useState('BUDDY-PT-884');
-  const [regKeepConnected, setRegKeepConnected] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [aiStep, setAiStep] = useState<number>(0);
-  const [uploadedScreenshotsCount, setUploadedScreenshotsCount] =
-    useState<number>(3);
-
-  const togglePlatform = (platform: PlatformName) => {
+  const togglePlatform = (plat: PlatformName) => {
     setSelectedPlatforms((prev) => {
-      if (prev.includes(platform)) {
-        if (prev.length === 1) return prev;
-        return prev.filter((p) => p !== platform);
+      if (prev.includes(plat)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((p) => p !== plat);
       }
-      return [...prev, platform];
+      return [...prev, plat];
     });
   };
 
-  const handleStandardLogin = (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!emailOrPhone.trim() || !password.trim()) {
-      setLoginError('Introduza o seu Email/Telemóvel e Palavra-passe.');
+    setErrorMsg(null);
+    const cleanName = username.trim();
+    const cleanPin = pinOrPassword.trim();
+
+    if (!cleanName) {
+      setErrorMsg('Introduza o seu Nome ou Utilizador.');
       return;
     }
-    setLoginError('');
-    loginWithCredentials(emailOrPhone, keepConnected);
-  };
+    if (cleanPin.length < 3) {
+      setErrorMsg('Introduza a sua Palavra-passe ou PIN (mín. 3 caracteres).');
+      return;
+    }
 
-  const handleRunAiVerification = () => {
-    if (aiStep > 0 && aiStep < 4) return;
-    setAiStep(1);
-    setTimeout(() => {
-      setAiStep(2);
-    }, 850);
-    setTimeout(() => {
-      setAiStep(3);
-    }, 1700);
-    setTimeout(() => {
-      setAiStep(4);
-      completeAiMultiAppRegistration({
-        courierName: courierName.trim() || 'Estafeta Verificado PT',
-        emailOrPhone: regEmailOrPhone.trim() || '+351 910 000 000',
-        connectedPlatforms: selectedPlatforms,
-        contractModel,
-        verificationMethod,
-        keepLoggedInShift: regKeepConnected,
+    setIsSubmitting(true);
+    try {
+      let resolvedVehicle: CourierRegistrationVehicle = selectedVehicle;
+      let resolvedPlatforms: PlatformName[] =
+        selectedPlatforms.length > 0 ? selectedPlatforms : ['Uber Eats', 'Glovo'];
+      let resolvedZone: AmaranteBaseZoneOption = selectedZone;
+
+      if (authMode === 'ENTRAR') {
+        const localSaved = loadSavedAccounts().find(
+          (a) => a.username.toLowerCase() === cleanName.toLowerCase()
+        );
+        if (
+          localSaved &&
+          localSaved.pinOrPassword &&
+          localSaved.pinOrPassword !== cleanPin
+        ) {
+          setErrorMsg('PIN / Palavra-passe incorreta para esta conta neste dispositivo.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (localSaved) {
+          resolvedVehicle = localSaved.vehicle;
+          resolvedPlatforms = localSaved.platforms;
+          resolvedZone = localSaved.zone;
+        } else {
+          // Check Supabase public.couriers for existing courier profile
+          const remoteRow = await findExistingCourierByNameInSupabaseRest({
+            supabaseUrl: aiAgentConfig.supabaseUrl,
+            supabaseAnonKey: aiAgentConfig.supabaseAnonKey,
+            nameOrUsername: cleanName,
+          });
+          if (remoteRow) {
+            if (
+              [
+                'Mota 125cc',
+                'Scooter Elétrica',
+                'Carro',
+                'Bicicleta Elétrica',
+              ].includes(remoteRow.vehicle)
+            ) {
+              resolvedVehicle = remoteRow.vehicle as CourierRegistrationVehicle;
+            }
+            if (
+              remoteRow.active_platforms &&
+              remoteRow.active_platforms.length > 0
+            ) {
+              resolvedPlatforms = remoteRow.active_platforms;
+            }
+          }
+        }
+      }
+
+      saveAccountLocally({
+        username: cleanName,
+        pinOrPassword: cleanPin,
+        vehicle: resolvedVehicle,
+        platforms: resolvedPlatforms,
+        zone: resolvedZone,
       });
-    }, 2600);
+
+      await saveAndRegisterRealCourierProfile({
+        name: cleanName,
+        vehicle: resolvedVehicle,
+        zone: resolvedZone,
+        active_platforms: resolvedPlatforms,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between p-4 select-none">
-      <div className="max-w-sm w-full mx-auto my-auto space-y-3">
-        {/* Monochrome Brand Header Card */}
-        <div className="border border-zinc-800/80 bg-zinc-900/90 rounded-xl p-4">
-          <div className="flex items-center justify-between gap-2 mb-2.5">
-            <span className="inline-flex items-center gap-1.5 bg-zinc-800 text-zinc-200 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded">
-              <ShieldCheck className="w-3.5 h-3.5 text-zinc-200" />
-              Rede Exclusiva Verificada
-            </span>
-            <span className="text-[10px] font-mono font-semibold text-zinc-400 bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded">
-              KYC IA
-            </span>
+    <div
+      className={`min-h-screen flex flex-col justify-center px-4 py-8 ${
+        isDay ? 'bg-slate-100 text-slate-950' : 'bg-zinc-950 text-zinc-100'
+      }`}
+    >
+      <div
+        className={`max-w-md w-full mx-auto rounded-3xl border p-6 shadow-2xl ${
+          isDay
+            ? 'bg-white border-slate-300 shadow-slate-300/50'
+            : 'bg-zinc-900 border-zinc-800 shadow-black/70'
+        }`}
+      >
+        {/* Brand Header */}
+        <div className="flex items-center gap-3.5 mb-5">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black text-xl shadow-md shrink-0">
+            DB
           </div>
-
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0">
-              <Bike className="w-6 h-6 text-zinc-100" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight text-zinc-100">
-                Delivery Buddy
-              </h1>
-              <p className="text-xs text-zinc-400">
-                O Copiloto Tático dos Estafetas em Portugal
-              </p>
-            </div>
-          </div>
-
-          {/* 2-Tab Segmented Switcher */}
-          <div className="grid grid-cols-2 gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800/80 mt-3.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab('LOGIN')}
-              className={`py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                activeTab === 'LOGIN'
-                  ? 'bg-white text-zinc-950 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200'
+          <div>
+            <h1 className="text-xl font-black tracking-tight">
+              Delivery Buddy
+            </h1>
+            <p
+              className={`text-xs font-semibold ${
+                isDay ? 'text-slate-600' : 'text-zinc-400'
               }`}
             >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Entrar</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('REGISTER_AI')}
-              className={`py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                activeTab === 'REGISTER_AI'
-                  ? 'bg-white text-zinc-950 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Registo IA</span>
-            </button>
+              Copiloto de Turno • Amarante (25 km)
+            </p>
           </div>
         </div>
 
-        {/* TAB 1: LOGIN VIEW */}
-        {activeTab === 'LOGIN' && (
-          <div className="border border-zinc-800/80 bg-zinc-900/90 rounded-xl p-4 space-y-3.5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-1.5">
-                <UserCheck className="w-3.5 h-3.5 text-zinc-300" />
-                <span>Autenticação de Estafeta</span>
-              </h2>
-            </div>
+        {/* Mode Switcher: Entrar vs Criar Conta */}
+        <div
+          className={`grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl border mb-5 ${
+            isDay
+              ? 'bg-slate-100 border-slate-200'
+              : 'bg-zinc-950 border-zinc-800'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMode('ENTRAR');
+              setErrorMsg(null);
+            }}
+            className={`py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              authMode === 'ENTRAR'
+                ? 'bg-emerald-600 text-white shadow'
+                : isDay
+                  ? 'text-slate-600 hover:text-slate-900'
+                  : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            🔑 Entrar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMode('CRIAR_CONTA');
+              setErrorMsg(null);
+            }}
+            className={`py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              authMode === 'CRIAR_CONTA'
+                ? 'bg-emerald-600 text-white shadow'
+                : isDay
+                  ? 'text-slate-600 hover:text-slate-900'
+                  : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            ✨ Criar Conta
+          </button>
+        </div>
 
-            {/* 1-Tap Quick Demo Login Button */}
-            <button
-              type="button"
-              onClick={() => loginWithDemoAccount(keepConnected)}
-              className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+        <form onSubmit={handleAuthSubmit} className="space-y-4">
+          {/* Username / Callsign */}
+          <div>
+            <label
+              className={`block text-[11px] font-black uppercase tracking-wider mb-1.5 ${
+                isDay ? 'text-slate-700' : 'text-zinc-300'
+              }`}
             >
-              <ShieldCheck className="w-4 h-4" />
-              <span>Login Rápido (Demo Estafeta Verificado)</span>
-            </button>
-
-            <form onSubmit={handleStandardLogin} className="space-y-3">
-              <div>
-                <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
-                  Email ou Telemóvel
-                </label>
-                <div className="relative">
-                  <Mail className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={emailOrPhone}
-                    onChange={(e) => setEmailOrPhone(e.target.value)}
-                    placeholder="estafeta@email.pt"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-8 pr-3 py-2 text-xs text-zinc-100 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
-                  Palavra-Passe
-                </label>
-                <div className="relative">
-                  <Lock className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-8 pr-3 py-2 text-xs text-zinc-100 outline-none"
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={keepConnected}
-                  onChange={(e) => setKeepConnected(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-zinc-100 rounded cursor-pointer"
-                />
-                <span className="text-xs font-medium text-zinc-300">
-                  Manter-se conectado (Turno Contínuo)
-                </span>
-              </label>
-
-              {loginError && (
-                <p className="text-xs font-semibold text-zinc-200 bg-zinc-800 rounded-lg px-3 py-2">
-                  {loginError}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                className="w-full py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
-              >
-                <span>Iniciar Turno Autenticado</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* TAB 2: AI MULTI-APP OWNERSHIP VERIFICATION FLOW */}
-        {activeTab === 'REGISTER_AI' && (
-          <div className="border border-zinc-800/80 bg-zinc-900/90 rounded-xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-1.5">
-                <Cpu className="w-3.5 h-3.5 text-zinc-300" />
-                <span>Validação IA Multi-App</span>
-              </h2>
-              <span className="text-[10px] font-mono font-semibold bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded">
-                1 PINO = 1 ESTAFETA
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[10px] font-medium uppercase text-zinc-400 mb-1">
-                  Nome Completo
-                </label>
-                <input
-                  type="text"
-                  value={courierName}
-                  onChange={(e) => setCourierName(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium uppercase text-zinc-400 mb-1">
-                  Telemóvel
-                </label>
-                <input
-                  type="text"
-                  value={regEmailOrPhone}
-                  onChange={(e) => setRegEmailOrPhone(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-medium uppercase text-zinc-400 flex items-center gap-1">
-                <Layers className="w-3 h-3" />
-                <span>1. Plataformas Ativas</span>
-              </span>
-              <div className="grid grid-cols-3 gap-1.5">
-                {ALL_PLATFORMS.map((platform) => {
-                  const isSelected = selectedPlatforms.includes(platform);
-                  return (
-                    <button
-                      key={platform}
-                      type="button"
-                      onClick={() => togglePlatform(platform)}
-                      className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
-                        isSelected
-                          ? 'bg-white text-zinc-950 border-white'
-                          : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                      }`}
-                    >
-                      {platform}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-medium uppercase text-zinc-400 block">
-                2. Modelo Contratual
-              </span>
-              <div className="grid grid-cols-2 gap-1.5">
-                {(
-                  [
-                    'Recibos Verdes / Independente',
-                    'Frota Parceira',
-                  ] as CourierContractModel[]
-                ).map((model) => (
-                  <button
-                    key={model}
-                    type="button"
-                    onClick={() => setContractModel(model)}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
-                      contractModel === model
-                        ? 'bg-white text-zinc-950 border-white'
-                        : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                    }`}
-                  >
-                    {model}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setVerificationMethod('IA_SCREENSHOT_FACIAL')}
-                  className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1 cursor-pointer ${
-                    verificationMethod === 'IA_SCREENSHOT_FACIAL'
-                      ? 'bg-white text-zinc-950 border-white'
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                  }`}
-                >
-                  <Upload className="w-3 h-3" />
-                  <span>Prints + IA</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVerificationMethod('CODIGO_PADRINHO')}
-                  className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1 cursor-pointer ${
-                    verificationMethod === 'CODIGO_PADRINHO'
-                      ? 'bg-white text-zinc-950 border-white'
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                  }`}
-                >
-                  <KeyRound className="w-3 h-3" />
-                  <span>Código Padrinho</span>
-                </button>
-              </div>
-
-              {verificationMethod === 'IA_SCREENSHOT_FACIAL' ? (
-                <div className="flex items-center justify-between text-[11px] bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-2">
-                  <span className="text-zinc-400">
-                    Capturas prontas: {uploadedScreenshotsCount}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setUploadedScreenshotsCount(selectedPlatforms.length)
-                    }
-                    className="text-zinc-100 font-semibold underline cursor-pointer"
-                  >
-                    Carregar Prints
-                  </button>
-                </div>
-              ) : (
-                <input
-                  type="text"
-                  value={sponsorInviteCode}
-                  onChange={(e) => setSponsorInviteCode(e.target.value)}
-                  placeholder="Código Padrinho (Ex: BUDDY-PT-884)"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-zinc-100"
-                />
-              )}
-
-              {aiStep > 0 && (
-                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 space-y-1 text-[11px] font-mono text-zinc-300">
-                  <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-zinc-100 shrink-0" />
-                    <span>Passo {Math.min(3, aiStep)}/3: Validação IA ativa...</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={regKeepConnected}
-                onChange={(e) => setRegKeepConnected(e.target.checked)}
-                className="w-3.5 h-3.5 accent-zinc-100 rounded"
-              />
-              <span>Manter-se conectado no turno</span>
+              Nome ou Utilizador
             </label>
-
-            <button
-              type="button"
-              onClick={handleRunAiVerification}
-              disabled={aiStep > 0 && aiStep < 4}
-              className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-zinc-200 disabled:opacity-60 text-zinc-950 font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>
-                {aiStep === 0
-                  ? 'Validar por IA & Entrar'
-                  : 'A Validar Titularidade...'}
-              </span>
-            </button>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Ex: Caio Moreira"
+              autoComplete="username"
+              className={`w-full rounded-xl border px-3.5 py-3 text-sm font-bold focus:outline-none ${
+                isDay
+                  ? 'bg-slate-50 border-slate-300 text-slate-950 focus:border-emerald-600'
+                  : 'bg-zinc-950 border-zinc-700 text-white focus:border-emerald-500'
+              }`}
+            />
           </div>
-        )}
-      </div>
 
-      <footer className="max-w-sm w-full mx-auto text-center pt-3 pb-1 text-[10px] text-zinc-500">
-        Delivery Buddy PT
-      </footer>
+          {/* PIN / Password */}
+          <div>
+            <label
+              className={`block text-[11px] font-black uppercase tracking-wider mb-1.5 ${
+                isDay ? 'text-slate-700' : 'text-zinc-300'
+              }`}
+            >
+              PIN ou Palavra-passe
+            </label>
+            <input
+              type="password"
+              value={pinOrPassword}
+              onChange={(e) => setPinOrPassword(e.target.value)}
+              placeholder="••••"
+              autoComplete={
+                authMode === 'ENTRAR' ? 'current-password' : 'new-password'
+              }
+              className={`w-full rounded-xl border px-3.5 py-3 text-sm font-bold focus:outline-none ${
+                isDay
+                  ? 'bg-slate-50 border-slate-300 text-slate-950 focus:border-emerald-600'
+                  : 'bg-zinc-950 border-zinc-700 text-white focus:border-emerald-500'
+              }`}
+            />
+          </div>
+
+          {/* Registration extra fields (Vehicle & Platforms) */}
+          {authMode === 'CRIAR_CONTA' && (
+            <>
+              <div>
+                <label
+                  className={`block text-[11px] font-black uppercase tracking-wider mb-1.5 ${
+                    isDay ? 'text-slate-700' : 'text-zinc-300'
+                  }`}
+                >
+                  Plataformas Ativas
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PLATFORM_OPTIONS.map((plat) => {
+                    const active = selectedPlatforms.includes(plat);
+                    return (
+                      <button
+                        key={plat}
+                        type="button"
+                        onClick={() => togglePlatform(plat)}
+                        className={`py-2.5 px-2 rounded-xl border text-xs font-black transition-all cursor-pointer ${
+                          active
+                            ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
+                            : isDay
+                              ? 'bg-slate-50 border-slate-300 text-slate-700'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                        }`}
+                      >
+                        {active ? '✓ ' : ''}
+                        {plat}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label
+                  className={`block text-[11px] font-black uppercase tracking-wider mb-1.5 ${
+                    isDay ? 'text-slate-700' : 'text-zinc-300'
+                  }`}
+                >
+                  O Teu Veículo
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {VEHICLE_OPTIONS.map((v) => {
+                    const active = selectedVehicle === v.id;
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setSelectedVehicle(v.id)}
+                        className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                          active
+                            ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
+                            : isDay
+                              ? 'bg-slate-50 border-slate-300 text-slate-700'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-300'
+                        }`}
+                      >
+                        <span>{v.emoji}</span>
+                        <span className="truncate">{v.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label
+                  className={`block text-[11px] font-black uppercase tracking-wider mb-1.5 ${
+                    isDay ? 'text-slate-700' : 'text-zinc-300'
+                  }`}
+                >
+                  Zona Principal (Amarante 25 km)
+                </label>
+                <select
+                  value={selectedZone}
+                  onChange={(e) =>
+                    setSelectedZone(e.target.value as AmaranteBaseZoneOption)
+                  }
+                  className={`w-full rounded-xl border px-3 py-2.5 text-xs font-bold focus:outline-none ${
+                    isDay
+                      ? 'bg-slate-50 border-slate-300 text-slate-900'
+                      : 'bg-zinc-950 border-zinc-700 text-white'
+                  }`}
+                >
+                  <option value="Amarante Centro / São Gonçalo">
+                    Amarante Centro / São Gonçalo
+                  </option>
+                  <option value="Freixo de Cima / Baixo">
+                    Freixo de Cima / Baixo
+                  </option>
+                  <option value="Vila Meã">Vila Meã</option>
+                  <option value="Lixa / Felgueiras">Lixa / Felgueiras</option>
+                  <option value="Marco de Canaveses">Marco de Canaveses</option>
+                </select>
+              </div>
+            </>
+          )}
+
+          {errorMsg && (
+            <div className="rounded-xl bg-red-600/15 border border-red-500/40 px-3.5 py-2.5 text-xs font-bold text-red-500">
+              ⚠️ {errorMsg}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-black text-sm uppercase tracking-wider shadow-lg transition-all cursor-pointer"
+          >
+            {isSubmitting
+              ? 'A iniciar sessão...'
+              : authMode === 'ENTRAR'
+                ? 'Entrar no Turno'
+                : 'Criar Conta e Entrar'}
+          </button>
+        </form>
+
+        <p
+          className={`mt-4 text-center text-[11px] font-medium ${
+            isDay ? 'text-slate-500' : 'text-zinc-500'
+          }`}
+        >
+          A tua sessão fica guardada automaticamente neste telemóvel. Podes editar o perfil ou terminar sessão em Ajustes.
+        </p>
+      </div>
     </div>
   );
 };

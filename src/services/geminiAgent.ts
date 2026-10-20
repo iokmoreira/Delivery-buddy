@@ -1015,24 +1015,26 @@ export async function cleanupGhostDuplicateCouriersInSupabaseRest(params: {
   const trimmedName = (params.currentName || '').trim();
   const deleteUrls: string[] = [];
 
-  // 1. Delete any stale row with the exact same name but a different UUID
+  // 1. Delete any stale row with the exact same name (case-insensitive) but a different UUID
   if (trimmedName.length > 0) {
     deleteUrls.push(
-      `${cleanUrl}/rest/v1/couriers?id=neq.${encodeURIComponent(params.currentId)}&name=eq.${encodeURIComponent(trimmedName)}`
+      `${cleanUrl}/rest/v1/couriers?id=neq.${encodeURIComponent(params.currentId)}&name=ilike.${encodeURIComponent(trimmedName)}`
     );
   }
 
-  // 2. Always delete legacy default "Caio M." ghost rows that don't belong to the current UUID,
-  // or any "Caio*" ghost row if the current user is Caio Moreira / Caio M.
-  if (trimmedName.toLowerCase().startsWith('caio')) {
-    deleteUrls.push(
-      `${cleanUrl}/rest/v1/couriers?id=neq.${encodeURIComponent(params.currentId)}&name=ilike.${encodeURIComponent('Caio*')}`
-    );
-  } else {
-    deleteUrls.push(
-      `${cleanUrl}/rest/v1/couriers?id=neq.${encodeURIComponent(params.currentId)}&name=eq.${encodeURIComponent('Caio M.')}`
-    );
-  }
+  // 2. Delete any stale rows older than 10 minutes so ghost pins from closed sessions never stay on the map
+  const tenMinAgoIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  deleteUrls.push(
+    `${cleanUrl}/rest/v1/couriers?id=neq.${encodeURIComponent(params.currentId)}&updated_at=lt.${encodeURIComponent(tenMinAgoIso)}`
+  );
+
+  // 3. Always delete legacy test/duplicate rows ("Caio M.", "caio", "cm") from previous sessions on this device
+  deleteUrls.push(
+    `${cleanUrl}/rest/v1/couriers?id=neq.${encodeURIComponent(params.currentId)}&name=ilike.${encodeURIComponent('Caio*')}`
+  );
+  deleteUrls.push(
+    `${cleanUrl}/rest/v1/couriers?id=neq.${encodeURIComponent(params.currentId)}&name=ilike.${encodeURIComponent('cm')}`
+  );
 
   try {
     await Promise.all(
@@ -1042,6 +1044,39 @@ export async function cleanupGhostDuplicateCouriersInSupabaseRest(params: {
           headers,
         }).catch(() => null)
       )
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteCourierFromSupabaseRest(params: {
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  courierId: string;
+}): Promise<boolean> {
+  const cleanUrl = sanitizeSupabaseUrlInput(params.supabaseUrl);
+  const cleanKey = sanitizeSupabaseKeyInput(params.supabaseAnonKey);
+  if (
+    !cleanUrl ||
+    !cleanKey ||
+    !cleanUrl.includes('.supabase.co') ||
+    cleanUrl.includes('xxxxxxxxxxxx') ||
+    !params.courierId
+  ) {
+    return false;
+  }
+  try {
+    await fetch(
+      `${cleanUrl}/rest/v1/couriers?id=eq.${encodeURIComponent(params.courierId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          apikey: cleanKey,
+          Authorization: `Bearer ${cleanKey}`,
+        },
+      }
     );
     return true;
   } catch {
@@ -1227,8 +1262,23 @@ export async function fetchCouriersFromSupabaseRest(params: {
     if (!Array.isArray(data)) {
       return { ok: false, rows: [] };
     }
+    const nowMs = Date.now();
+    const maxAgeMs = 5 * 60 * 1000; // Only show active couriers with a heartbeat in the last 5 minutes
     const validRows: SupabaseCourierRow[] = data
-      .filter((r) => r && typeof r.id === 'string' && typeof r.name === 'string')
+      .filter((r) => {
+        if (!r || typeof r.id !== 'string' || typeof r.name !== 'string') {
+          return false;
+        }
+        const nameLower = r.name.trim().toLowerCase();
+        if (!nameLower || nameLower === 'caio m.' || nameLower === 'cm') {
+          return false;
+        }
+        const updatedMs = r.updated_at ? Date.parse(String(r.updated_at)) : 0;
+        if (!Number.isFinite(updatedMs) || nowMs - updatedMs > maxAgeMs) {
+          return false;
+        }
+        return true;
+      })
       .map((r) => ({
         id: String(r.id),
         name: String(r.name),
@@ -1254,6 +1304,64 @@ export async function fetchCouriersFromSupabaseRest(params: {
     return { ok: true, rows: validRows };
   } catch {
     return { ok: false, rows: [] };
+  }
+}
+
+export async function findExistingCourierByNameInSupabaseRest(params: {
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  nameOrUsername: string;
+}): Promise<SupabaseCourierRow | null> {
+  const cleanUrl = sanitizeSupabaseUrlInput(params.supabaseUrl);
+  const cleanKey = sanitizeSupabaseKeyInput(params.supabaseAnonKey);
+  const trimmed = (params.nameOrUsername || '').trim();
+  if (
+    !cleanUrl ||
+    !cleanKey ||
+    !trimmed ||
+    !cleanUrl.includes('.supabase.co') ||
+    cleanUrl.includes('xxxxxxxxxxxx')
+  ) {
+    return null;
+  }
+
+  const endpoint = `${cleanUrl}/rest/v1/couriers?select=*&name=ilike.${encodeURIComponent(trimmed)}&order=updated_at.desc&limit=1`;
+  try {
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        apikey: cleanKey,
+        Authorization: `Bearer ${cleanKey}`,
+      },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!Array.isArray(data) || !data[0]) return null;
+    const r = data[0];
+    return {
+      id: String(r.id),
+      name: String(r.name),
+      vehicle: String(r.vehicle || 'Mota 125cc'),
+      status: String(r.status || 'Disponível'),
+      has_order: Boolean(r.has_order),
+      lat: Number(r.lat ?? AMARANTE_DEFAULT_COORDS.lat),
+      lng: Number(r.lng ?? AMARANTE_DEFAULT_COORDS.lng),
+      zone: String(r.zone || 'Amarante Centro / São Gonçalo'),
+      reputation: Number(r.reputation ?? 100),
+      buddy_since: String(r.buddy_since || 'Fundador • Out 2026'),
+      updated_at: String(r.updated_at || new Date().toISOString()),
+      avatar_url:
+        typeof r.avatar_url === 'string' && r.avatar_url.trim()
+          ? r.avatar_url
+          : undefined,
+      active_platforms: Array.isArray(r.active_platforms)
+        ? (r.active_platforms.filter((p: unknown) =>
+            ['Uber Eats', 'Glovo', 'Bolt Food'].includes(String(p))
+          ) as PlatformName[])
+        : undefined,
+    };
+  } catch {
+    return null;
   }
 }
 

@@ -1,35 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
-import L from 'leaflet';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
+  Navigation,
+  Compass,
   MapPin,
   AlertTriangle,
   Users,
   Plus,
   X,
   Check,
-  Navigation,
-  ZoomIn,
-  ZoomOut,
-  Compass,
-  Route,
-  UserCheck,
-  RefreshCw,
 } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
-  ExternalNavMapAssistAction,
   MapRadiusOptionKm,
+  OnlineDirectoryCourier,
   PortugalRegionName,
   RoadHazardType,
-  TacticalMapCell,
 } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
-
-// ============================================================================
-// EXPORTED SUB-PANELS FOR "AJUSTES" (MOVED OUT OF THE PURE MAPA PAGE)
-// 1. MapRadiusSettingsSection (Raio do Mapa km & Região)
-// 2. RoadHazardsSettingsSection (Perigos na Via)
-// 3. ZoneAgreementsSettingsSection (Acordos de Zona — Renamed from "Pactos")
-// ============================================================================
 
 export const MapRadiusSettingsSection: React.FC = () => {
   const {
@@ -181,10 +169,10 @@ export const RoadHazardsSettingsSection: React.FC = () => {
           {activeUnresolvedHazards.length === 0 ? (
             <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3.5 text-center space-y-1">
               <span className="text-xs font-bold text-zinc-100 block">
-                Modo Produção Real Ativo • 0 alertas na via reportados
+                0 alertas na via reportados
               </span>
               <span className="text-[11px] text-zinc-400 block">
-                Os alertas de demonstração foram ocultados. Toque num dos botões acima para reportar um perigo real em Amarante.
+                Toque num dos botões acima para reportar um perigo real em Amarante.
               </span>
             </div>
           ) : (
@@ -276,10 +264,10 @@ export const ZoneAgreementsSettingsSection: React.FC = () => {
           {zonePacts.length === 0 ? (
             <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3.5 text-center space-y-1">
               <span className="text-xs font-bold text-zinc-100 block">
-                Modo Produção Real Ativo • 0 acordos de zona registados
+                0 acordos de zona registados
               </span>
               <span className="text-[11px] text-zinc-400 block">
-                Os acordos fictícios foram ocultados. Clique em &quot;+ Novo Acordo&quot; para publicar um acordo real em Amarante.
+                Clique em &quot;+ Novo Acordo&quot; para publicar um acordo real em Amarante.
               </span>
             </div>
           ) : (
@@ -418,795 +406,525 @@ export const ZoneAgreementsSettingsSection: React.FC = () => {
   );
 };
 
-// ============================================================================
-// PURE "MAPA" COCKPIT: 80% SCREEN HEIGHT (calc(100dvh - 135px)),
-// SMOOTH TOUCH PHYSICS, HYBRID SATELLITE LABELS & ZERO CAMERA SNAPPING
-// ============================================================================
+const AMARANTE_INITIAL_VIEW_CENTER = {
+  lat: 41.2704,
+  lng: -8.0818,
+};
 
 export const ShiftRadarModule: React.FC = () => {
   const {
-    tacticalCells,
-    mapRadiusKm,
-    onlineDirectoryCouriers,
     themeMode,
-    lastExternalMapAssist,
-    triggerExternalMapAssistMacro,
-    aiAgentConfig,
-    realCompletedDeliveries,
-    marketTelemetry,
+    onlineDirectoryCouriers,
+    setActiveBuddyPopupCourierId,
     realCourierProfile,
-    setIsCourierRegistrationModalOpen,
     refreshLiveGpsPosition,
-    userOrderAvailabilityStatus,
-    toggleUserOrderAvailabilityStatus,
-    roadHazards,
-    setActiveTab,
     cleanupGhostDuplicatePinsNow,
+    isAppPaused,
+    activeDeliveryLifecycle,
+    hasRealActiveDelivery,
   } = useEstafetas();
 
-  const [selectedCellId, setSelectedCellId] = useState<string>(
-    tacticalCells[0]?.id || 'CELL-AMA-01'
-  );
-  const [mapLayerMode, setMapLayerMode] = useState<'STREETS' | 'SATELLITE'>(
-    'STREETS'
-  );
-  const [isTelemetrySheetExpanded, setIsTelemetrySheetExpanded] =
-    useState<boolean>(false);
-
-  // Touch-scroll guard so vertical scrolling never triggers external Waze/Maps macros
-  const touchStartPosRef = useRef<{ x: number; y: number; moved: boolean }>({
-    x: 0,
-    y: 0,
-    moved: false,
-  });
-
   const isDaylight = themeMode === 'DAYLIGHT';
-  const isProdRealOnly = Boolean(aiAgentConfig.productionModeRealOnly);
 
-  const selectedCell: TacticalMapCell =
-    tacticalCells.find((c) => c.id === selectedCellId) || tacticalCells[0];
-
-  const realTotalNetEur = realCompletedDeliveries.reduce(
-    (sum, item) => sum + item.netProfitEur,
-    0
-  );
-  const realTotalDistanceKm = realCompletedDeliveries.reduce(
-    (sum, item) => sum + item.realKm,
-    0
-  );
-  const realCalculatedEurPerKmLabel =
-    realTotalDistanceKm > 0
-      ? `${(realTotalNetEur / realTotalDistanceKm).toFixed(2).replace('.', ',')} €/km`
-      : '0,00 €/km';
-
-  const selfNameNorm = (realCourierProfile?.name || '').trim().toLowerCase();
-  const otherCouriersOnMap = onlineDirectoryCouriers.filter((c) => {
-    if (c.isSelfProfile) return false;
-    if (realCourierProfile && c.id === realCourierProfile.id) return false;
-    const callLower = (c.callsign || '').trim().toLowerCase();
-    // Filter out any legacy "Caio M." or duplicate self pin
-    if (callLower === 'caio m.' || callLower === 'caio m') return false;
-    if (selfNameNorm && callLower === selfNameNorm) return false;
-    if (selfNameNorm.startsWith('caio') && callLower.startsWith('caio')) {
-      return false;
+  const [mapStyleMode, setMapStyleMode] = useState<'RUAS' | 'SATELITE'>('RUAS');
+  const [isAutoFollowActive, setIsAutoFollowActive] = useState<boolean>(true);
+  const [liveAccuracyMeters, setLiveAccuracyMeters] = useState<number>(12);
+  const [localLiveCoords, setLocalLiveCoords] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(() => {
+    if (
+      realCourierProfile?.gpsSource === 'LIVE_GPS' &&
+      Number.isFinite(realCourierProfile.lat) &&
+      Number.isFinite(realCourierProfile.lng)
+    ) {
+      return {
+        lat: realCourierProfile.lat,
+        lng: realCourierProfile.lng,
+      };
     }
-    return true;
+    return null;
   });
 
-  const isSelfFree = userOrderAvailabilityStatus === 'DISPONIVEL';
-  const selfLat = Number(realCourierProfile?.lat || 41.2704);
-  const selfLng = Number(realCourierProfile?.lng || -8.0818);
-
-  // Real Leaflet Map Instance, Persistent Marker Refs & User Pan Guard
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
-  const streetTileLayerRef = useRef<L.TileLayer | null>(null);
-  const satelliteHybridGroupRef = useRef<L.LayerGroup | null>(null);
-  const staticOverlaysGroupRef = useRef<L.LayerGroup | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const selfMarkerRef = useRef<L.Marker | null>(null);
-  const selfMarkerHtmlSigRef = useRef<string>('');
-  const peerMarkersMapRef = useRef<
-    Map<string, { marker: L.Marker; sig: string }>
-  >(new Map());
-  const userHasPannedMap = useRef<boolean>(false);
+  const selfAccuracyCircleRef = useRef<L.Circle | null>(null);
+  const peerMarkersLayerRef = useRef<L.LayerGroup | null>(null);
+  const isAutoFollowRef = useRef<boolean>(true);
+  const hasCenteredOnFirstFixRef = useRef<boolean>(false);
 
-  // Real Amarante Restaurant Hotspots & Zones (Real Lat/Lng in Amarante)
-  const amaranteRealHotspots = [
-    {
-      id: tacticalCells[0]?.id || 'CELL-AMR-CENTRO',
-      shortLabel: 'Amarante Centro / São Gonçalo',
-      hotspotDetail: 'Continente Modelo • Churrasqueira da Ponte • Centro',
-      lat: 41.2692,
-      lng: -8.0785,
-    },
-    {
-      id: tacticalCells[1]?.id || 'CELL-AMR-FREIXO',
-      shortLabel: 'Freixo de Cima / Baixo (N15)',
-      hotspotDetail: 'Amarante Retail • Burger King • Eixo N15 Norte',
-      lat: 41.2955,
-      lng: -8.0459,
-    },
-    {
-      id: tacticalCells[2]?.id || 'CELL-AMR-VILA-MEA',
-      shortLabel: 'Vila Meã (Acesso A4 / N211)',
-      hotspotDetail: 'McDonald’s Vila Meã • Intermarché • Nó A4',
-      lat: 41.2545,
-      lng: -8.1765,
-    },
-    {
-      id: tacticalCells[3]?.id || 'CELL-AMR-LIXA',
-      shortLabel: 'Lixa / Felgueiras (N101)',
-      hotspotDetail: 'Corredor N101 • Pingo Doce Lixa',
-      lat: 41.3235,
-      lng: -8.1462,
-    },
-    {
-      id: tacticalCells[4]?.id || 'CELL-AMR-MARCO',
-      shortLabel: 'Marco de Canaveses',
-      hotspotDetail: 'Centro Comercial • Eixo Sul Tâmega',
-      lat: 41.1852,
-      lng: -8.1488,
-    },
-  ];
+  useEffect(() => {
+    isAutoFollowRef.current = isAutoFollowActive;
+  }, [isAutoFollowActive]);
 
-  // Initialize Real Interactive Leaflet Map on mount with Smooth Mobile Touch Physics
+  // Purge ghost/duplicate rows in Supabase on map mount
+  useEffect(() => {
+    void cleanupGhostDuplicatePinsNow();
+    void refreshLiveGpsPosition();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync from context when real device GPS updates
+  useEffect(() => {
+    if (
+      realCourierProfile?.gpsSource === 'LIVE_GPS' &&
+      Number.isFinite(realCourierProfile.lat) &&
+      Number.isFinite(realCourierProfile.lng)
+    ) {
+      setLocalLiveCoords({
+        lat: realCourierProfile.lat,
+        lng: realCourierProfile.lng,
+      });
+    }
+  }, [
+    realCourierProfile?.gpsSource,
+    realCourierProfile?.lat,
+    realCourierProfile?.lng,
+  ]);
+
+  // Direct high-frequency GPS watcher inside Map tab (Native Android + Web Geolocation)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const winAny = window as unknown as {
+      BuddyNativeOverlay?: {
+        requestImmediateNativeGpsFix?: () => void;
+      };
+    };
+    try {
+      winAny.BuddyNativeOverlay?.requestImmediateNativeGpsFix?.();
+    } catch {
+      // ignore
+    }
+
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      return;
+    }
+
+    let watchId: number | null = null;
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+            setLocalLiveCoords({
+              lat: Number(lat.toFixed(6)),
+              lng: Number(lng.toFixed(6)),
+            });
+            if (Number.isFinite(pos.coords.accuracy) && pos.coords.accuracy > 0) {
+              setLiveAccuracyMeters(Math.min(80, Math.max(6, pos.coords.accuracy)));
+            }
+          }
+        },
+        () => {
+          // Wait for GPS signal without placing fake pins
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 2000,
+          timeout: 10000,
+        }
+      );
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      if (watchId !== null) {
+        try {
+          navigator.geolocation.clearWatch(watchId);
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, []);
+
+  // Only show active peer couriers (within last 5 minutes, excluding self and ghost rows)
+  const activePeerCouriers = useMemo(() => {
+    const nowMs = Date.now();
+    const myId = realCourierProfile?.id || '';
+    const myNameLower = (realCourierProfile?.name || '').trim().toLowerCase();
+
+    return onlineDirectoryCouriers.filter((c) => {
+      if (c.isSelfProfile || (myId && c.id === myId)) return false;
+      const callsignLower = (c.callsign || '').trim().toLowerCase();
+      if (
+        !callsignLower ||
+        callsignLower === 'caio m.' ||
+        callsignLower === 'caio' ||
+        callsignLower === 'cm' ||
+        (myNameLower && callsignLower === myNameLower)
+      ) {
+        return false;
+      }
+      if (!c.updatedAtIso) return false;
+      const updatedMs = Date.parse(c.updatedAtIso);
+      if (!Number.isFinite(updatedMs) || nowMs - updatedMs > 5 * 60 * 1000) {
+        return false;
+      }
+      return (
+        typeof c.lat === 'number' &&
+        typeof c.lng === 'number' &&
+        Number.isFinite(c.lat) &&
+        Number.isFinite(c.lng)
+      );
+    });
+  }, [onlineDirectoryCouriers, realCourierProfile?.id, realCourierProfile?.name]);
+
+  const totalOnlineCouriersCount = useMemo(() => {
+    const selfCount = !isAppPaused ? 1 : 0;
+    return selfCount + activePeerCouriers.length;
+  }, [isAppPaused, activePeerCouriers.length]);
+
+  const handleOpenBuddyProfilePopup = useCallback(
+    (courier: OnlineDirectoryCourier) => {
+      setActiveBuddyPopupCourierId(courier.id);
+    },
+    [setActiveBuddyPopupCourierId]
+  );
+
+  // Initialize Leaflet Map once
   useEffect(() => {
     if (!mapContainerRef.current || leafletMapRef.current) return;
 
-    const mapOptions: L.MapOptions & { tap?: boolean } = {
-      center: [selfLat, selfLng],
-      zoom: 14,
-      dragging: true,
-      tap: false,
-      inertia: true,
-      inertiaDeceleration: 2200,
-      inertiaMaxSpeed: 1800,
+    const initialCenter: [number, number] = localLiveCoords
+      ? [localLiveCoords.lat, localLiveCoords.lng]
+      : [AMARANTE_INITIAL_VIEW_CENTER.lat, AMARANTE_INITIAL_VIEW_CENTER.lng];
+
+    const map = L.map(mapContainerRef.current, {
+      center: initialCenter,
+      zoom: localLiveCoords ? 17 : 15,
       zoomControl: false,
-      touchZoom: true,
-      bounceAtZoomLimits: false,
       attributionControl: false,
-    };
+    });
 
-    const map = L.map(mapContainerRef.current, mapOptions);
+    const initialTileUrl =
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+    const tileLayer = L.tileLayer(initialTileUrl, {
+      maxZoom: 19,
+      subdomains: 'abcd',
+    }).addTo(map);
 
-    // Track user drag/zoom so background GPS or Supabase polls NEVER snap the camera back
+    const peerLayer = L.layerGroup().addTo(map);
+
+    // Pause auto-follow when user drags the map manually
     map.on('dragstart', () => {
-      userHasPannedMap.current = true;
+      setIsAutoFollowActive(false);
     });
-    map.on('zoomstart', () => {
-      userHasPannedMap.current = true;
-    });
-
-    const streetLayer = L.tileLayer(
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      {
-        maxZoom: 19,
-      }
-    );
-
-    // Hybrid Satellite: Esri World Imagery + Esri World Transportation + Esri World Boundaries and Places
-    const satImagery = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      {
-        maxZoom: 19,
-      }
-    );
-    const satTransportation = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
-      {
-        maxZoom: 19,
-        pane: 'overlayPane',
-      }
-    );
-    const satPlacesLabels = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-      {
-        maxZoom: 19,
-        pane: 'overlayPane',
-      }
-    );
-    const satelliteHybridGroup = L.layerGroup([
-      satImagery,
-      satTransportation,
-      satPlacesLabels,
-    ]);
-
-    streetLayer.addTo(map);
-    const staticGroup = L.layerGroup().addTo(map);
 
     leafletMapRef.current = map;
-    streetTileLayerRef.current = streetLayer;
-    satelliteHybridGroupRef.current = satelliteHybridGroup;
-    staticOverlaysGroupRef.current = staticGroup;
+    tileLayerRef.current = tileLayer;
+    peerMarkersLayerRef.current = peerLayer;
 
-    // Trigger invalidateSize after mount & layout transitions so tiles fill the 80% height with zero gray gaps
-    const t1 = window.setTimeout(() => map.invalidateSize(), 100);
-    const t2 = window.setTimeout(() => map.invalidateSize(), 350);
-    const handleResize = () => {
+    const timer = window.setTimeout(() => {
       map.invalidateSize();
-    };
-    window.addEventListener('resize', handleResize);
+    }, 150);
 
     return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.removeEventListener('resize', handleResize);
-      peerMarkersMapRef.current.clear();
-      selfMarkerRef.current = null;
+      window.clearTimeout(timer);
       map.remove();
       leafletMapRef.current = null;
-      streetTileLayerRef.current = null;
-      satelliteHybridGroupRef.current = null;
-      staticOverlaysGroupRef.current = null;
+      tileLayerRef.current = null;
+      selfMarkerRef.current = null;
+      selfAccuracyCircleRef.current = null;
+      peerMarkersLayerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-validate map size when telemetry sheet expands/collapses or layer switches
+  // Switch between Street and Satellite tiles
+  useEffect(() => {
+    const tileLayer = tileLayerRef.current;
+    if (!tileLayer) return;
+    if (mapStyleMode === 'SATELITE') {
+      tileLayer.setUrl(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+      );
+    } else {
+      tileLayer.setUrl(
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+      );
+    }
+  }, [mapStyleMode]);
+
+  // Update logged-in user's real GPS marker & auto-follow
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map) return;
-    const timer = window.setTimeout(() => {
-      map.invalidateSize();
-    }, 150);
-    return () => window.clearTimeout(timer);
-  }, [isTelemetrySheetExpanded, mapLayerMode]);
 
-  // Switch between OpenStreetMap Streets and Hybrid Satellite (Imagery + Roads + Place Names)
-  useEffect(() => {
-    const map = leafletMapRef.current;
-    const street = streetTileLayerRef.current;
-    const satHybrid = satelliteHybridGroupRef.current;
-    if (!map || !street || !satHybrid) return;
-
-    if (mapLayerMode === 'SATELLITE') {
-      if (map.hasLayer(street)) map.removeLayer(street);
-      if (!map.hasLayer(satHybrid)) satHybrid.addTo(map);
-    } else {
-      if (map.hasLayer(satHybrid)) map.removeLayer(satHybrid);
-      if (!map.hasLayer(street)) street.addTo(map);
+    // Never place the user's pin on a fake coordinate before real GPS arrives!
+    if (!localLiveCoords) {
+      if (selfMarkerRef.current) {
+        selfMarkerRef.current.remove();
+        selfMarkerRef.current = null;
+      }
+      if (selfAccuracyCircleRef.current) {
+        selfAccuracyCircleRef.current.remove();
+        selfAccuracyCircleRef.current = null;
+      }
+      return;
     }
-  }, [mapLayerMode]);
 
-  // Render static/semi-static overlays (Radius Circle, Hotspots & Road Hazards) ONLY when those change
-  useEffect(() => {
-    const map = leafletMapRef.current;
-    const group = staticOverlaysGroupRef.current;
-    if (!map || !group) return;
+    const latLng: [number, number] = [localLiveCoords.lat, localLiveCoords.lng];
+    const selfCallsign = (realCourierProfile?.name || 'Tu').trim();
+    const dotColor = isAppPaused ? '#94a3b8' : '#10b981';
 
-    group.clearLayers();
+    // Update or create accuracy circle
+    if (selfAccuracyCircleRef.current) {
+      selfAccuracyCircleRef.current.setLatLng(latLng);
+      selfAccuracyCircleRef.current.setRadius(liveAccuracyMeters);
+    } else {
+      selfAccuracyCircleRef.current = L.circle(latLng, {
+        radius: liveAccuracyMeters,
+        color: dotColor,
+        weight: 1.5,
+        fillColor: dotColor,
+        fillOpacity: 0.14,
+        interactive: false,
+      }).addTo(map);
+    }
 
-    // 1. Operational Radius Circle around Amarante Centro (41.2704, -8.0818)
-    L.circle([41.2704, -8.0818], {
-      radius: mapRadiusKm * 1000,
-      color: '#10b981',
-      weight: 1.5,
-      opacity: 0.45,
-      fillColor: '#10b981',
-      fillOpacity: 0.02,
-      dashArray: '6 6',
-      interactive: false,
-    }).addTo(group);
-
-    // 2. Real Amarante Restaurant Hotspots & Zones
-    amaranteRealHotspots.forEach((spot) => {
-      const isSelected = selectedCell?.id === spot.id;
-      const hotspotHtml = `
-        <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);cursor:pointer;">
-          <div style="width:${isSelected ? '14px' : '11px'};height:${isSelected ? '14px' : '11px'};border-radius:9999px;background:${isSelected ? '#10b981' : '#0284c7'};border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.45);"></div>
-          <span style="margin-top:2px;padding:1px 5px;border-radius:6px;background:rgba(15,23,42,0.88);color:#f8fafc;font-size:9px;font-weight:800;white-space:nowrap;border:1px solid ${isSelected ? '#10b981' : 'rgba(148,163,184,0.35)'};">
-            🏪 ${spot.shortLabel.split('/')[0].trim()}
-          </span>
+    // Compact, clean GPS pin for logged-in user
+    const selfIcon = L.divIcon({
+      className: 'buddy-clean-self-pin',
+      html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);">
+        <div style="position:relative;width:24px;height:24px;display:flex;align-items:center;justify-content:center;">
+          <span style="position:absolute;inset:0;border-radius:9999px;background:${dotColor};opacity:0.35;animation:ping 1.8s cubic-bezier(0,0,0.2,1) infinite;"></span>
+          <div style="width:16px;height:16px;border-radius:9999px;background:${dotColor};border:3px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.45);"></div>
         </div>
-      `;
-      const marker = L.marker([spot.lat, spot.lng], {
-        icon: L.divIcon({
-          className: 'buddy-leaflet-hotspot-pin',
-          html: hotspotHtml,
-          iconSize: [0, 0],
-        }),
-      });
-      marker.on('click', () => {
-        setSelectedCellId(spot.id);
-      });
-      marker.bindPopup(
-        `<div style="font-family:sans-serif;font-size:12px;color:#0f172a;">
-          <strong>${spot.shortLabel}</strong><br/>
-          <span style="font-size:11px;color:#334155;">${spot.hotspotDetail}</span>
-        </div>`
-      );
-      marker.addTo(group);
+        <span style="margin-top:2px;background:#09090b;color:#ffffff;font-size:10px;font-weight:900;padding:1px 6px;border-radius:9999px;border:1.5px solid ${dotColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4);">
+          ${selfCallsign}
+        </span>
+      </div>`,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
     });
 
-    // 3. Active Community Road Hazards on Real Streets
-    roadHazards
-      .filter((h) => !h.resolved)
-      .forEach((haz, idx) => {
-        const hazCoords = [
-          [41.2689, -8.0782],
-          [41.2932, -8.0485],
-          [41.2558, -8.1742],
-          [41.3185, -8.1395],
-        ][idx % 4];
-        const hazHtml = `
-          <div style="display:flex;align-items:center;gap:4px;transform:translate(-50%,-50%);padding:2px 6px;border-radius:9999px;background:#dc2626;color:#ffffff;font-size:10px;font-weight:800;white-space:nowrap;border:2px solid #ffffff;box-shadow:0 2px 8px rgba(220,38,38,0.5);">
-            ⚠️ ${haz.hazardType.split('/')[0].trim()}
-          </div>
-        `;
-        L.marker([hazCoords[0], hazCoords[1]], {
-          icon: L.divIcon({
-            className: 'buddy-leaflet-hazard-pin',
-            html: hazHtml,
-            iconSize: [0, 0],
-          }),
-        })
-          .bindPopup(
-            `<div style="font-family:sans-serif;font-size:12px;color:#0f172a;">
-              <strong>⚠️ ${haz.hazardType}</strong><br/>
-              <span>${haz.streetLocation}</span>
-            </div>`
-          )
-          .addTo(group);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roadHazards, selectedCell?.id, mapRadiusKm]);
-
-  // Update Self Marker & Peer Markers IN-PLACE via marker.setLatLng([lat, lng])
-  // NEVER call map.setView() or map.panTo() here so user drag is NEVER interrupted
-  useEffect(() => {
-    const map = leafletMapRef.current;
-    if (!map) return;
-
-    // 1. Update or create Self Courier Marker in-place
-    const selfRingColor = isSelfFree ? '#10b981' : '#f59e0b';
-    const selfStatusText = isSelfFree ? 'Disponível' : 'Ocupado';
-    const selfLabel =
-      realCourierProfile?.isRegistered && realCourierProfile.name
-        ? `${realCourierProfile.name} (Tu)`
-        : 'Novo Perfil (Tu)';
-    const selfVehicle = realCourierProfile?.vehicle || 'Mota 125cc';
-    const selfAvatarUrl = realCourierProfile?.isRegistered
-      ? realCourierProfile.avatar_url || ''
-      : '';
-    const nextSelfSig = `${selfLabel}|${selfStatusText}|${selfVehicle}|${selfAvatarUrl}`;
-
-    const selfAvatarNode = selfAvatarUrl
-      ? `<img src="${selfAvatarUrl}" alt="${selfLabel}" style="width:28px;height:28px;border-radius:9999px;object-fit:cover;border:2.5px solid ${selfRingColor};box-shadow:0 0 0 4px rgba(16,185,129,0.4),0 0 12px rgba(59,130,246,0.75);" />`
-      : `<div style="width:15px;height:15px;border-radius:9999px;background:${selfRingColor};border:2.5px solid #ffffff;box-shadow:0 0 0 5px rgba(16,185,129,0.45),0 0 12px rgba(59,130,246,0.75);"></div>`;
-
-    const selfHtml = `
-      <div style="display:flex;align-items:center;gap:6px;transform:translate(-50%,-50%);padding:3px 10px 3px 5px;border-radius:9999px;background:#0f172a;color:#ffffff;font-size:11px;font-weight:900;white-space:nowrap;border:2px solid ${selfRingColor};box-shadow:0 0 0 4px rgba(59,130,246,0.38),0 4px 14px rgba(16,185,129,0.5);">
-        ${selfAvatarNode}
-        <div style="display:flex;flex-direction:column;line-height:1.15;">
-          <span>${selfLabel}</span>
-          <span style="font-size:9px;color:${selfRingColor};font-weight:800;">● ${selfStatusText} • ${selfVehicle}</span>
-        </div>
-      </div>
-    `;
-
-    if (!selfMarkerRef.current) {
-      const m = L.marker([selfLat, selfLng], {
+    if (selfMarkerRef.current) {
+      selfMarkerRef.current.setLatLng(latLng);
+      selfMarkerRef.current.setIcon(selfIcon);
+    } else {
+      selfMarkerRef.current = L.marker(latLng, {
+        icon: selfIcon,
         zIndexOffset: 1000,
-        icon: L.divIcon({
-          className: 'buddy-leaflet-self-pin',
-          html: selfHtml,
-          iconSize: [0, 0],
-        }),
-      }).bindPopup(
-        `<div style="font-family:sans-serif;font-size:12px;color:#0f172a;">
-          <strong>${selfLabel}</strong><br/>
-          <span>${selfVehicle} • ${realCourierProfile?.zone || 'Amarante'} • <strong>${selfStatusText}</strong></span><br/>
-          <span style="font-family:monospace;font-size:11px;">GPS: ${selfLat.toFixed(4)}, ${selfLng.toFixed(4)}</span>
-        </div>`
-      );
-      m.addTo(map);
-      selfMarkerRef.current = m;
-      selfMarkerHtmlSigRef.current = nextSelfSig;
-    } else {
-      selfMarkerRef.current.setLatLng([selfLat, selfLng]);
-      if (selfMarkerHtmlSigRef.current !== nextSelfSig) {
-        selfMarkerRef.current.setIcon(
-          L.divIcon({
-            className: 'buddy-leaflet-self-pin',
-            html: selfHtml,
-            iconSize: [0, 0],
-          })
-        );
-        selfMarkerHtmlSigRef.current = nextSelfSig;
-      }
+      }).addTo(map);
     }
 
-    // 2. Update or create Peer Couriers in-place without recreating unchanged DOM markers
-    const activePeerIds = new Set<string>();
-    otherCouriersOnMap.forEach((courier, idx) => {
-      activePeerIds.add(courier.id);
-      const cLat = Number(courier.lat || 41.272 + (idx + 1) * 0.004);
-      const cLng = Number(courier.lng || -8.079 - (idx + 1) * 0.004);
-      const isFree = courier.orderStatus === 'DISPONIVEL';
-      const ringColor = isFree ? '#10b981' : '#f59e0b';
-      const statusBadgeLabel = isFree ? 'Disponível' : 'Ocupado';
-      const distKmLabel =
-        typeof courier.distanceKm === 'number'
-          ? `${courier.distanceKm.toFixed(1)} km`
-          : '0.0 km';
-      const peerSig = `${courier.callsign}|${courier.vehicle}|${statusBadgeLabel}|${distKmLabel}|${courier.avatarPhotoUrl || ''}`;
-
-      const avatarInside = courier.avatarPhotoUrl
-        ? `<img src="${courier.avatarPhotoUrl}" style="width:24px;height:24px;border-radius:9999px;object-fit:cover;border:2px solid ${ringColor};" />`
-        : `<div style="width:14px;height:14px;border-radius:9999px;background:${ringColor};border:2px solid #ffffff;"></div>`;
-      const peerHtml = `
-        <div style="display:flex;align-items:center;gap:5px;transform:translate(-50%,-50%);padding:3px 8px 3px 5px;border-radius:9999px;background:rgba(15,23,42,0.94);color:#ffffff;font-size:10px;font-weight:800;white-space:nowrap;border:1.5px solid ${ringColor};box-shadow:0 2px 10px rgba(0,0,0,0.5);">
-          ${avatarInside}
-          <div style="display:flex;flex-direction:column;line-height:1.15;">
-            <span>${courier.callsign} • <span style="color:#cbd5e1;font-weight:700;">${courier.vehicle}</span></span>
-            <span style="font-size:9px;color:${ringColor};font-weight:900;">● ${statusBadgeLabel} • ${distKmLabel}</span>
-          </div>
-        </div>
-      `;
-
-      const existingPeer = peerMarkersMapRef.current.get(courier.id);
-      if (!existingPeer) {
-        const pm = L.marker([cLat, cLng], {
-          icon: L.divIcon({
-            className: 'buddy-leaflet-peer-pin',
-            html: peerHtml,
-            iconSize: [0, 0],
-          }),
-        }).bindPopup(
-          `<div style="font-family:sans-serif;font-size:12px;color:#0f172a;line-height:1.4;">
-            <strong>${courier.callsign}</strong> (${courier.vehicle})<br/>
-            <span style="display:inline-block;margin:2px 0;padding:1px 6px;border-radius:9999px;background:${isFree ? '#d1fae5' : '#fef3c7'};color:${isFree ? '#065f46' : '#92400e'};font-size:10px;font-weight:800;">● ${statusBadgeLabel}</span>
-            <span style="font-size:11px;font-weight:700;color:#0f172a;"> • a ${distKmLabel} de ti</span><br/>
-            <span style="font-size:11px;color:#334155;">Zona: ${courier.zoneName}</span><br/>
-            <span style="font-family:monospace;font-size:10px;color:#64748b;">GPS: ${cLat.toFixed(4)}, ${cLng.toFixed(4)}</span>
-          </div>`
-        );
-        pm.addTo(map);
-        peerMarkersMapRef.current.set(courier.id, { marker: pm, sig: peerSig });
-      } else {
-        existingPeer.marker.setLatLng([cLat, cLng]);
-        if (existingPeer.sig !== peerSig) {
-          existingPeer.marker.setIcon(
-            L.divIcon({
-              className: 'buddy-leaflet-peer-pin',
-              html: peerHtml,
-              iconSize: [0, 0],
-            })
-          );
-          existingPeer.sig = peerSig;
-        }
-      }
-    });
-
-    // Remove markers for couriers no longer on the map
-    peerMarkersMapRef.current.forEach((val, key) => {
-      if (!activePeerIds.has(key)) {
-        val.marker.remove();
-        peerMarkersMapRef.current.delete(key);
-      }
-    });
+    // Smooth Auto-Follow Mode
+    if (!hasCenteredOnFirstFixRef.current) {
+      hasCenteredOnFirstFixRef.current = true;
+      map.setView(latLng, 17, { animate: true });
+    } else if (isAutoFollowRef.current) {
+      map.panTo(latLng, { animate: true, duration: 0.5 });
+    }
   }, [
-    selfLat,
-    selfLng,
-    isSelfFree,
-    realCourierProfile,
-    otherCouriersOnMap,
+    localLiveCoords,
+    liveAccuracyMeters,
+    realCourierProfile?.name,
+    isAppPaused,
   ]);
 
-  // Only fly/center the camera when the user EXPLICITLY taps [🎯 Centrar]
-  const handleRecenterOnCourier = () => {
-    userHasPannedMap.current = false;
-    if (leafletMapRef.current) {
-      leafletMapRef.current.flyTo([selfLat, selfLng], 16, {
-        duration: 0.5,
+  // Render active peer couriers (within last 5 minutes only)
+  useEffect(() => {
+    const peerLayer = peerMarkersLayerRef.current;
+    if (!peerLayer) return;
+    peerLayer.clearLayers();
+
+    activePeerCouriers.forEach((c) => {
+      if (typeof c.lat !== 'number' || typeof c.lng !== 'number') return;
+      const isFree = c.orderStatus === 'DISPONIVEL';
+      const ringColor = isFree ? '#10b981' : '#f59e0b';
+
+      const peerIcon = L.divIcon({
+        className: 'buddy-clean-peer-pin',
+        html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);cursor:pointer;">
+          <div style="width:26px;height:26px;border-radius:9999px;background:#18181b;color:#ffffff;border:2.5px solid ${ringColor};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+            ${c.avatarInitials || c.callsign.slice(0, 2).toUpperCase()}
+          </div>
+          <span style="margin-top:2px;background:rgba(9,9,11,0.92);color:#ffffff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:6px;border:1px solid ${ringColor};white-space:nowrap;">
+            ${c.callsign}
+          </span>
+        </div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
       });
-    }
+
+      const marker = L.marker([c.lat, c.lng], { icon: peerIcon });
+      marker.on('click', () => {
+        handleOpenBuddyProfilePopup(c);
+      });
+      marker.addTo(peerLayer);
+    });
+  }, [activePeerCouriers, handleOpenBuddyProfilePopup]);
+
+  const handleRecenterAndFollowGps = () => {
+    setIsAutoFollowActive(true);
     void refreshLiveGpsPosition();
-  };
 
-  const handleZoomIn = () => {
-    if (leafletMapRef.current) {
-      leafletMapRef.current.zoomIn();
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = Number(pos.coords.latitude.toFixed(6));
+            const lng = Number(pos.coords.longitude.toFixed(6));
+            setLocalLiveCoords({ lat, lng });
+            if (leafletMapRef.current) {
+              leafletMapRef.current.flyTo([lat, lng], 17, {
+                animate: true,
+                duration: 0.6,
+              });
+            }
+          },
+          () => {
+            if (localLiveCoords && leafletMapRef.current) {
+              leafletMapRef.current.flyTo(
+                [localLiveCoords.lat, localLiveCoords.lng],
+                17,
+                { animate: true, duration: 0.6 }
+              );
+            }
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        );
+      } catch {
+        // ignore
+      }
+    }
+
+    if (localLiveCoords && leafletMapRef.current) {
+      leafletMapRef.current.flyTo(
+        [localLiveCoords.lat, localLiveCoords.lng],
+        17,
+        { animate: true, duration: 0.6 }
+      );
     }
   };
 
-  const handleZoomOut = () => {
-    if (leafletMapRef.current) {
-      leafletMapRef.current.zoomOut();
-    }
+  const handleOpenExternalNav = (app: 'WAZE' | 'GMAPS') => {
+    const destQuery =
+      hasRealActiveDelivery && activeDeliveryLifecycle.destinationName
+        ? encodeURIComponent(`${activeDeliveryLifecycle.destinationName}, Amarante`)
+        : localLiveCoords
+          ? `${localLiveCoords.lat},${localLiveCoords.lng}`
+          : '41.2704,-8.0818';
+
+    const url =
+      app === 'WAZE'
+        ? `https://waze.com/ul?q=${destQuery}&navigate=yes`
+        : `https://www.google.com/maps/dir/?api=1&destination=${destQuery}&travelmode=two-wheeler`;
+
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
-
-  const externalAssistButtons: {
-    action: ExternalNavMapAssistAction;
-    label: string;
-    voicePhrase: string;
-    icon: React.ReactNode;
-  }[] = [
-    {
-      action: 'ZOOM_IN',
-      label: 'Aproximar Zoom',
-      voicePhrase: 'Mapa: aproximar zoom',
-      icon: <ZoomIn className="h-3.5 w-3.5 shrink-0" />,
-    },
-    {
-      action: 'ZOOM_OUT',
-      label: 'Afastar Zoom',
-      voicePhrase: 'Mapa: afastar zoom',
-      icon: <ZoomOut className="h-3.5 w-3.5 shrink-0" />,
-    },
-    {
-      action: 'RECENTER_ROUTE',
-      label: 'Recentralizar Rota',
-      voicePhrase: 'Mapa: recentralizar rota',
-      icon: <Compass className="h-3.5 w-3.5 shrink-0" />,
-    },
-    {
-      action: 'REPORT_HAZARD',
-      label: 'Marcar Perigo',
-      voicePhrase: 'Mapa: marcar perigo no mapa',
-      icon: <AlertTriangle className="h-3.5 w-3.5 shrink-0" />,
-    },
-    {
-      action: 'ALTERNATIVE_ROUTE',
-      label: 'Rota Alternativa',
-      voicePhrase: 'Mapa: rota alternativa',
-      icon: <Route className="h-3.5 w-3.5 shrink-0" />,
-    },
-  ];
-
-  const liveRateDisplay = isProdRealOnly
-    ? realCalculatedEurPerKmLabel
-    : `${marketTelemetry.liveEurPerKmByScope.GLOBAL_CRUZADO.toFixed(2).replace('.', ',')} €/km`;
 
   return (
-    <div className="relative w-full h-full overflow-hidden flex flex-col gap-1.5 select-none">
-      {/* =====================================================================
-          80% FULL-VIEWPORT INTERACTIVE STREET & HYBRID SATELLITE MAP
-          height: calc(100dvh - 135px), touch-action: none so 1-finger drag never scrolls page
-          ===================================================================== */}
+    <div className="space-y-2.5">
+      {/* FULL INTERACTIVE LEAFLET MAP CONTAINER */}
       <div
-        aria-label="Mapa Real Interativo de Amarante (80% Ecrã • Ruas & Satélite Híbrido)"
-        style={{
-          height: 'calc(100dvh - 135px)',
-          minHeight: '360px',
-          touchAction: 'none',
-        }}
-        className={`relative w-full rounded-2xl overflow-hidden shadow-lg border ${
-          isDaylight ? 'border-slate-300' : 'border-slate-800'
+        className={`relative rounded-2xl overflow-hidden border shadow-xl h-[calc(100vh-148px)] min-h-[460px] max-h-[760px] ${
+          isDaylight
+            ? 'border-slate-300 bg-slate-100'
+            : 'border-zinc-800 bg-zinc-950'
         }`}
       >
+        {/* Leaflet Map Canvas */}
         <div
           ref={mapContainerRef}
-          className="w-full h-full z-0"
-          style={{
-            width: '100%',
-            height: '100%',
-            touchAction: 'none',
-          }}
+          className="absolute inset-0 z-0 h-full w-full"
         />
 
-        {/* Slim Translucent High-Contrast Top Floating Control Pill Bar (z-index: 500) */}
-        <div className="absolute top-2.5 inset-x-2.5 z-[500] flex items-center justify-between gap-1.5 pointer-events-none">
-          <div
-            style={{ backgroundColor: 'rgba(2, 6, 23, 0.88)', color: '#ffffff' }}
-            className="rounded-xl border border-slate-700/90 p-1 flex items-center gap-1 shadow-xl backdrop-blur-md pointer-events-auto"
-          >
+        {/* TOP OVERLAY BAR: ONLY [🗺️ Ruas | 🛰️ Satélite] on Left AND [🎯 Centrar] on Right */}
+        <div className="absolute top-3 left-3 right-3 z-[400] flex items-center justify-between gap-2 pointer-events-none">
+          {/* Left: Street vs Satellite Toggle */}
+          <div className="pointer-events-auto inline-flex items-center rounded-xl bg-zinc-950/90 backdrop-blur-md border border-zinc-700 p-1 shadow-lg">
             <button
               type="button"
-              onClick={() => setMapLayerMode('STREETS')}
-              style={{
-                backgroundColor:
-                  mapLayerMode === 'STREETS' ? '#059669' : 'transparent',
-                color: '#ffffff',
-              }}
-              className="rounded-lg px-2 py-1 text-[10px] font-extrabold cursor-pointer transition whitespace-nowrap"
+              onClick={() => setMapStyleMode('RUAS')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition cursor-pointer ${
+                mapStyleMode === 'RUAS'
+                  ? 'bg-emerald-500 text-zinc-950 shadow'
+                  : 'text-zinc-200 hover:text-white'
+              }`}
             >
               🗺️ Ruas
             </button>
             <button
               type="button"
-              onClick={() => setMapLayerMode('SATELLITE')}
-              style={{
-                backgroundColor:
-                  mapLayerMode === 'SATELLITE' ? '#059669' : 'transparent',
-                color: '#ffffff',
-              }}
-              className="rounded-lg px-2 py-1 text-[10px] font-extrabold cursor-pointer transition whitespace-nowrap"
+              onClick={() => setMapStyleMode('SATELITE')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition cursor-pointer ${
+                mapStyleMode === 'SATELITE'
+                  ? 'bg-emerald-500 text-zinc-950 shadow'
+                  : 'text-zinc-200 hover:text-white'
+              }`}
             >
-              🛰️ Satélite Híbrido
+              🛰️ Satélite
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 pointer-events-auto">
-            <button
-              type="button"
-              onClick={handleRecenterOnCourier}
-              style={{ backgroundColor: 'rgba(15, 23, 42, 0.92)', color: '#34d399' }}
-              className="rounded-xl border border-emerald-500/60 px-2.5 py-1.5 text-[10px] font-extrabold shadow-xl backdrop-blur-md cursor-pointer active:scale-95 transition whitespace-nowrap"
-            >
-              🎯 Centrar
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsCourierRegistrationModalOpen(true)}
-              style={{ backgroundColor: '#059669', color: '#ffffff' }}
-              className="rounded-xl border border-emerald-400/70 px-2.5 py-1.5 text-[10px] font-extrabold shadow-xl flex items-center gap-1 cursor-pointer active:scale-95 transition whitespace-nowrap"
-            >
-              <UserCheck className="h-3 w-3 shrink-0" />
-              <span>👤 Perfil</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Compact Bottom-Left + / - Zoom Controls & Availability Toggle Pill */}
-        <div className="absolute bottom-2.5 left-2.5 right-2.5 z-[500] flex items-end justify-between gap-2 pointer-events-none">
-          <div className="flex items-center gap-1.5 pointer-events-auto">
-            <div
-              style={{ backgroundColor: 'rgba(2, 6, 23, 0.88)', color: '#ffffff' }}
-              className="rounded-xl border border-slate-700 flex items-center overflow-hidden shadow-lg backdrop-blur-md"
-            >
-              <button
-                type="button"
-                onClick={handleZoomOut}
-                aria-label="Afastar zoom"
-                className="px-2.5 py-1.5 text-xs font-black text-white hover:bg-slate-800 cursor-pointer border-r border-slate-700"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={handleZoomIn}
-                aria-label="Aproximar zoom"
-                className="px-2.5 py-1.5 text-xs font-black text-white hover:bg-slate-800 cursor-pointer"
-              >
-                +
-              </button>
-            </div>
-
-            <div
-              style={{ backgroundColor: 'rgba(15, 23, 42, 0.88)', color: '#f8fafc' }}
-              className="rounded-xl border border-slate-700 px-2 py-1 text-[10px] font-mono font-bold shadow-md"
-            >
-              📍 Amarante • {marketTelemetry.onlineCouriersNow} online
-            </div>
-          </div>
-
+          {/* Right: Centrar + Auto-Follow GPS Button (No Perfil button!) */}
           <button
             type="button"
-            onClick={toggleUserOrderAvailabilityStatus}
-            style={{
-              backgroundColor: isSelfFree
-                ? 'rgba(6, 78, 59, 0.94)'
-                : 'rgba(120, 53, 15, 0.94)',
-              color: '#ffffff',
-            }}
-            className="pointer-events-auto rounded-xl border border-white/25 px-2.5 py-1.5 text-[10px] font-extrabold shadow-lg cursor-pointer active:scale-95 transition whitespace-nowrap"
+            onClick={handleRecenterAndFollowGps}
+            className={`pointer-events-auto rounded-xl backdrop-blur-md border px-3.5 py-2 text-xs font-black flex items-center gap-1.5 shadow-lg cursor-pointer transition ${
+              isAutoFollowActive && localLiveCoords
+                ? 'bg-emerald-600/95 border-emerald-400 text-white'
+                : 'bg-zinc-950/90 border-zinc-700 text-zinc-100 hover:bg-zinc-900'
+            }`}
           >
-            {isSelfFree ? '● Disponível' : '● Ocupado'}
+            <Compass className="h-3.5 w-3.5 shrink-0" />
+            <span>🎯 Centrar</span>
           </button>
         </div>
 
-        {/* Collapsible Telemetry & Waze/Maps Overlay Sheet inside Map when expanded */}
-        {isTelemetrySheetExpanded && (
-          <div
-            style={{ backgroundColor: 'rgba(9, 9, 11, 0.96)', color: '#f4f4f5' }}
-            className="absolute inset-x-2 bottom-2 z-[520] rounded-2xl border border-emerald-500/40 p-3 space-y-2.5 shadow-2xl backdrop-blur-md max-h-[65%] overflow-y-auto"
-          >
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-2">
-              <div className="min-w-0">
-                <span className="text-xs font-extrabold text-white block truncate">
-                  {realCourierProfile?.zone || selectedCell?.zoneName || 'Amarante'}
-                </span>
-                <span className="text-[10px] text-zinc-400 block truncate">
-                  Janela {marketTelemetry.currentHourWindowLabel} •{' '}
-                  {realCompletedDeliveries.length} entrega(s) hoje •{' '}
-                  {marketTelemetry.onlineCouriersNow} estafeta(s) online
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => void cleanupGhostDuplicatePinsNow()}
-                  className="rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 px-2 py-1 text-[10px] font-bold text-slate-200 flex items-center gap-1 cursor-pointer"
-                >
-                  <RefreshCw className="h-2.5 w-2.5 text-emerald-400" />
-                  <span>Limpar Pinos</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('financas')}
-                  className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-2 py-1 text-[10px] font-extrabold text-white cursor-pointer"
-                >
-                  Finanças →
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsTelemetrySheetExpanded(false)}
-                  className="rounded-lg bg-zinc-800 hover:bg-zinc-700 p-1 text-zinc-300 cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* External Navigation Map Touch Helper (Waze / Google Maps Assist) */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-bold text-zinc-200 flex items-center gap-1">
-                  <Navigation className="h-3 w-3 text-emerald-400 shrink-0" />
-                  <span>Atalhos Rápidos Waze / Google Maps</span>
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {externalAssistButtons.map((btn) => (
-                  <button
-                    key={btn.action}
-                    type="button"
-                    onTouchStart={(e) => {
-                      const t = e.touches[0];
-                      touchStartPosRef.current = {
-                        x: t ? t.clientX : 0,
-                        y: t ? t.clientY : 0,
-                        moved: false,
-                      };
-                    }}
-                    onTouchMove={(e) => {
-                      const t = e.touches[0];
-                      if (!t) return;
-                      const dx = Math.abs(t.clientX - touchStartPosRef.current.x);
-                      const dy = Math.abs(t.clientY - touchStartPosRef.current.y);
-                      if (dx > 10 || dy > 10) {
-                        touchStartPosRef.current.moved = true;
-                      }
-                    }}
-                    onClick={() => {
-                      if (touchStartPosRef.current.moved) {
-                        touchStartPosRef.current.moved = false;
-                        return;
-                      }
-                      triggerExternalMapAssistMacro(btn.action);
-                    }}
-                    className="rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 px-2 py-1.5 text-[10px] font-semibold text-zinc-100 flex items-center gap-1 cursor-pointer transition text-left"
-                  >
-                    {btn.icon}
-                    <span className="truncate">{btn.label}</span>
-                  </button>
-                ))}
-              </div>
-              {lastExternalMapAssist && (
-                <div className="rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1 flex items-center justify-between text-[10px] font-mono text-emerald-400">
-                  <span className="truncate">
-                    ✓ {lastExternalMapAssist.label}:{' '}
-                    {lastExternalMapAssist.simulatedTouchCoords}
-                  </span>
-                  <span className="text-zinc-500">
-                    {lastExternalMapAssist.timestamp}
-                  </span>
-                </div>
-              )}
-            </div>
+        {/* CLEAN COMPACT BOTTOM STATUS PILL (No black drawer, no duplicate Disponível button) */}
+        <div className="absolute bottom-3 left-3 right-3 z-[400] flex items-center justify-between gap-2 pointer-events-none">
+          <div className="pointer-events-auto rounded-xl bg-zinc-950/90 backdrop-blur-md border border-zinc-800 px-3 py-2 shadow-lg flex items-center gap-2 min-w-0">
+            <span
+              className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                !localLiveCoords
+                  ? 'bg-amber-400 animate-pulse'
+                  : isAppPaused
+                    ? 'bg-zinc-400'
+                    : 'bg-emerald-400 animate-ping'
+              }`}
+            />
+            <span className="text-[11px] font-extrabold text-zinc-100 truncate">
+              {localLiveCoords
+                ? isAutoFollowActive
+                  ? 'GPS em Tempo Real (A seguir)'
+                  : 'GPS Ativo (Toque 🎯 Centrar p/ seguir)'
+                : 'A obter sinal GPS do telemóvel...'}
+            </span>
+            <span className="rounded-lg bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-400 shrink-0">
+              {totalOnlineCouriersCount} online
+            </span>
           </div>
-        )}
-      </div>
 
-      {/* =====================================================================
-          COMPACT 1-LINE COLLAPSIBLE BOTTOM TELEMETRY BAR
-          ===================================================================== */}
-      <button
-        type="button"
-        onClick={() => setIsTelemetrySheetExpanded((prev) => !prev)}
-        style={{ backgroundColor: '#18181b', color: '#f4f4f5' }}
-        className="w-full rounded-xl border border-zinc-800 px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] font-bold shadow-sm cursor-pointer hover:border-emerald-500/50 transition shrink-0"
-      >
-        <span className="truncate">
-          📍 Amarante ({mapRadiusKm} km)
-        </span>
-        <span className="text-[10px] font-semibold text-emerald-400 whitespace-nowrap shrink-0">
-          {isTelemetrySheetExpanded
-            ? '▾ Ocultar atalhos'
-            : '▴ Atalhos Waze / Maps'}
-        </span>
-      </button>
+          {hasRealActiveDelivery && (
+            <div className="pointer-events-auto flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleOpenExternalNav('WAZE')}
+                className="rounded-xl bg-sky-600 hover:bg-sky-500 text-white px-3 py-2 text-[11px] font-black shadow-lg flex items-center gap-1 cursor-pointer"
+              >
+                <Navigation className="h-3 w-3" />
+                <span>Waze</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenExternalNav('GMAPS')}
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 text-[11px] font-black shadow-lg flex items-center gap-1 cursor-pointer"
+              >
+                <Navigation className="h-3 w-3" />
+                <span>Maps</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

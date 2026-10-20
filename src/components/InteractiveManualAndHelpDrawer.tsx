@@ -509,10 +509,10 @@ export const InteractiveManualAndHelpDrawer: React.FC = () => {
             <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
               <div>
                 <h2 className="text-base font-extrabold text-white">
-                  Boas-vindas ao Delivery Buddy
+                  Editar Perfil de Estafeta
                 </h2>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  O teu copiloto de entregas em Amarante
+                  Atualiza o teu nome, foto, plataformas e veículo
                 </p>
               </div>
               <button
@@ -590,7 +590,7 @@ export const InteractiveManualAndHelpDrawer: React.FC = () => {
               className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 py-3 px-4 text-sm font-black flex items-center justify-center gap-2 shadow-lg cursor-pointer transition"
             >
               <span>
-                {isSavingReg ? 'A guardar...' : 'Começar a Trabalhar →'}
+                {isSavingReg ? 'A guardar...' : 'Guardar Alterações'}
               </span>
             </button>
           </form>
@@ -1691,14 +1691,15 @@ export const MenuMaisHubView: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Device Account Switch Button */}
+        {/* Quick Logout / Switch Account Button */}
         <button
           type="button"
-          onClick={switchOrCreateNewCourierProfileOnDevice}
-          style={{ backgroundColor: '#d97706', color: '#ffffff' }}
-          className="w-full rounded-xl bg-amber-600 hover:bg-amber-500 border border-amber-400 text-white py-2 px-3 text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
+          onClick={logoutSession}
+          style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+          className="w-full rounded-xl bg-rose-600 hover:bg-rose-500 border border-rose-400 text-white py-2 px-3 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
         >
-          <span>🔄 Não és tu? Criar Novo Perfil neste Telemóvel</span>
+          <LogOut className="h-3.5 w-3.5" />
+          <span>Terminar Sessão / Trocar Conta</span>
         </button>
 
         {/* Direct Zero-AI Photo Uploader & Active Platforms Selector in Ajustes */}

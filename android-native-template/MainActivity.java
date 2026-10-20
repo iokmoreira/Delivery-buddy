@@ -7,6 +7,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.ContentObserver;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.net.ConnectivityManager;
@@ -24,6 +27,7 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.view.WindowManager;
+import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -57,6 +61,12 @@ public class MainActivity extends BridgeActivity {
     private TextToSpeech nativeTts;
     private boolean nativeTtsReady = false;
     private ContentObserver screenshotObserver;
+    private LocationManager locationManager;
+    private LocationListener nativeLocationListener;
+    private double lastNativeLat = 0.0;
+    private double lastNativeLng = 0.0;
+    private float lastNativeAccuracy = 0.0f;
+    private boolean hasNativeGpsFix = false;
 
     // 100% Silent by Default: single-shot on-demand voice only (NEVER loops!)
     private boolean isSingleShotListening = false;
@@ -103,12 +113,14 @@ public class MainActivity extends BridgeActivity {
         initRecognizerIntent();
         initNativeTts();
         registerScreenshotObserver();
+        startNativeGpsTrackingIfPermitted();
 
         if (getBridge() != null && getBridge().getWebView() != null) {
             final WebView webView = getBridge().getWebView();
             WebSettings settings = webView.getSettings();
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
+            settings.setGeolocationEnabled(true);
             settings.setCacheMode(WebSettings.LOAD_DEFAULT);
             settings.setMediaPlaybackRequiresUserGesture(false);
             webView.addJavascriptInterface(new BuddyNativeOverlayBridge(), "BuddyNativeOverlay");
@@ -128,11 +140,131 @@ public class MainActivity extends BridgeActivity {
                         });
                     }
                 }
+
+                @Override
+                public void onGeolocationPermissionsShowPrompt(
+                    final String origin,
+                    final GeolocationPermissions.Callback callback
+                ) {
+                    if (callback != null) {
+                        callback.invoke(origin, true, false);
+                    }
+                }
             });
 
             // Automatic Live OTA check on startup: load https://iokmoreira.github.io/Delivery-buddy/ if reachable,
             // otherwise stay on the bundled local Capacitor build (https://localhost) seamlessly!
             checkAndLoadLiveOtaIfOnline(false);
+        }
+    }
+
+    private void startNativeGpsTrackingIfPermitted() {
+        try {
+            boolean hasFine = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED;
+            boolean hasCoarse = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED;
+            if (!hasFine && !hasCoarse) {
+                return;
+            }
+            if (locationManager == null) {
+                locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+            }
+            if (locationManager == null) return;
+
+            if (nativeLocationListener == null) {
+                nativeLocationListener = new LocationListener() {
+                    @Override
+                    public void onLocationChanged(final Location location) {
+                        if (location == null) return;
+                        dispatchNativeLocationToWebView(location);
+                    }
+
+                    @Override
+                    public void onStatusChanged(String provider, int status, Bundle extras) {
+                    }
+
+                    @Override
+                    public void onProviderEnabled(String provider) {
+                    }
+
+                    @Override
+                    public void onProviderDisabled(String provider) {
+                    }
+                };
+            }
+
+            try {
+                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                        LocationManager.GPS_PROVIDER,
+                        2000L,
+                        1.0f,
+                        nativeLocationListener,
+                        Looper.getMainLooper()
+                    );
+                    Location lastGps = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                    if (lastGps != null) {
+                        dispatchNativeLocationToWebView(lastGps);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+
+            try {
+                if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                        LocationManager.NETWORK_PROVIDER,
+                        2500L,
+                        2.0f,
+                        nativeLocationListener,
+                        Looper.getMainLooper()
+                    );
+                    if (!hasNativeGpsFix) {
+                        Location lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                        if (lastNet != null) {
+                            dispatchNativeLocationToWebView(lastNet);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void dispatchNativeLocationToWebView(final Location location) {
+        if (location == null) return;
+        final double lat = location.getLatitude();
+        final double lng = location.getLongitude();
+        if (lat == 0.0 && lng == 0.0) return;
+        final float accuracy = location.hasAccuracy() ? location.getAccuracy() : 12.0f;
+        final float speedMps = location.hasSpeed() ? location.getSpeed() : 0.0f;
+        lastNativeLat = lat;
+        lastNativeLng = lng;
+        lastNativeAccuracy = accuracy;
+        hasNativeGpsFix = true;
+
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            final WebView webView = getBridge().getWebView();
+            webView.post(new Runnable() {
+                @Override
+                public void run() {
+                    String js = String.format(
+                        Locale.US,
+                        "window.onNativeLocationUpdate && window.onNativeLocationUpdate(%.6f, %.6f, %.1f, %.2f);",
+                        lat,
+                        lng,
+                        accuracy,
+                        speedMps
+                    );
+                    webView.evaluateJavascript(js, null);
+                }
+            });
         }
     }
 
@@ -819,6 +951,7 @@ public class MainActivity extends BridgeActivity {
         isInForeground = true;
         BuddyOverlayService.hideBubble(this);
         notifyRestoredFromBubble();
+        startNativeGpsTrackingIfPermitted();
         if (pendingWakeTranscript != null) {
             mainHandler.postDelayed(new Runnable() {
                 @Override
@@ -827,6 +960,16 @@ public class MainActivity extends BridgeActivity {
                 }
             }, 150L);
         }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(
+        int requestCode,
+        String[] permissions,
+        int[] grantResults
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        startNativeGpsTrackingIfPermitted();
     }
 
     @Override
@@ -850,6 +993,12 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onDestroy() {
         stopAndReleaseMicrophoneNow();
+        if (locationManager != null && nativeLocationListener != null) {
+            try {
+                locationManager.removeUpdates(nativeLocationListener);
+            } catch (Exception ignored) {
+            }
+        }
         if (screenshotObserver != null) {
             try {
                 getContentResolver().unregisterContentObserver(screenshotObserver);
@@ -957,7 +1106,7 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public int getNativeBridgeVersion() {
-            return 7;
+            return 8;
         }
 
         @JavascriptInterface
@@ -1013,6 +1162,27 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void reloadOtaNow() {
             checkAndLoadLiveOtaIfOnline(true);
+        }
+
+        @JavascriptInterface
+        public void requestImmediateNativeGpsFix() {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    startNativeGpsTrackingIfPermitted();
+                    if (hasNativeGpsFix && getBridge() != null && getBridge().getWebView() != null) {
+                        final WebView webView = getBridge().getWebView();
+                        String js = String.format(
+                            Locale.US,
+                            "window.onNativeLocationUpdate && window.onNativeLocationUpdate(%.6f, %.6f, %.1f, 0.0);",
+                            lastNativeLat,
+                            lastNativeLng,
+                            lastNativeAccuracy
+                        );
+                        webView.evaluateJavascript(js, null);
+                    }
+                }
+            });
         }
     }
 }

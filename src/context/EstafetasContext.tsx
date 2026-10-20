@@ -106,10 +106,12 @@ import {
   cleanupGhostDuplicateCouriersInSupabaseRest,
   connectSupabaseRealtimeSocket,
   COURIER_AVATAR_URL_STORAGE_KEY,
+  deleteCourierFromSupabaseRest,
   detectDeviceScreenProfile,
   DEVICE_SCREEN_PROFILE_STORAGE_KEY,
   fetchCouriersFromSupabaseRest,
   fetchDirectMessagesFromSupabaseRest,
+  findExistingCourierByNameInSupabaseRest,
   GEMINI_API_KEY_STORAGE_KEY,
   GEMINI_CUSTOM_MODEL_STORAGE_KEY,
   GEMINI_MODEL_STORAGE_KEY,
@@ -1281,8 +1283,44 @@ function getDefaultState(): PersistedEstafetasState {
   };
 }
 
+function hasPersistedRegisteredAccount(): boolean {
+  try {
+    const raw = localStorage.getItem(REAL_COURIER_MAP_PROFILE_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<RealCourierMapProfile>;
+      if (
+        parsed &&
+        parsed.isRegistered === true &&
+        typeof parsed.name === 'string' &&
+        parsed.name.trim().length > 0
+      ) {
+        return true;
+      }
+    }
+    const legacyRaw = localStorage.getItem(LEGACY_COURIER_PROFILE_STORAGE_KEY);
+    if (legacyRaw) {
+      const legacyParsed = JSON.parse(
+        legacyRaw
+      ) as Partial<RealCourierMapProfile>;
+      if (
+        legacyParsed &&
+        legacyParsed.isRegistered === true &&
+        typeof legacyParsed.name === 'string' &&
+        legacyParsed.name.trim().length > 0 &&
+        legacyParsed.name.trim() !== 'Caio M.'
+      ) {
+        return true;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
 function loadPersistedState(): PersistedEstafetasState {
   const defaults = getDefaultState();
+  const hasRegisteredProfile = hasPersistedRegisteredAccount();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -1294,11 +1332,7 @@ function loadPersistedState(): PersistedEstafetasState {
         Array.isArray(parsed.shiftTrips)
       ) {
         const verifiedAcc = parsed.verifiedAccount || defaults.verifiedAccount;
-        const persistedAuth =
-          parsed.isAuthenticated !== undefined
-            ? Boolean(parsed.isAuthenticated) &&
-              Boolean(verifiedAcc.keepLoggedInShift)
-            : true;
+        const persistedAuth = hasRegisteredProfile;
 
         return {
           ...defaults,
@@ -1574,7 +1608,10 @@ function loadPersistedState(): PersistedEstafetasState {
   } catch (err) {
     console.warn('Falha ao ler localStorage de Delivery Buddy:', err);
   }
-  return defaults;
+  return {
+    ...defaults,
+    isAuthenticated: hasRegisteredProfile,
+  };
 }
 
 export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -1716,6 +1753,9 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
             typeof parsed.name === 'string' &&
             parsed.name.trim().length > 0
           ) {
+            const isHardcodedFallbackCoord =
+              Math.abs(Number(parsed.lat || 41.2704) - 41.2704) < 0.0001 &&
+              Math.abs(Number(parsed.lng || -8.0818) - -8.0818) < 0.0001;
             return {
               ...blankUnregisteredProfile,
               ...parsed,
@@ -1728,6 +1768,9 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
                   ? parsed.active_platforms
                   : blankUnregisteredProfile.active_platforms,
               isRegistered: true,
+              gpsSource: isHardcodedFallbackCoord
+                ? 'AMARANTE_FALLBACK'
+                : parsed.gpsSource || 'AMARANTE_FALLBACK',
             };
           }
         }
@@ -1758,6 +1801,7 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
                   ? legacyParsed.active_platforms
                   : blankUnregisteredProfile.active_platforms,
               isRegistered: true,
+              gpsSource: 'AMARANTE_FALLBACK',
             };
           }
         }
@@ -1767,43 +1811,11 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
       return blankUnregisteredProfile;
     });
 
+  // Never auto-open the registration/profile popup modal on startup:
+  // When logged out, the full-screen <AuthAndVerificationGate /> is shown.
+  // When logged in, profile editing exists exclusively inside the Ajustes tab.
   const [isCourierRegistrationModalOpen, setIsCourierRegistrationModalOpen] =
-    useState<boolean>(() => {
-      try {
-        const raw = localStorage.getItem(REAL_COURIER_MAP_PROFILE_STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as Partial<RealCourierMapProfile>;
-          if (
-            parsed &&
-            parsed.isRegistered === true &&
-            typeof parsed.name === 'string' &&
-            parsed.name.trim().length > 0
-          ) {
-            return false;
-          }
-        }
-        const legacyRaw = localStorage.getItem(
-          LEGACY_COURIER_PROFILE_STORAGE_KEY
-        );
-        if (legacyRaw) {
-          const legacyParsed = JSON.parse(
-            legacyRaw
-          ) as Partial<RealCourierMapProfile>;
-          if (
-            legacyParsed &&
-            legacyParsed.isRegistered === true &&
-            typeof legacyParsed.name === 'string' &&
-            legacyParsed.name.trim().length > 0 &&
-            legacyParsed.name.trim() !== 'Caio M.'
-          ) {
-            return false;
-          }
-        }
-      } catch {
-        // ignore
-      }
-      return true;
-    });
+    useState<boolean>(false);
 
   const [supabaseLiveCouriers, setSupabaseLiveCouriers] = useState<
     SupabaseCourierRow[]
@@ -2445,6 +2457,14 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
+    const oldId = realCourierProfileRef.current.id;
+    if (oldId) {
+      void deleteCourierFromSupabaseRest({
+        supabaseUrl: state.aiAgentConfig.supabaseUrl,
+        supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
+        courierId: oldId,
+      });
+    }
     const freshDeviceId = resetAndGenerateNewCourierUuid();
     setRealCourierProfile({
       id: freshDeviceId,
@@ -2463,20 +2483,21 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
       isRegistered: false,
       gpsSource: 'AMARANTE_FALLBACK',
       supabaseSyncStatusText:
-        'Sessão terminada — registe o seu perfil neste telemóvel',
+        'Sessão terminada — inicie sessão ou crie conta para entrar',
     });
     setActiveDirectChatCourierId(null);
     setActiveBuddyPopupCourierId(null);
+    setIsCourierRegistrationModalOpen(false);
     setState((prev) => ({
       ...prev,
+      isAuthenticated: false,
       isAppPaused: false,
       verifiedAccount: {
         ...prev.verifiedAccount,
         courierName: 'Novo Estafeta',
       },
     }));
-    setIsCourierRegistrationModalOpen(true);
-  }, []);
+  }, [state.aiAgentConfig.supabaseAnonKey, state.aiAgentConfig.supabaseUrl]);
 
   const toggleAppPauseMode = useCallback(() => {
     setState((prev) => {
@@ -5597,21 +5618,47 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       'Sofia L.',
     ];
 
-    const directoryCouriers = (
-      isProd
-        ? state.onlineDirectoryCouriers.filter(
-            (c) =>
-              !c.id.startsWith('DIR-') && !mockCourierNames.includes(c.callsign)
-          )
-        : state.onlineDirectoryCouriers.filter(
-            (c) => c.isOnlineActive !== false
-          )
-    ).filter(
-      (c) => !c.isSelfProfile && (!realCourierProfile || c.id !== realCourierProfile.id)
-    );
+    const activeRemotePeers = supabaseLiveCouriers.filter((r) => {
+      if (!r.name || !r.name.trim()) return false;
+      if (realCourierProfile && r.id === realCourierProfile.id) return false;
+      const rLower = r.name.trim().toLowerCase();
+      const sLower = (realCourierProfile?.name || '').trim().toLowerCase();
+      if (
+        rLower === 'caio m.' ||
+        rLower === 'caio m' ||
+        rLower === 'caio' ||
+        rLower === 'cm' ||
+        (sLower && rLower === sLower)
+      ) {
+        return false;
+      }
+      const updatedMs = r.updated_at ? Date.parse(r.updated_at) : 0;
+      return Number.isFinite(updatedMs) && Date.now() - updatedMs <= 5 * 60 * 1000;
+    });
+
+    const directoryCouriers = isProd
+      ? activeRemotePeers.map((r) => ({
+          id: r.id,
+          callsign: r.name,
+          orderStatus: (r.has_order ||
+          r.status === 'Ocupado' ||
+          r.status === 'OCUPADO_COM_PEDIDO'
+            ? 'OCUPADO_COM_PEDIDO'
+            : 'DISPONIVEL') as CourierOrderAvailabilityStatus,
+        }))
+      : state.onlineDirectoryCouriers.filter(
+          (c) =>
+            c.isOnlineActive !== false &&
+            !c.isSelfProfile &&
+            (!realCourierProfile || c.id !== realCourierProfile.id)
+        );
 
     const selfOnline =
-      realCourierProfile || (state.isAuthenticated && !state.isAppPaused)
+      Boolean(
+        realCourierProfile?.isRegistered &&
+          realCourierProfile.name.trim().length > 0 &&
+          !state.isAppPaused
+      )
         ? 1
         : 0;
     const selfFree =
@@ -5856,6 +5903,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     realCompletedDeliveries,
     marketHourlySnapshots,
     realCourierProfile,
+    supabaseLiveCouriers,
   ]);
 
   const recordMarketTelemetrySnapshot = useCallback(
@@ -5978,7 +6026,66 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     [state.aiAgentConfig.supabaseUrl, state.aiAgentConfig.supabaseAnonKey]
   );
 
-  // Request live device coordinates via navigator.geolocation.watchPosition with Amarante Centro fallback
+  const applyLiveDeviceGpsFix = useCallback((rawLat: number, rawLng: number) => {
+    if (
+      !Number.isFinite(rawLat) ||
+      !Number.isFinite(rawLng) ||
+      (rawLat === 0 && rawLng === 0)
+    ) {
+      return;
+    }
+    setRealCourierProfile((prev) => {
+      const updated: RealCourierMapProfile = {
+        ...prev,
+        lat: Number(rawLat.toFixed(6)),
+        lng: Number(rawLng.toFixed(6)),
+        gpsSource: 'LIVE_GPS',
+        updated_at: new Date().toISOString(),
+      };
+      if (updated.isRegistered && updated.name.trim().length > 0) {
+        try {
+          localStorage.setItem(
+            REAL_COURIER_MAP_PROFILE_STORAGE_KEY,
+            JSON.stringify(updated)
+          );
+        } catch {
+          // ignore
+        }
+      }
+      return updated;
+    });
+  }, []);
+
+  // Listen to native Android LocationManager bridge (window.onNativeLocationUpdate)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const winAny = window as unknown as {
+      onNativeLocationUpdate?: (
+        lat: number,
+        lng: number,
+        accuracy?: number,
+        speed?: number
+      ) => void;
+      BuddyNativeOverlay?: {
+        requestImmediateNativeGpsFix?: () => void;
+      };
+    };
+    winAny.onNativeLocationUpdate = (lat: number, lng: number) => {
+      applyLiveDeviceGpsFix(Number(lat), Number(lng));
+    };
+    try {
+      winAny.BuddyNativeOverlay?.requestImmediateNativeGpsFix?.();
+    } catch {
+      // ignore
+    }
+    return () => {
+      if (winAny.onNativeLocationUpdate) {
+        delete winAny.onNativeLocationUpdate;
+      }
+    };
+  }, [applyLiveDeviceGpsFix]);
+
+  // Request live device coordinates via Native Android bridge + navigator.geolocation.watchPosition
   const startOrRefreshGeolocationWatch = useCallback(
     (targetZone?: AmaranteBaseZoneOption) => {
       const zoneKey =
@@ -5988,18 +6095,38 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       const fallbackCoords =
         AMARANTE_ZONE_COORDS_MAP[zoneKey] || AMARANTE_DEFAULT_COORDS;
 
+      if (typeof window !== 'undefined') {
+        const winAny = window as unknown as {
+          BuddyNativeOverlay?: {
+            requestImmediateNativeGpsFix?: () => void;
+          };
+        };
+        try {
+          winAny.BuddyNativeOverlay?.requestImmediateNativeGpsFix?.();
+        } catch {
+          // ignore
+        }
+      }
+
       if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-        setRealCourierProfile((prev) => ({
-          ...prev,
-          lat: fallbackCoords.lat,
-          lng: fallbackCoords.lng,
-          gpsSource: 'AMARANTE_FALLBACK',
-          updated_at: new Date().toISOString(),
-        }));
         return;
       }
 
       try {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            applyLiveDeviceGpsFix(pos.coords.latitude, pos.coords.longitude);
+          },
+          () => {
+            // Keep waiting for watchPosition or native GPS fix; never overwrite a LIVE_GPS fix
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 12000,
+            maximumAge: 2000,
+          }
+        );
+
         if (gpsWatchIdRef.current !== null) {
           navigator.geolocation.clearWatch(gpsWatchIdRef.current);
           gpsWatchIdRef.current = null;
@@ -6007,74 +6134,32 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
         gpsWatchIdRef.current = navigator.geolocation.watchPosition(
           (pos) => {
-            const rawLat = pos.coords.latitude;
-            const rawLng = pos.coords.longitude;
-            const isValidCoord =
-              Number.isFinite(rawLat) && Number.isFinite(rawLng);
-            const nextLat = isValidCoord ? rawLat : fallbackCoords.lat;
-            const nextLng = isValidCoord ? rawLng : fallbackCoords.lng;
-
-            setRealCourierProfile((prev) => {
-              const updated: RealCourierMapProfile = {
-                ...prev,
-                lat: Number(nextLat.toFixed(6)),
-                lng: Number(nextLng.toFixed(6)),
-                gpsSource: isValidCoord ? 'LIVE_GPS' : 'AMARANTE_FALLBACK',
-                updated_at: new Date().toISOString(),
-              };
-              if (updated.isRegistered && updated.name.trim().length > 0) {
-                try {
-                  localStorage.setItem(
-                    REAL_COURIER_MAP_PROFILE_STORAGE_KEY,
-                    JSON.stringify(updated)
-                  );
-                } catch {
-                  // ignore
-                }
-              }
-              return updated;
-            });
+            applyLiveDeviceGpsFix(pos.coords.latitude, pos.coords.longitude);
           },
           () => {
-            // Automatic fallback to Amarante Centro (lat: 41.2704, lng: -8.0818) or selected zone
+            // Never overwrite an already-acquired LIVE_GPS fix on a transient timeout
             setRealCourierProfile((prev) => {
-              const updated: RealCourierMapProfile = {
+              if (prev.gpsSource === 'LIVE_GPS') return prev;
+              return {
                 ...prev,
                 lat: fallbackCoords.lat,
                 lng: fallbackCoords.lng,
                 gpsSource: 'AMARANTE_FALLBACK',
                 updated_at: new Date().toISOString(),
               };
-              if (updated.isRegistered && updated.name.trim().length > 0) {
-                try {
-                  localStorage.setItem(
-                    REAL_COURIER_MAP_PROFILE_STORAGE_KEY,
-                    JSON.stringify(updated)
-                  );
-                } catch {
-                  // ignore
-                }
-              }
-              return updated;
             });
           },
           {
             enableHighAccuracy: true,
-            timeout: 5000,
-            maximumAge: 10000,
+            timeout: 15000,
+            maximumAge: 2000,
           }
         );
       } catch {
-        setRealCourierProfile((prev) => ({
-          ...prev,
-          lat: fallbackCoords.lat,
-          lng: fallbackCoords.lng,
-          gpsSource: 'AMARANTE_FALLBACK',
-          updated_at: new Date().toISOString(),
-        }));
+        // ignore
       }
     },
-    []
+    [applyLiveDeviceGpsFix]
   );
 
   useEffect(() => {
@@ -6796,6 +6881,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   }, []);
 
   const switchOrCreateNewCourierProfileOnDevice = useCallback(() => {
+    const oldId = realCourierProfileRef.current.id;
+    if (oldId) {
+      void deleteCourierFromSupabaseRest({
+        supabaseUrl: state.aiAgentConfig.supabaseUrl,
+        supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
+        courierId: oldId,
+      });
+    }
     const freshDeviceId = resetAndGenerateNewCourierUuid();
     const blankProfile: RealCourierMapProfile = {
       id: freshDeviceId,
@@ -6814,31 +6907,41 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       isRegistered: false,
       gpsSource: 'AMARANTE_FALLBACK',
       supabaseSyncStatusText:
-        'Sessão limpa — registe o novo perfil neste telemóvel',
+        'Sessão limpa — inicie sessão ou crie conta para entrar',
     };
     setRealCourierProfile(blankProfile);
     setActiveDirectChatCourierId(null);
     setActiveBuddyPopupCourierId(null);
+    setIsCourierRegistrationModalOpen(false);
     setState((prev) => ({
       ...prev,
+      isAuthenticated: false,
       verifiedAccount: {
         ...prev.verifiedAccount,
         courierName: 'Novo Estafeta',
       },
     }));
-    setIsCourierRegistrationModalOpen(true);
-    speakTextPt(
-      'Sessão local reiniciada. Registe o seu próprio nome e veículo neste telemóvel.'
-    );
-  }, [speakTextPt]);
+    speakTextPt('Sessão terminada.');
+  }, [
+    speakTextPt,
+    state.aiAgentConfig.supabaseAnonKey,
+    state.aiAgentConfig.supabaseUrl,
+  ]);
 
   const isGhostDuplicateOfSelf = useCallback(
     (rowId: string, rowName: string, selfId: string, selfName: string) => {
       if (rowId === selfId) return false;
       const rLower = (rowName || '').trim().toLowerCase();
       const sLower = (selfName || '').trim().toLowerCase();
-      // Always treat legacy default "Caio M." from another UUID as a ghost pin
-      if (rLower === 'caio m.' || rLower === 'caio m') return true;
+      // Always treat legacy test rows ("Caio M.", "caio", "cm") from another UUID as ghost pins
+      if (
+        rLower === 'caio m.' ||
+        rLower === 'caio m' ||
+        rLower === 'caio' ||
+        rLower === 'cm'
+      ) {
+        return true;
+      }
       if (!sLower) return false;
       if (rLower === sLower) return true;
       if (sLower.startsWith('caio') && rLower.startsWith('caio')) return true;
@@ -6846,6 +6949,23 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     },
     []
   );
+
+  // Automatically purge ghost/duplicate rows in Supabase on startup when logged in
+  useEffect(() => {
+    const prof = realCourierProfileRef.current;
+    if (!prof.isRegistered || !prof.id) return;
+    void cleanupGhostDuplicateCouriersInSupabaseRest({
+      supabaseUrl: state.aiAgentConfig.supabaseUrl,
+      supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
+      currentId: prof.id,
+      currentName: prof.name || 'Caio',
+    });
+  }, [
+    realCourierProfile.isRegistered,
+    realCourierProfile.id,
+    state.aiAgentConfig.supabaseAnonKey,
+    state.aiAgentConfig.supabaseUrl,
+  ]);
 
   const cleanupGhostDuplicatePinsNow = useCallback(async () => {
     const prof = realCourierProfileRef.current;
@@ -6962,9 +7082,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
       setState((prev) => ({
         ...prev,
+        isAuthenticated: true,
         verifiedAccount: {
           ...prev.verifiedAccount,
           courierName: cleanName,
+          keepLoggedInShift: true,
         },
       }));
 
@@ -6972,7 +7094,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       const upsertRes = await syncProfileToSupabaseAndLocalCache(nextProfile);
 
       speakTextPt(
-        `Perfil ${cleanName} registado online em ${input.zone} com ${input.vehicle}. Sincronizado no mapa e no Supabase.`
+        `Sessão iniciada como ${cleanName}.`
       );
 
       return {
@@ -11337,9 +11459,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       seen.add(realCourierProfile.id);
     }
 
-    // 2. Append all other real couriers synced from Supabase public.couriers
+    // 2. Append all other real couriers synced from Supabase public.couriers (active within last 5 minutes)
+    const nowMs = Date.now();
     supabaseLiveCouriers.forEach((row) => {
       if (seen.has(row.id) || !row.name || !row.name.trim()) return;
+      const updatedMs = row.updated_at ? Date.parse(row.updated_at) : 0;
+      if (!Number.isFinite(updatedMs) || nowMs - updatedMs > 5 * 60 * 1000) {
+        return;
+      }
       if (
         isGhostDuplicateOfSelf(
           row.id,
