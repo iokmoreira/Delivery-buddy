@@ -137,6 +137,19 @@ import {
   validateGeminiStudioConnection,
 } from '../services/geminiAgent';
 import {
+  CloudSharedStateSnapshot,
+  getActiveCloudCourierRows,
+  loadCloudSharedState,
+  publishAccountRegistrationToCloud,
+  publishAdminApprovalDecisionToCloud,
+  publishCourierPresenceToCloud,
+  publishRoadHazardToCloud,
+  publishWalkieMessageToCloud,
+  registerLocalCloudIdentityProvider,
+  startRealtimeCloudSyncStream,
+  subscribeToCloudSharedState,
+} from '../services/cloudSync';
+import {
   buildSurgicalHeavyOrderStreetTts,
   buildSurgicalMarketQueryStreetTts,
   buildSurgicalOfferStreetTts,
@@ -2902,6 +2915,8 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
         roadHazards: [newPin, ...prev.roadHazards],
       }));
 
+      void publishRoadHazardToCloud(newPin);
+
       return newPin;
     },
     [state.userPrefs.anonymousMode, state.verifiedAccount.courierName]
@@ -3677,6 +3692,13 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         ...prev,
         walkieMessages: [...prev.walkieMessages, newMsg],
       }));
+
+      void publishWalkieMessageToCloud({
+        ...newMsg,
+        senderId: realCourierProfileRef.current.id || 'SELF-COURIER',
+        senderName:
+          realCourierProfileRef.current.name.trim() || newMsg.senderName,
+      });
 
       return { ok: true };
     },
@@ -5829,18 +5851,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       if (!r.name || !r.name.trim()) return false;
       if (realCourierProfile && r.id === realCourierProfile.id) return false;
       const rLower = r.name.trim().toLowerCase();
-      const sLower = (realCourierProfile?.name || '').trim().toLowerCase();
-      if (
-        rLower === 'caio m.' ||
-        rLower === 'caio m' ||
-        rLower === 'caio' ||
-        rLower === 'cm' ||
-        (sLower && rLower === sLower)
-      ) {
+      if (rLower === 'caio m.' || rLower === 'caio m' || rLower === 'cm') {
         return false;
       }
       const updatedMs = r.updated_at ? Date.parse(r.updated_at) : 0;
-      return Number.isFinite(updatedMs) && Date.now() - updatedMs <= 5 * 60 * 1000;
+      return (
+        Number.isFinite(updatedMs) &&
+        Date.now() - updatedMs <= 2 * 60 * 60 * 1000
+      );
     });
 
     const directoryCouriers = isProd
@@ -7440,22 +7458,13 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   ]);
 
   const isGhostDuplicateOfSelf = useCallback(
-    (rowId: string, rowName: string, selfId: string, selfName: string) => {
+    (rowId: string, rowName: string, selfId: string, _selfName: string) => {
       if (rowId === selfId) return false;
       const rLower = (rowName || '').trim().toLowerCase();
-      const sLower = (selfName || '').trim().toLowerCase();
-      // Always treat legacy test rows ("Caio M.", "caio", "cm") from another UUID as ghost pins
-      if (
-        rLower === 'caio m.' ||
-        rLower === 'caio m' ||
-        rLower === 'caio' ||
-        rLower === 'cm'
-      ) {
+      // Only filter legacy mock rows ("Caio M.", "cm") — never filter a real second device UUID!
+      if (rLower === 'caio m.' || rLower === 'caio m' || rLower === 'cm') {
         return true;
       }
-      if (!sLower) return false;
-      if (rLower === sLower) return true;
-      if (sLower.startsWith('caio') && rLower.startsWith('caio')) return true;
       return false;
     },
     []
@@ -7660,7 +7669,192 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     ]
   );
 
-  // Send a heartbeat every 25 seconds while the app is open so active couriers stay online in public.couriers
+  const [cloudSharedState, setCloudSharedState] =
+    useState<CloudSharedStateSnapshot>(() => loadCloudSharedState());
+
+  const broadcastAllLocalIdentitiesToCloud = useCallback(() => {
+    const prof = realCourierProfileRef.current;
+    const persistentId = prof.id || getOrCreatePersistentCourierUuid();
+
+    if (prof.isRegistered && prof.name.trim().length > 0 && !state.isAppPaused) {
+      void publishCourierPresenceToCloud({ profile: prof });
+      void publishAccountRegistrationToCloud({
+        id: persistentId,
+        username: prof.name.trim(),
+        emailOrPhone: prof.name.trim(),
+        vehicle: prof.vehicle,
+        platforms:
+          prof.active_platforms && prof.active_platforms.length > 0
+            ? prof.active_platforms
+            : activePlatforms,
+        zone: prof.zone,
+        lat: prof.lat || AMARANTE_DEFAULT_COORDS.lat,
+        lng: prof.lng || AMARANTE_DEFAULT_COORDS.lng,
+        deviceModel: prof.device_model || deviceScreenProfile.deviceModel,
+      });
+    }
+
+    // Also broadcast any existing local accounts saved on this phone (buddy_saved_accounts_v1)
+    // so Admin immediately sees them in Requisições de Aceitação & Controlo de Contas
+    try {
+      const savedRaw = localStorage.getItem('buddy_saved_accounts_v1');
+      if (savedRaw) {
+        const savedList = JSON.parse(savedRaw);
+        if (Array.isArray(savedList)) {
+          savedList.forEach((acc, idx) => {
+            if (!acc || typeof acc.username !== 'string' || !acc.username.trim()) {
+              return;
+            }
+            const uname = acc.username.trim();
+            const isPrimary =
+              idx === 0 ||
+              (prof.name &&
+                uname.toLowerCase() === prof.name.trim().toLowerCase());
+            const accId = isPrimary
+              ? persistentId
+              : `${persistentId}-${uname
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]/g, '')
+                  .slice(0, 8)}`;
+            void publishAccountRegistrationToCloud({
+              id: accId,
+              username: uname,
+              emailOrPhone: acc.emailOrPhone || uname,
+              vehicle: acc.vehicle || prof.vehicle || 'Mota 125cc',
+              platforms:
+                Array.isArray(acc.platforms) && acc.platforms.length > 0
+                  ? acc.platforms
+                  : activePlatforms,
+              zone:
+                acc.zone || prof.zone || 'Amarante Centro / São Gonçalo',
+              lat: prof.lat || AMARANTE_DEFAULT_COORDS.lat,
+              lng: prof.lng || AMARANTE_DEFAULT_COORDS.lng,
+              deviceModel: deviceScreenProfile.deviceModel,
+            });
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [activePlatforms, deviceScreenProfile.deviceModel, state.isAppPaused]);
+
+  // Start Zero-Config Automatic Cloud Sync Engine on mount & subscribe to incoming real-time updates
+  useEffect(() => {
+    startRealtimeCloudSyncStream();
+    registerLocalCloudIdentityProvider(broadcastAllLocalIdentitiesToCloud);
+    broadcastAllLocalIdentitiesToCloud();
+
+    const unsub = subscribeToCloudSharedState((nextCloud) => {
+      setCloudSharedState(nextCloud);
+
+      // Immediately update live couriers from cloud state
+      const cloudRows = getActiveCloudCourierRows(nextCloud);
+      const selfProf = realCourierProfileRef.current;
+      const isSelfValid =
+        Boolean(selfProf.isRegistered) && selfProf.name.trim().length > 0;
+      const selfRow: SupabaseCourierRow | null = isSelfValid
+        ? {
+            id: selfProf.id,
+            name: selfProf.name.trim(),
+            vehicle: selfProf.vehicle,
+            status: selfProf.status,
+            has_order: selfProf.has_order,
+            lat: selfProf.lat,
+            lng: selfProf.lng,
+            zone: selfProf.zone,
+            reputation: selfProf.reputation || 100,
+            buddy_since: selfProf.buddy_since || 'Fundador • Out 2026',
+            updated_at: selfProf.updated_at || new Date().toISOString(),
+            avatar_url: selfProf.avatar_url,
+            active_platforms: selfProf.active_platforms,
+            device_model:
+              selfProf.device_model || deviceScreenProfile.deviceModel,
+            screen_aspect_ratio:
+              selfProf.screen_aspect_ratio ||
+              deviceScreenProfile.screenAspectRatio,
+          }
+        : null;
+
+      setSupabaseLiveCouriers((prev) => {
+        const byId = new Map<string, SupabaseCourierRow>();
+        for (const r of prev) {
+          if (
+            r &&
+            r.name &&
+            !isGhostDuplicateOfSelf(r.id, r.name, selfProf.id, selfProf.name)
+          ) {
+            byId.set(r.id, r);
+          }
+        }
+        for (const r of cloudRows) {
+          if (
+            r &&
+            r.name &&
+            !isGhostDuplicateOfSelf(r.id, r.name, selfProf.id, selfProf.name)
+          ) {
+            byId.set(r.id, r);
+          }
+        }
+        if (selfRow) {
+          byId.set(selfRow.id, selfRow);
+        }
+        return Array.from(byId.values());
+      });
+
+      // Sync Walkie-Talkie messages & Road Hazards from Cloud
+      if (
+        (nextCloud.walkieMessages && nextCloud.walkieMessages.length > 0) ||
+        (nextCloud.roadHazards && nextCloud.roadHazards.length > 0)
+      ) {
+        setState((prev) => {
+          let changed = false;
+          let nextWalkie = prev.walkieMessages;
+          if (nextCloud.walkieMessages && nextCloud.walkieMessages.length > 0) {
+            const existingWalkieIds = new Set(prev.walkieMessages.map((m) => m.id));
+            const incomingWalkie = nextCloud.walkieMessages.filter(
+              (m) => m && m.id && !existingWalkieIds.has(m.id)
+            );
+            if (incomingWalkie.length > 0) {
+              changed = true;
+              nextWalkie = [...prev.walkieMessages, ...incomingWalkie];
+            }
+          }
+
+          let nextHazards = prev.roadHazards;
+          if (nextCloud.roadHazards && nextCloud.roadHazards.length > 0) {
+            const existingHazardIds = new Set(prev.roadHazards.map((h) => h.id));
+            const incomingHazards = nextCloud.roadHazards.filter(
+              (h) => h && h.id && !existingHazardIds.has(h.id)
+            );
+            if (incomingHazards.length > 0) {
+              changed = true;
+              nextHazards = [...incomingHazards, ...prev.roadHazards];
+            }
+          }
+
+          return changed
+            ? {
+                ...prev,
+                walkieMessages: nextWalkie,
+                roadHazards: nextHazards,
+              }
+            : prev;
+        });
+      }
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [
+    broadcastAllLocalIdentitiesToCloud,
+    deviceScreenProfile.deviceModel,
+    deviceScreenProfile.screenAspectRatio,
+    isGhostDuplicateOfSelf,
+  ]);
+
+  // Send a heartbeat every 10 seconds while the app is open so active couriers stay online in public.couriers & Cloud Sync
   useEffect(() => {
     const heartbeatTimer = window.setInterval(() => {
       const prof = realCourierProfileRef.current;
@@ -7671,9 +7865,33 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         };
         void syncProfileToSupabaseAndLocalCache(updated);
       }
-    }, 25000);
+      broadcastAllLocalIdentitiesToCloud();
+    }, 10000);
     return () => window.clearInterval(heartbeatTimer);
-  }, [state.isAppPaused, syncProfileToSupabaseAndLocalCache]);
+  }, [
+    state.isAppPaused,
+    syncProfileToSupabaseAndLocalCache,
+    broadcastAllLocalIdentitiesToCloud,
+  ]);
+
+  // Immediately broadcast GPS coordinate updates whenever realCourierProfile.lat / lng changes
+  useEffect(() => {
+    if (
+      realCourierProfile.isRegistered &&
+      realCourierProfile.name.trim().length > 0 &&
+      !state.isAppPaused
+    ) {
+      void publishCourierPresenceToCloud({ profile: realCourierProfile });
+    }
+  }, [
+    realCourierProfile.lat,
+    realCourierProfile.lng,
+    realCourierProfile.status,
+    realCourierProfile.has_order,
+    realCourierProfile.isRegistered,
+    realCourierProfile.name,
+    state.isAppPaused,
+  ]);
 
   // Poll & subscribe via WebSockets (postgres_changes) to public.couriers and public.direct_messages
   useEffect(() => {
@@ -10095,8 +10313,22 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           c.id === courierId ? { ...c, kycStatus: status } : c
         ),
       }));
+      const targetReq = cloudSharedState.approvalRequests.find(
+        (r) => r.id === courierId
+      );
+      const targetCourier = supabaseLiveCouriers.find((c) => c.id === courierId);
+      void publishAdminApprovalDecisionToCloud({
+        courierId,
+        username: targetReq?.username || targetCourier?.name,
+        approvalStatus:
+          status === 'Ativo'
+            ? 'approved'
+            : status === 'Suspenso'
+              ? 'blocked'
+              : 'pending',
+      });
     },
-    []
+    [cloudSharedState.approvalRequests, supabaseLiveCouriers]
   );
 
   const toggleMandatoryTermsEnforcement = useCallback(() => {
@@ -12109,12 +12341,15 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       seen.add(realCourierProfile.id);
     }
 
-    // 2. Append all other real couriers synced from Supabase public.couriers (active within last 5 minutes)
+    // 2. Append all other real couriers synced from Supabase public.couriers & Cloud Sync (active within last 2 hours)
     const nowMs = Date.now();
     supabaseLiveCouriers.forEach((row) => {
       if (seen.has(row.id) || !row.name || !row.name.trim()) return;
       const updatedMs = row.updated_at ? Date.parse(row.updated_at) : 0;
-      if (!Number.isFinite(updatedMs) || nowMs - updatedMs > 5 * 60 * 1000) {
+      if (
+        !Number.isFinite(updatedMs) ||
+        nowMs - updatedMs > 2 * 60 * 60 * 1000
+      ) {
         return;
       }
       if (
@@ -12491,7 +12726,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     AdminManagedCourierRecord[]
   >(() => {
     const combinedRealRows: SupabaseCourierRow[] = [];
-    if (realCourierProfile) {
+    if (realCourierProfile && realCourierProfile.name.trim().length > 0) {
       combinedRealRows.push({
         id: realCourierProfile.id,
         name: realCourierProfile.name,
@@ -12509,8 +12744,43 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       });
     }
     supabaseLiveCouriers.forEach((row) => {
+      if (!row.name || !row.name.trim()) return;
       if (!combinedRealRows.some((r) => r.id === row.id)) {
         combinedRealRows.push(row);
+      }
+    });
+    // Also merge all cloud approval requests so newly created or existing accounts on any phone appear immediately for Admin
+    (cloudSharedState.approvalRequests || []).forEach((req) => {
+      if (!req.username || !req.username.trim()) return;
+      const alreadyExists = combinedRealRows.some(
+        (r) =>
+          r.id === req.id ||
+          r.name.trim().toLowerCase() === req.username.trim().toLowerCase()
+      );
+      if (!alreadyExists) {
+        combinedRealRows.push({
+          id: req.id,
+          name: req.username.trim(),
+          vehicle: String(req.vehicle || 'Mota 125cc'),
+          status:
+            req.approvalStatus === 'pending'
+              ? 'Pendente Aprovação'
+              : req.approvalStatus === 'blocked'
+                ? 'Bloqueado'
+                : 'Disponível',
+          has_order: false,
+          lat: Number(req.lat ?? AMARANTE_DEFAULT_COORDS.lat),
+          lng: Number(req.lng ?? AMARANTE_DEFAULT_COORDS.lng),
+          zone: String(req.zone || 'Amarante Centro / São Gonçalo'),
+          reputation: 100,
+          buddy_since: 'Fundador • Out 2026',
+          updated_at: req.updatedAt || req.createdAt || new Date().toISOString(),
+          active_platforms:
+            Array.isArray(req.platforms) && req.platforms.length > 0
+              ? req.platforms
+              : ['Uber Eats', 'Glovo'],
+          device_model: req.deviceModel,
+        });
       }
     });
 
@@ -12526,27 +12796,58 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
               second: '2-digit',
             })
           : 'Agora';
+        const cloudReq = (cloudSharedState.approvalRequests || []).find(
+          (req) =>
+            req.id === row.id ||
+            req.username.trim().toLowerCase() === row.name.trim().toLowerCase()
+        );
+        const cloudCourier = Object.values(cloudSharedState.couriers || {}).find(
+          (c) =>
+            c.id === row.id ||
+            c.name.trim().toLowerCase() === row.name.trim().toLowerCase()
+        );
+        const isAdminRole =
+          row.name.trim().toLowerCase().includes('presidente') ||
+          row.name.trim().toLowerCase() === 'admin' ||
+          cloudReq?.role === 'admin' ||
+          cloudCourier?.role === 'admin';
+        const effectiveCloudApproval = isAdminRole
+          ? 'approved'
+          : cloudReq?.approvalStatus || cloudCourier?.approvalStatus || 'pending';
+
         const statusOverride = realKycStatusOverrides[row.id];
+        const derivedKycStatus: AdminCourierKycStatus =
+          statusOverride ||
+          (effectiveCloudApproval === 'approved'
+            ? 'Ativo'
+            : effectiveCloudApproval === 'blocked'
+              ? 'Suspenso'
+              : 'Pendente IA');
+
         const rowPlats: PlatformName[] = isSelf
           ? activePlatforms
           : row.active_platforms && row.active_platforms.length > 0
             ? row.active_platforms
-            : ['Uber Eats', 'Glovo'];
+            : cloudReq?.platforms && cloudReq.platforms.length > 0
+              ? cloudReq.platforms
+              : ['Uber Eats', 'Glovo'];
         return {
           id: row.id,
           fullName: isSelf ? `${row.name} (Tu)` : row.name,
           courierTag: `#${row.id.slice(0, 6).toUpperCase()}`,
-          phone: isSelf
-            ? 'Perfil Local + Supabase'
-            : 'Sincronizado via Supabase',
+          phone:
+            cloudReq?.emailOrPhone ||
+            (isSelf
+              ? 'Perfil Local + Cloud Sync'
+              : 'Sincronizado via Cloud Realtime'),
           cityZone: row.zone,
           platforms: rowPlats,
           reputationPct: row.reputation ?? 100,
-          kycStatus: statusOverride || 'Ativo',
+          kycStatus: derivedKycStatus,
           aiMatchScorePct: 99,
           joinedAt: row.buddy_since || 'Fundador • Out 2026',
           lastActiveText: `Online às ${liveTimestamp}`,
-          kycProofSummary: `Sincronizado via Supabase Realtime (public.couriers) • GPS: ${Number(row.lat || 41.2704).toFixed(4)}, ${Number(row.lng || -8.0818).toFixed(4)} • Estado: ${row.has_order || row.status === 'Ocupado' || row.status === 'OCUPADO_COM_PEDIDO' ? 'Ocupado / Em Entrega' : 'Disponível'}${isSelf ? ` • Dispositivo: ${deviceScreenProfile.deviceModel} (${deviceScreenProfile.screenAspectRatio})` : ''}`,
+          kycProofSummary: `Sincronizado via Cloud Realtime • GPS: ${Number(row.lat || 41.2704).toFixed(4)}, ${Number(row.lng || -8.0818).toFixed(4)} • Estado: ${derivedKycStatus === 'Pendente IA' ? '⏳ Aguarda Aprovação Admin' : row.has_order || row.status === 'Ocupado' || row.status === 'OCUPADO_COM_PEDIDO' ? 'Ocupado / Em Entrega' : 'Disponível'}${row.device_model || cloudReq?.deviceModel ? ` • Dispositivo: ${row.device_model || cloudReq?.deviceModel}` : isSelf ? ` • Dispositivo: ${deviceScreenProfile.deviceModel} (${deviceScreenProfile.screenAspectRatio})` : ''}`,
           vehicle: row.vehicle,
           activeAmaranteZone: row.zone,
           updatedAtIso: row.updated_at,
@@ -12570,6 +12871,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     state.userOrderAvailabilityStatus,
     realCourierProfile,
     supabaseLiveCouriers,
+    cloudSharedState,
     realKycStatusOverrides,
     deviceScreenProfile.deviceModel,
     deviceScreenProfile.screenAspectRatio,

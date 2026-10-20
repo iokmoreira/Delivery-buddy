@@ -28,6 +28,13 @@ import {
   saveCustomTaughtCrosswalk,
 } from '../utils/amaranteCopilotTelemetry';
 import { playBuddyOpenChime } from '../services/voiceEngine';
+import {
+  CloudApprovalRequest,
+  computeSameLocationPinOffset,
+  loadCloudSharedState,
+  publishTaughtCrosswalkToCloud,
+  subscribeToCloudSharedState,
+} from '../services/cloudSync';
 
 const AMARANTE_HUB_CENTER = {
   lat: 41.2704,
@@ -678,17 +685,24 @@ export const ShiftRadarModule: React.FC = () => {
     lng: number;
   } | null>(() => {
     if (
-      realCourierProfile?.gpsSource === 'LIVE_GPS' &&
+      realCourierProfile &&
       Number.isFinite(realCourierProfile.lat) &&
-      Number.isFinite(realCourierProfile.lng)
+      Number.isFinite(realCourierProfile.lng) &&
+      (realCourierProfile.lat !== 0 || realCourierProfile.lng !== 0)
     ) {
       return {
         lat: realCourierProfile.lat,
         lng: realCourierProfile.lng,
       };
     }
-    return null;
+    return {
+      lat: AMARANTE_HUB_CENTER.lat,
+      lng: AMARANTE_HUB_CENTER.lng,
+    };
   });
+  const [cloudApprovalRequests, setCloudApprovalRequests] = useState<
+    CloudApprovalRequest[]
+  >(() => loadCloudSharedState().approvalRequests || []);
 
   // Live Speedometer, Dynamic Road Limit (30/50/70/90), 20s Over-Speed Monitor & Crosswalk Proximity State
   const [currentSpeedKmh, setCurrentSpeedKmh] = useState<number>(0);
@@ -1025,6 +1039,7 @@ export const ShiftRadarModule: React.FC = () => {
     };
 
     saveCustomTaughtCrosswalk(newCw);
+    void publishTaughtCrosswalkToCloud(newCw);
     setAmaranteCrosswalks(getAllAmaranteCrosswalks());
     addRoadHazardPin(
       'Obras na Via / Desvio',
@@ -1279,11 +1294,30 @@ export const ShiftRadarModule: React.FC = () => {
     };
   }, [applyFilteredGpsFix]);
 
-  // Only show active peer couriers (within last 5 minutes, excluding self and ghost rows)
+  // Sync taught crosswalks & account approval status from Zero-Config Cloud Sync Relay
+  useEffect(() => {
+    const syncFromCloud = (cloudSnap = loadCloudSharedState()) => {
+      setCloudApprovalRequests(cloudSnap.approvalRequests || []);
+      if (cloudSnap.passadeiras && cloudSnap.passadeiras.length > 0) {
+        cloudSnap.passadeiras.forEach((cw) => {
+          saveCustomTaughtCrosswalk(cw);
+        });
+        setAmaranteCrosswalks(getAllAmaranteCrosswalks());
+      }
+    };
+    syncFromCloud();
+    const unsub = subscribeToCloudSharedState((nextCloud) => {
+      syncFromCloud(nextCloud);
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  // Show all active peer couriers (within last 2 hours, excluding only self UUID and legacy mock rows)
   const activePeerCouriers = useMemo(() => {
     const nowMs = Date.now();
     const myId = realCourierProfile?.id || '';
-    const myNameLower = (realCourierProfile?.name || '').trim().toLowerCase();
 
     return onlineDirectoryCouriers.filter((c) => {
       if (c.isSelfProfile || (myId && c.id === myId)) return false;
@@ -1291,15 +1325,17 @@ export const ShiftRadarModule: React.FC = () => {
       if (
         !callsignLower ||
         callsignLower === 'caio m.' ||
-        callsignLower === 'caio' ||
-        callsignLower === 'cm' ||
-        (myNameLower && callsignLower === myNameLower)
+        callsignLower === 'caio m' ||
+        callsignLower === 'cm'
       ) {
         return false;
       }
       if (!c.updatedAtIso) return false;
       const updatedMs = Date.parse(c.updatedAtIso);
-      if (!Number.isFinite(updatedMs) || nowMs - updatedMs > 5 * 60 * 1000) {
+      if (
+        !Number.isFinite(updatedMs) ||
+        nowMs - updatedMs > 2 * 60 * 60 * 1000
+      ) {
         return false;
       }
       return (
@@ -1310,12 +1346,39 @@ export const ShiftRadarModule: React.FC = () => {
         getDistanceKmFromAmaranteHub(c.lat, c.lng) <= 35
       );
     });
-  }, [onlineDirectoryCouriers, realCourierProfile?.id, realCourierProfile?.name]);
+  }, [onlineDirectoryCouriers, realCourierProfile?.id]);
 
   const totalOnlineCouriersCount = useMemo(() => {
     const selfCount = !isAppPaused ? 1 : 0;
     return selfCount + activePeerCouriers.length;
   }, [isAppPaused, activePeerCouriers.length]);
+
+  const allMapPinPointsForOffset = useMemo(() => {
+    const pts: Array<{ id: string; lat: number; lng: number }> = [];
+    const selfPos = localLiveCoords || {
+      lat: realCourierProfile?.lat || AMARANTE_HUB_CENTER.lat,
+      lng: realCourierProfile?.lng || AMARANTE_HUB_CENTER.lng,
+    };
+    if (realCourierProfile?.id) {
+      pts.push({
+        id: realCourierProfile.id,
+        lat: selfPos.lat,
+        lng: selfPos.lng,
+      });
+    }
+    activePeerCouriers.forEach((c) => {
+      if (typeof c.lat === 'number' && typeof c.lng === 'number') {
+        pts.push({ id: c.id, lat: c.lat, lng: c.lng });
+      }
+    });
+    return pts;
+  }, [
+    localLiveCoords,
+    realCourierProfile?.id,
+    realCourierProfile?.lat,
+    realCourierProfile?.lng,
+    activePeerCouriers,
+  ]);
 
   const handleOpenBuddyProfilePopup = useCallback(
     (courier: OnlineDirectoryCourier) => {
@@ -1498,21 +1561,20 @@ export const ShiftRadarModule: React.FC = () => {
     const map = leafletMapRef.current;
     if (!map) return;
 
-    // Never place the user's pin on a fake coordinate before real GPS arrives!
-    if (!localLiveCoords) {
-      if (selfMarkerRef.current) {
-        selfMarkerRef.current.remove();
-        selfMarkerRef.current = null;
-      }
-      if (selfAccuracyCircleRef.current) {
-        selfAccuracyCircleRef.current.remove();
-        selfAccuracyCircleRef.current = null;
-      }
-      return;
-    }
+    const effectiveSelfCoords = localLiveCoords || {
+      lat: realCourierProfile?.lat || AMARANTE_HUB_CENTER.lat,
+      lng: realCourierProfile?.lng || AMARANTE_HUB_CENTER.lng,
+    };
 
-    const posForInit = displayedGlidingCoordsRef.current || localLiveCoords;
-    const latLng: [number, number] = [posForInit.lat, posForInit.lng];
+    const posForInit = displayedGlidingCoordsRef.current || effectiveSelfCoords;
+    const selfId = realCourierProfile?.id || 'self';
+    const offsetSelfPos = computeSameLocationPinOffset(
+      selfId,
+      posForInit.lat,
+      posForInit.lng,
+      allMapPinPointsForOffset
+    );
+    const latLng: [number, number] = [offsetSelfPos.lat, offsetSelfPos.lng];
     const selfCallsign = (realCourierProfile?.name || 'Tu').trim();
     const dotColor =
       currentMascotState === 'DELIVERY'
@@ -1523,20 +1585,27 @@ export const ShiftRadarModule: React.FC = () => {
 
     // Update or create accuracy circle
     if (selfAccuracyCircleRef.current) {
+      selfAccuracyCircleRef.current.setLatLng([
+        posForInit.lat,
+        posForInit.lng,
+      ]);
       selfAccuracyCircleRef.current.setRadius(liveAccuracyMeters);
       selfAccuracyCircleRef.current.setStyle({
         color: dotColor,
         fillColor: dotColor,
       });
     } else {
-      selfAccuracyCircleRef.current = L.circle(latLng, {
-        radius: liveAccuracyMeters,
-        color: dotColor,
-        weight: 1.5,
-        fillColor: dotColor,
-        fillOpacity: 0.14,
-        interactive: false,
-      }).addTo(map);
+      selfAccuracyCircleRef.current = L.circle(
+        [posForInit.lat, posForInit.lng],
+        {
+          radius: liveAccuracyMeters,
+          color: dotColor,
+          weight: 1.5,
+          fillColor: dotColor,
+          fillOpacity: 0.14,
+          interactive: false,
+        }
+      ).addTo(map);
     }
 
     const headingArrowHtml =
@@ -1566,6 +1635,7 @@ export const ShiftRadarModule: React.FC = () => {
     });
 
     if (selfMarkerRef.current) {
+      selfMarkerRef.current.setLatLng(latLng);
       selfMarkerRef.current.setIcon(selfIcon);
     } else {
       selfMarkerRef.current = L.marker(latLng, {
@@ -1577,11 +1647,11 @@ export const ShiftRadarModule: React.FC = () => {
     // Smooth Auto-Follow Mode
     if (!hasCenteredOnFirstFixRef.current) {
       hasCenteredOnFirstFixRef.current = true;
-      map.setView([localLiveCoords.lat, localLiveCoords.lng], 17, {
+      map.setView([effectiveSelfCoords.lat, effectiveSelfCoords.lng], 17, {
         animate: true,
       });
     } else if (isAutoFollowRef.current) {
-      map.panTo([localLiveCoords.lat, localLiveCoords.lng], {
+      map.panTo([effectiveSelfCoords.lat, effectiveSelfCoords.lng], {
         animate: true,
         duration: 0.45,
       });
@@ -1589,14 +1659,18 @@ export const ShiftRadarModule: React.FC = () => {
   }, [
     localLiveCoords,
     liveAccuracyMeters,
+    realCourierProfile?.id,
     realCourierProfile?.name,
+    realCourierProfile?.lat,
+    realCourierProfile?.lng,
     isAppPaused,
     currentMascotState,
     currentMascotImageUrl,
     headingDeg,
+    allMapPinPointsForOffset,
   ]);
 
-  // Render active peer couriers (within last 5 minutes only)
+  // Render active peer couriers with 3D Buddy pin + smart side-by-side offset when at the same location (<15m)
   useEffect(() => {
     const peerLayer = peerMarkersLayerRef.current;
     if (!peerLayer) return;
@@ -1604,30 +1678,69 @@ export const ShiftRadarModule: React.FC = () => {
 
     activePeerCouriers.forEach((c) => {
       if (typeof c.lat !== 'number' || typeof c.lng !== 'number') return;
+      const offsetPeerPos = computeSameLocationPinOffset(
+        c.id,
+        c.lat,
+        c.lng,
+        allMapPinPointsForOffset
+      );
       const isFree = c.orderStatus === 'DISPONIVEL';
-      const ringColor = isFree ? '#00E5FF' : '#f59e0b';
+      const cloudReq = cloudApprovalRequests.find(
+        (r) =>
+          r.id === c.id ||
+          r.username.trim().toLowerCase() === c.callsign.trim().toLowerCase()
+      );
+      const isPendingApproval =
+        cloudReq?.approvalStatus === 'pending' &&
+        !c.callsign.toLowerCase().includes('presidente');
+      const ringColor = isPendingApproval
+        ? '#f59e0b'
+        : isFree
+          ? '#00E5FF'
+          : '#00B8D4';
+      const statusBadgeLabel = isPendingApproval
+        ? '⏳ Pendente'
+        : isFree
+          ? 'Online'
+          : 'Em Entrega';
+
+      const avatarInnerHtml = c.avatarPhotoUrl
+        ? `<img src="${c.avatarPhotoUrl}" alt="${c.callsign}" style="width:100%;height:100%;object-fit:cover;border-radius:9999px;" />`
+        : `<img src="${currentMascotImageUrl}" alt="${c.callsign}" style="width:100%;height:100%;object-fit:contain;" />`;
 
       const peerIcon = L.divIcon({
         className: 'buddy-clean-peer-pin',
         html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);cursor:pointer;">
-          <div style="width:26px;height:26px;border-radius:9999px;background:#18181b;color:#ffffff;border:2.5px solid ${ringColor};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.5);">
-            ${c.avatarInitials || c.callsign.slice(0, 2).toUpperCase()}
+          <div style="position:relative;width:46px;height:46px;display:flex;align-items:center;justify-content:center;">
+            <span style="position:absolute;inset:-2px;border-radius:9999px;background:${ringColor};opacity:0.22;animation:ping 2s cubic-bezier(0,0,0.2,1) infinite;"></span>
+            <div style="width:44px;height:44px;border-radius:9999px;background:#090D16;border:2px solid ${ringColor};display:flex;align-items:center;justify-content:center;padding:1px;box-shadow:0 2px 8px rgba(0,0,0,0.55);">
+              ${avatarInnerHtml}
+            </div>
           </div>
-          <span style="margin-top:2px;background:rgba(9,9,11,0.92);color:#ffffff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:6px;border:1px solid ${ringColor};white-space:nowrap;">
-            ${c.callsign}
+          <span style="margin-top:2px;background:rgba(9,13,22,0.95);color:#ffffff;font-size:10px;font-weight:900;padding:1.5px 7px;border-radius:9999px;border:1.5px solid ${ringColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.5);">
+            ${c.callsign} • <span style="color:${ringColor};font-size:9px;">${statusBadgeLabel}</span>
           </span>
         </div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0],
       });
 
-      const marker = L.marker([c.lat, c.lng], { icon: peerIcon });
+      const marker = L.marker([offsetPeerPos.lat, offsetPeerPos.lng], {
+        icon: peerIcon,
+        zIndexOffset: 900,
+      });
       marker.on('click', () => {
         handleOpenBuddyProfilePopup(c);
       });
       marker.addTo(peerLayer);
     });
-  }, [activePeerCouriers, handleOpenBuddyProfilePopup]);
+  }, [
+    activePeerCouriers,
+    allMapPinPointsForOffset,
+    cloudApprovalRequests,
+    currentMascotImageUrl,
+    handleOpenBuddyProfilePopup,
+  ]);
 
   const handleRecenterAndFollowGps = () => {
     isAutoFollowRef.current = true;

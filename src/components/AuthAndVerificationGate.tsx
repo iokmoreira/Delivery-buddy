@@ -15,7 +15,11 @@ import {
   CourierRegistrationVehicle,
   PlatformName,
 } from '../types/models';
-import { findExistingCourierByNameInSupabaseRest } from '../services/geminiAgent';
+import {
+  findExistingCourierByNameInSupabaseRest,
+  getOrCreatePersistentCourierUuid,
+} from '../services/geminiAgent';
+import { publishAccountRegistrationToCloud } from '../services/cloudSync';
 import {
   cancelBuddySpeechNow,
   DEFAULT_BUDDY_VOICE_PITCH,
@@ -79,6 +83,22 @@ function saveAccountLocally(record: SavedLocalAccountRecord) {
       SAVED_ACCOUNTS_STORAGE_KEY,
       JSON.stringify([record, ...existing])
     );
+    // Broadcast new or logged-in account immediately to the Zero-Config Cloud Sync Relay
+    const persistentId = getOrCreatePersistentCourierUuid();
+    void publishAccountRegistrationToCloud({
+      id: persistentId,
+      username: record.username,
+      emailOrPhone: record.emailOrPhone || record.username,
+      vehicle: record.vehicle,
+      platforms: record.platforms,
+      zone: record.zone,
+      approvalStatus:
+        record.status === 'APROVADO'
+          ? 'approved'
+          : record.status === 'BLOQUEADO'
+          ? 'blocked'
+          : undefined,
+    });
   } catch {
     // ignore
   }

@@ -50,6 +50,13 @@ import {
   SavedLocalAccountRecord,
   SupportChatMessage,
 } from './AuthAndVerificationGate';
+import {
+  CloudApprovalRequest,
+  loadCloudSharedState,
+  publishAdminApprovalDecisionToCloud,
+  subscribeToCloudSharedState,
+  syncCloudStateNow,
+} from '../services/cloudSync';
 
 export const AdminBackofficeModule: React.FC = () => {
   const {
@@ -100,23 +107,46 @@ export const AdminBackofficeModule: React.FC = () => {
   const mascotAdminInputRef = useRef<HTMLInputElement | null>(null);
   const [mascotAdminMsg, setMascotAdminMsg] = useState<string>('');
 
-  // Local registered accounts & live support inbox state
+  // Local registered accounts, cloud approval requests & live support inbox state
   const [localAccounts, setLocalAccounts] = useState<SavedLocalAccountRecord[]>(
     () => loadSavedAccounts()
   );
+  const [cloudRequests, setCloudRequests] = useState<CloudApprovalRequest[]>(
+    () => loadCloudSharedState().approvalRequests || []
+  );
+  const [isSyncingCloudAccounts, setIsSyncingCloudAccounts] =
+    useState<boolean>(false);
   const [supportMessages, setSupportMessages] = useState<SupportChatMessage[]>(
     () => loadSupportChatMessages()
   );
   const [adminReplyText, setAdminReplyText] = useState<string>('');
 
   useEffect(() => {
+    void syncCloudStateNow();
+    const unsub = subscribeToCloudSharedState((snap) => {
+      setCloudRequests(snap.approvalRequests || []);
+    });
     const syncAdminInbox = () => {
       setLocalAccounts(loadSavedAccounts());
       setSupportMessages(loadSupportChatMessages());
     };
     const intervalId = window.setInterval(syncAdminInbox, 2500);
-    return () => window.clearInterval(intervalId);
+    return () => {
+      unsub();
+      window.clearInterval(intervalId);
+    };
   }, []);
+
+  const handleForceSyncCloudAccounts = async () => {
+    setIsSyncingCloudAccounts(true);
+    try {
+      const snap = await syncCloudStateNow();
+      setCloudRequests(snap.approvalRequests || []);
+      setLocalAccounts(loadSavedAccounts());
+    } finally {
+      setIsSyncingCloudAccounts(false);
+    }
+  };
 
   const handleToggleLocalAccountStatus = (
     usernameKey: string,
@@ -131,6 +161,14 @@ export const AdminBackofficeModule: React.FC = () => {
     } catch {
       // ignore
     }
+    const matchingCloud = cloudRequests.find(
+      (r) => r.username.trim().toLowerCase() === usernameKey.trim().toLowerCase()
+    );
+    void publishAdminApprovalDecisionToCloud({
+      courierId: matchingCloud?.id || usernameKey,
+      username: usernameKey,
+      approvalStatus: status === 'APROVADO' ? 'approved' : 'blocked',
+    });
   };
 
   const handleSendAdminSupportReply = async (e: React.FormEvent) => {
@@ -198,6 +236,9 @@ export const AdminBackofficeModule: React.FC = () => {
     1,
     localAccounts.length + deduplicatedAdminCouriers.length
   );
+  const pendingApprovalsCount =
+    localAccounts.filter((acc) => acc.status === 'PENDENTE').length +
+    deduplicatedAdminCouriers.filter((c) => c.kycStatus === 'Pendente IA').length;
 
   const visibleComplaints = complaints.filter(
     (rc) => !archivedComplaintIds.includes(rc.id)
@@ -409,6 +450,11 @@ export const AdminBackofficeModule: React.FC = () => {
           className="rounded-xl border py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5"
         >
           <span>✓ Requisições de Aceitação ({totalRegisteredCount})</span>
+          {pendingApprovalsCount > 0 && (
+            <span className="rounded-full bg-[#00E5FF] text-slate-950 px-1.5 py-0.5 text-[10px] font-black animate-pulse">
+              +{pendingApprovalsCount} Nova{pendingApprovalsCount > 1 ? 's' : ''}
+            </span>
+          )}
         </button>
         <button
           type="button"
@@ -1454,54 +1500,80 @@ export const AdminBackofficeModule: React.FC = () => {
         <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800/80 p-3.5 space-y-3 shadow-lg">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
-              <span className="text-base font-extrabold text-zinc-100 flex items-center gap-1.5">
+              <span className="text-base font-extrabold text-zinc-100 flex items-center gap-1.5 flex-wrap">
                 <Users className="h-4 w-4 text-[#00E5FF]" />
                 <span>
                   ✓ Requisições de Aceitação &amp; Controlo de Contas ({totalRegisteredCount})
                 </span>
+                {pendingApprovalsCount > 0 && (
+                  <span className="rounded-full bg-[#00E5FF] text-slate-950 px-2 py-0.5 text-[10px] font-black animate-pulse">
+                    ⏳ {pendingApprovalsCount} Pendente{pendingApprovalsCount > 1 ? 's' : ''}
+                  </span>
+                )}
               </span>
               <span className="text-xs text-zinc-400 block mt-0.5">
-                Aprove ou bloqueie contas de estafetas com 1 toque (sincronizado com{' '}
-                <code className="text-[#00E5FF]">public.couriers</code> e registos locais).
+                Sincronização Automática em Tempo Real com todos os telemóveis (Cloud Relay +{' '}
+                <code className="text-[#00E5FF]">public.couriers</code>). Aprove ou bloqueie com 1 toque.
               </span>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsCourierRegistrationModalOpen(true)}
-              style={{
-                backgroundColor: '#0B0F17',
-                borderColor: '#00E5FF',
-                color: '#00E5FF',
-              }}
-              className="rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition shrink-0"
-            >
-              {realCourierProfile
-                ? `Editar Meu Registo (${realCourierProfile.name})`
-                : '+ Registar Meu Perfil no Mapa'}
-            </button>
+            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+              <button
+                type="button"
+                onClick={handleForceSyncCloudAccounts}
+                disabled={isSyncingCloudAccounts}
+                style={{
+                  backgroundColor: '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: '#00E5FF',
+                }}
+                className="rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition shrink-0"
+              >
+                {isSyncingCloudAccounts ? '⏳ A Sincronizar...' : '🔄 Sincronizar Contas da Nuvem'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCourierRegistrationModalOpen(true)}
+                style={{
+                  backgroundColor: '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: '#00E5FF',
+                }}
+                className="rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition shrink-0"
+              >
+                {realCourierProfile
+                  ? `Editar Meu Registo (${realCourierProfile.name})`
+                  : '+ Registar Meu Perfil no Mapa'}
+              </button>
+            </div>
           </div>
 
-          {/* Local Registered Accounts on Device */}
+          {/* Local & Cloud Synced Registered Accounts */}
           {localAccounts.length > 0 && (
             <div className="space-y-2">
               <span className="text-xs font-extrabold text-[#00E5FF] block">
-                Contas Registadas (Acesso App &amp; Login):
+                Contas Registadas &amp; Requisições da Nuvem (Acesso App &amp; Mapa):
               </span>
               {localAccounts.map((acc) => {
                 const status = acc.status || 'APROVADO';
+                const isPending = status === 'PENDENTE';
+                const isBlocked = status === 'BLOQUEADO';
                 return (
                   <div
                     key={acc.username}
-                    className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 flex items-center justify-between gap-2 flex-wrap"
+                    className={`rounded-xl bg-zinc-950 border p-3 flex items-center justify-between gap-2 flex-wrap ${
+                      isPending
+                        ? 'border-[#00E5FF] shadow-[0_0_12px_rgba(0,229,255,0.2)]'
+                        : 'border-zinc-800'
+                    }`}
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-extrabold text-white">
                           {acc.username}
                         </span>
                         <span
                           style={
-                            status === 'BLOQUEADO'
+                            isBlocked || isPending
                               ? undefined
                               : {
                                   backgroundColor: '#0B0F17',
@@ -1510,18 +1582,36 @@ export const AdminBackofficeModule: React.FC = () => {
                                 }
                           }
                           className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold border ${
-                            status === 'BLOQUEADO'
+                            isBlocked
                               ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                              : ''
+                              : isPending
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
+                                : ''
                           }`}
                         >
-                          {status === 'BLOQUEADO' ? '🚫 BLOQUEADO' : '✓ APROVADO'}
+                          {isBlocked
+                            ? '🚫 BLOQUEADO'
+                            : isPending
+                              ? '⏳ PENDENTE DE APROVAÇÃO'
+                              : '✓ APROVADO'}
                         </span>
                       </div>
                       <span className="text-xs text-zinc-400 block">
                         {acc.emailOrPhone || 'Sem contacto'} • {acc.vehicle} •{' '}
                         {acc.zone}
                       </span>
+                      {Array.isArray(acc.platforms) && acc.platforms.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                          {acc.platforms.map((plat) => (
+                            <span
+                              key={plat}
+                              className="rounded bg-zinc-900 border border-[#00E5FF]/40 px-1.5 py-0.5 text-[10px] font-bold text-[#00E5FF]"
+                            >
+                              {plat}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
@@ -1530,16 +1620,22 @@ export const AdminBackofficeModule: React.FC = () => {
                           handleToggleLocalAccountStatus(acc.username, 'APROVADO')
                         }
                         style={
-                          status !== 'BLOQUEADO'
+                          status === 'APROVADO'
                             ? {
                                 backgroundColor: '#0B0F17',
                                 borderColor: '#00E5FF',
                                 color: '#00E5FF',
                               }
-                            : undefined
+                            : isPending
+                              ? {
+                                  backgroundColor: '#00E5FF',
+                                  borderColor: '#00E5FF',
+                                  color: '#05070B',
+                                }
+                              : undefined
                         }
                         className={`rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
-                          status !== 'BLOQUEADO'
+                          status === 'APROVADO' || isPending
                             ? ''
                             : 'bg-zinc-900 border-zinc-700 text-zinc-300'
                         }`}
@@ -1552,7 +1648,7 @@ export const AdminBackofficeModule: React.FC = () => {
                           handleToggleLocalAccountStatus(acc.username, 'BLOQUEADO')
                         }
                         className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
-                          status === 'BLOQUEADO'
+                          isBlocked
                             ? 'bg-rose-600 text-white'
                             : 'bg-zinc-900 border border-zinc-700 text-rose-300'
                         }`}
