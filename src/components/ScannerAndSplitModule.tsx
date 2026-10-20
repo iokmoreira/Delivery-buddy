@@ -848,11 +848,11 @@ export const ScannerAndSplitModule: React.FC = () => {
       )}
 
       {/* =====================================================================
-          DETAILED EARNINGS MODAL (Full-Height 88vh–92vh + Glovo Typography + Tap-Anywhere to Mute)
+          DETAILED EARNINGS MODAL (Full-Height 88vh–92vh + Theme-Aware High Contrast)
           ===================================================================== */}
       {isEarningsModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3"
           onClick={() => {
             stopBuddySpeech();
             cancelSpeechNow();
@@ -860,7 +860,15 @@ export const ScannerAndSplitModule: React.FC = () => {
           }}
         >
           <div
-            className="w-full max-w-md min-h-[88vh] max-h-[92vh] overflow-y-auto rounded-3xl bg-slate-950 border-2 border-emerald-500/45 p-5 text-white shadow-2xl flex flex-col justify-between gap-4 cursor-pointer"
+            style={{
+              backgroundColor: isDaylight ? '#FFFFFF' : '#05070B',
+              borderColor: '#00E5FF',
+              color: isDaylight ? '#090D16' : '#FFFFFF',
+              boxShadow: isDaylight
+                ? '0 20px 50px rgba(15, 23, 42, 0.22)'
+                : '0 20px 50px rgba(0, 229, 255, 0.22)',
+            }}
+            className="w-full max-w-md min-h-[84vh] max-h-[92vh] overflow-y-auto rounded-3xl border-2 p-5 flex flex-col justify-between gap-4 cursor-pointer"
             onClick={(e) => {
               e.stopPropagation();
               stopBuddySpeech();
@@ -872,10 +880,20 @@ export const ScannerAndSplitModule: React.FC = () => {
               {/* Header */}
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 text-sm font-bold text-emerald-300">
+                  <span
+                    style={{
+                      backgroundColor: isDaylight ? '#F0F9FF' : '#0B0F17',
+                      borderColor: '#00E5FF',
+                      color: isDaylight ? '#0284C7' : '#00E5FF',
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-extrabold"
+                  >
                     💰 Contabilidade Diária
                   </span>
-                  <h3 className="text-2xl font-extrabold text-white mt-1.5 leading-snug">
+                  <h3
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-2xl font-black mt-1.5 leading-snug"
+                  >
                     Resumo de Ganhos
                   </h3>
                 </div>
@@ -887,32 +905,61 @@ export const ScannerAndSplitModule: React.FC = () => {
                     cancelSpeechNow();
                     setIsEarningsModalOpen(false);
                   }}
-                  className="rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 px-3.5 py-2 text-lg font-extrabold text-slate-200 cursor-pointer shrink-0"
+                  style={{
+                    backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
+                    borderColor: isDaylight
+                      ? '#CBD5E1'
+                      : 'rgba(0, 229, 255, 0.4)',
+                    color: isDaylight ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="rounded-2xl border px-3.5 py-2 text-lg font-extrabold cursor-pointer shrink-0 transition hover:border-[#00E5FF]"
                 >
                   ✕
                 </button>
               </div>
 
               {/* 1. Lucro Líquido Total + Bruto vs. Combustível/Desgaste */}
-              <div className="rounded-3xl bg-slate-900/95 border border-emerald-500/35 p-4 flex items-center justify-between gap-3 shadow-md">
+              <div
+                style={{
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: isDaylight ? '#090D16' : '#FFFFFF',
+                }}
+                className="rounded-3xl border-2 p-4 flex items-center justify-between gap-3 shadow-xs"
+              >
                 <div>
-                  <span className="text-base font-bold text-emerald-300 block">
+                  <span
+                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
+                    className="text-base font-extrabold block"
+                  >
                     Lucro Líquido Hoje
                   </span>
-                  <span className="text-3xl font-extrabold text-emerald-400 leading-tight block mt-1">
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#00E5FF' }}
+                    className="text-3xl font-black leading-tight block mt-1 whitespace-nowrap"
+                  >
                     {formatEurPt(earningsTodayByApp.total)}
                   </span>
                 </div>
                 <div className="text-right text-base space-y-1">
-                  <div className="text-slate-200 font-medium">
+                  <div
+                    style={{ color: isDaylight ? '#334155' : '#CBD5E1' }}
+                    className="font-bold whitespace-nowrap"
+                  >
                     Bruto:{' '}
-                    <strong className="text-white font-extrabold">
+                    <strong
+                      style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                      className="font-black"
+                    >
                       {formatEurPt(earningsTodayByApp.totalGross)}
                     </strong>
                   </div>
-                  <div className="text-rose-400 font-medium">
+                  <div
+                    style={{ color: isDaylight ? '#DC2626' : '#FB7185' }}
+                    className="font-bold whitespace-nowrap"
+                  >
                     Custos:{' '}
-                    <strong className="font-extrabold">
+                    <strong className="font-black">
                       -{formatEurPt(earningsTodayByApp.fuelCostDeducted)}
                     </strong>
                   </div>
@@ -920,39 +967,86 @@ export const ScannerAndSplitModule: React.FC = () => {
               </div>
 
               {/* 2. Ganhos por Plataforma */}
-              <div className="rounded-3xl bg-slate-900/85 border border-slate-800 p-4 space-y-3">
+              <div
+                style={{
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.35)',
+                  color: isDaylight ? '#090D16' : '#FFFFFF',
+                }}
+                className="rounded-3xl border p-4 space-y-3"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-lg font-bold text-slate-200">
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-lg font-black"
+                  >
                     Ganhos por Plataforma
                   </span>
-                  <span className="text-sm font-bold text-emerald-400">
+                  <span
+                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
+                    className="text-sm font-extrabold"
+                  >
                     Valor Líquido
                   </span>
                 </div>
-                <div className="flex items-center justify-between py-2 border-b border-slate-800/90">
-                  <span className="text-lg font-bold text-slate-100 flex items-center gap-2.5">
-                    <span className="h-3 w-3 rounded-full bg-emerald-400" />
+                <div
+                  style={{
+                    borderColor: isDaylight
+                      ? '#E2E8F0'
+                      : 'rgba(0, 229, 255, 0.18)',
+                  }}
+                  className="flex items-center justify-between py-2 border-b"
+                >
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-lg font-extrabold flex items-center gap-2.5"
+                  >
+                    <span className="h-3 w-3 rounded-full bg-[#00E5FF]" />
                     Uber Eats
                   </span>
-                  <span className="text-xl font-extrabold text-white">
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-xl font-black whitespace-nowrap"
+                  >
                     {formatEurPt(earningsTodayByApp.uber)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between py-2 border-b border-slate-800/90">
-                  <span className="text-lg font-bold text-slate-100 flex items-center gap-2.5">
-                    <span className="h-3 w-3 rounded-full bg-amber-400" />
+                <div
+                  style={{
+                    borderColor: isDaylight
+                      ? '#E2E8F0'
+                      : 'rgba(0, 229, 255, 0.18)',
+                  }}
+                  className="flex items-center justify-between py-2 border-b"
+                >
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-lg font-extrabold flex items-center gap-2.5"
+                  >
+                    <span className="h-3 w-3 rounded-full bg-[#00B8D4]" />
                     Glovo
                   </span>
-                  <span className="text-xl font-extrabold text-white">
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-xl font-black whitespace-nowrap"
+                  >
                     {formatEurPt(earningsTodayByApp.glovo)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-lg font-bold text-slate-100 flex items-center gap-2.5">
-                    <span className="h-3 w-3 rounded-full bg-sky-400" />
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-lg font-extrabold flex items-center gap-2.5"
+                  >
+                    <span className="h-3 w-3 rounded-full bg-[#38BDF8]" />
                     Bolt Food
                   </span>
-                  <span className="text-xl font-extrabold text-white">
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-xl font-black whitespace-nowrap"
+                  >
                     {formatEurPt(earningsTodayByApp.bolt)}
                   </span>
                 </div>
@@ -960,36 +1054,94 @@ export const ScannerAndSplitModule: React.FC = () => {
 
               {/* 3. 4-Card KPI Grid: Entregas, KM Rodados, Média €/km, Ritmo €/h */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3.5">
-                  <span className="text-base font-medium text-slate-400 block">
+                <div
+                  style={{
+                    backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
+                    borderColor: isDaylight
+                      ? '#CBD5E1'
+                      : 'rgba(0, 229, 255, 0.35)',
+                    color: isDaylight ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="rounded-2xl border p-3.5"
+                >
+                  <span
+                    style={{ color: isDaylight ? '#475569' : '#CBD5E1' }}
+                    className="text-sm font-bold block"
+                  >
                     Entregas hoje
                   </span>
-                  <span className="text-xl font-extrabold text-white mt-1 block">
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-xl font-black mt-1 block whitespace-nowrap"
+                  >
                     {realCompletedDeliveries.length} entregas
                   </span>
                 </div>
-                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3.5">
-                  <span className="text-base font-medium text-slate-400 block">
+                <div
+                  style={{
+                    backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
+                    borderColor: isDaylight
+                      ? '#CBD5E1'
+                      : 'rgba(0, 229, 255, 0.35)',
+                    color: isDaylight ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="rounded-2xl border p-3.5"
+                >
+                  <span
+                    style={{ color: isDaylight ? '#475569' : '#CBD5E1' }}
+                    className="text-sm font-bold block"
+                  >
                     Distância hoje
                   </span>
-                  <span className="text-xl font-extrabold text-white mt-1 block">
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-xl font-black mt-1 block whitespace-nowrap"
+                  >
                     {earningsTodayByApp.totalKm.toFixed(1)} km
                   </span>
                 </div>
-                <div className="rounded-2xl bg-slate-900 border border-emerald-500/35 p-3.5">
-                  <span className="text-base font-bold text-emerald-400 block">
+                <div
+                  style={{
+                    backgroundColor: isDaylight ? '#F0F9FF' : '#0B0F17',
+                    borderColor: '#00E5FF',
+                    color: isDaylight ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="rounded-2xl border p-3.5"
+                >
+                  <span
+                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
+                    className="text-sm font-extrabold block"
+                  >
                     Média Líquida
                   </span>
-                  <span className="text-xl font-extrabold text-emerald-400 mt-1 block">
+                  <span
+                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
+                    className="text-xl font-black mt-1 block whitespace-nowrap"
+                  >
                     {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')}{' '}
                     €/km
                   </span>
                 </div>
-                <div className="rounded-2xl bg-slate-900 border border-amber-500/30 p-3.5">
-                  <span className="text-base font-bold text-amber-400 block">
+                <div
+                  style={{
+                    backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
+                    borderColor: isDaylight
+                      ? '#CBD5E1'
+                      : 'rgba(0, 229, 255, 0.35)',
+                    color: isDaylight ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="rounded-2xl border p-3.5"
+                >
+                  <span
+                    style={{ color: isDaylight ? '#475569' : '#CBD5E1' }}
+                    className="text-sm font-bold block"
+                  >
                     Média por Hora
                   </span>
-                  <span className="text-xl font-extrabold text-amber-400 mt-1 block">
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#00E5FF' }}
+                    className="text-xl font-black mt-1 block whitespace-nowrap"
+                  >
                     {earningsTodayByApp.avgHourlyEur.toFixed(2).replace('.', ',')}{' '}
                     €/h
                   </span>
@@ -997,36 +1149,78 @@ export const ScannerAndSplitModule: React.FC = () => {
               </div>
 
               {/* 4. Meta Diária % + Última Entrega */}
-              <div className="rounded-3xl bg-slate-900/90 border border-slate-800 p-4 space-y-2.5">
-                <div className="flex items-center justify-between text-base">
-                  <span className="font-bold text-slate-200">
+              <div
+                style={{
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
+                  borderColor: isDaylight
+                    ? '#CBD5E1'
+                    : 'rgba(0, 229, 255, 0.35)',
+                  color: isDaylight ? '#090D16' : '#FFFFFF',
+                }}
+                className="rounded-3xl border p-4 space-y-2.5"
+              >
+                <div className="flex items-center justify-between text-base gap-2">
+                  <span
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="font-black"
+                  >
                     🎯 Meta Diária ({earningsTodayByApp.goalProgressPct}%)
                   </span>
-                  <span className="font-extrabold text-emerald-400">
+                  <span
+                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
+                    className="font-black whitespace-nowrap"
+                  >
                     {formatEurPt(earningsTodayByApp.total)} /{' '}
                     {formatEurPt(earningsTodayByApp.goalTargetEur)}
                   </span>
                 </div>
-                <div className="w-full h-3 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  style={{
+                    backgroundColor: isDaylight ? '#E2E8F0' : '#1E293B',
+                  }}
+                  className="w-full h-3 rounded-full overflow-hidden"
+                >
                   <div
-                    style={{ width: `${earningsTodayByApp.goalProgressPct}%` }}
-                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                    style={{
+                      width: `${earningsTodayByApp.goalProgressPct}%`,
+                      backgroundColor: '#00E5FF',
+                    }}
+                    className="h-full rounded-full transition-all duration-300"
                   />
                 </div>
                 {earningsTodayByApp.lastDelivery ? (
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2 text-base">
-                    <span className="text-slate-300 truncate">
+                  <div
+                    style={{
+                      borderColor: isDaylight
+                        ? '#E2E8F0'
+                        : 'rgba(0, 229, 255, 0.2)',
+                    }}
+                    className="pt-2 border-t flex items-center justify-between gap-2 text-base"
+                  >
+                    <span
+                      style={{ color: isDaylight ? '#334155' : '#CBD5E1' }}
+                      className="truncate font-bold"
+                    >
                       Última ({earningsTodayByApp.lastDelivery.platform}):{' '}
-                      <strong className="text-white font-bold">
+                      <strong
+                        style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                        className="font-black"
+                      >
                         {earningsTodayByApp.lastDelivery.segment}
                       </strong>
                     </span>
-                    <span className="font-extrabold text-emerald-400 shrink-0">
+                    <span
+                      style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
+                      className="font-black shrink-0 whitespace-nowrap"
+                    >
                       +{formatEurPt(earningsTodayByApp.lastDelivery.netProfitEur)}
                     </span>
                   </div>
                 ) : (
-                  <div className="pt-1.5 text-base font-medium text-slate-400">
+                  <div
+                    style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
+                    className="pt-1.5 text-sm font-bold"
+                  >
                     Última entrega: Nenhuma entrega registada no turno de hoje.
                   </div>
                 )}
@@ -1042,7 +1236,11 @@ export const ScannerAndSplitModule: React.FC = () => {
                 cancelSpeechNow();
                 setIsEarningsModalOpen(false);
               }}
-              className="py-4 text-lg font-extrabold rounded-2xl w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg cursor-pointer transition active:scale-[0.99]"
+              style={{
+                backgroundColor: '#00E5FF',
+                color: '#05070B',
+              }}
+              className="py-4 text-lg font-black rounded-2xl w-full shadow-lg cursor-pointer transition active:scale-[0.99]"
             >
               Fechar Resumo
             </button>

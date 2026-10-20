@@ -249,7 +249,7 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
   };
 
   return (
-    <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 space-y-2">
+    <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 space-y-2.5 overflow-hidden">
       <input
         ref={fileInputRef}
         type="file"
@@ -257,9 +257,9 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
         onChange={handleFileChange}
         className="hidden"
       />
-      <div className="flex items-center justify-between gap-2.5 flex-wrap">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative h-12 w-12 rounded-full overflow-hidden bg-zinc-900 border-2 border-emerald-500/70 flex items-center justify-center shrink-0 shadow-md">
+          <div className="relative h-12 w-12 rounded-full overflow-hidden bg-zinc-900 border-2 border-[#00E5FF] flex items-center justify-center shrink-0 shadow-md">
             {compressedPreviewUrl ? (
               <img
                 src={compressedPreviewUrl}
@@ -267,64 +267,66 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
                 className="h-full w-full object-cover rounded-full"
               />
             ) : (
-              <span className="text-sm font-black text-emerald-300">
+              <span className="text-sm font-black text-[#00E5FF]">
                 {initials}
               </span>
             )}
           </div>
           <div className="min-w-0">
-            <span className="block text-[11px] font-extrabold text-zinc-100 truncate">
+            <span className="block text-xs font-extrabold text-zinc-100 truncate">
               Foto de Perfil (Opcional)
             </span>
-            <span className="block text-[10px] text-zinc-400">
+            <span className="block text-[10px] text-zinc-400 truncate">
               {compressedPreviewUrl
-                ? 'Foto pronta para o teu perfil'
+                ? `Foto pronta ${compressedSizeKb ? `(${compressedSizeKb})` : ''}`
                 : 'Aparece no teu ícone em Amarante'}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+        {compressedPreviewUrl && (
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-3 py-1.5 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow-sm"
-          >
-            <Camera className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-            <span>📷 Escolher Foto (Opcional)</span>
-          </button>
-          <div
-            contentEditable
-            suppressContentEditableWarning
-            onPaste={handlePasteAvatar}
-            onInput={(e) => {
-              const el = e.currentTarget;
-              const imgEl = el.querySelector('img');
-              if (imgEl && imgEl.src) {
-                loadAvatarFromDataUrl(imgEl.src);
-              }
-              el.innerHTML = '';
+            onClick={() => {
+              setIsCropping(false);
+              loadedImageRef.current = null;
+              setCompressedPreviewUrl(undefined);
+              setCompressedSizeKb('');
+              onAvatarCompressedChange(undefined);
             }}
-            className="rounded-xl bg-zinc-900 border border-dashed border-emerald-500/40 px-2.5 py-1.5 text-[10px] font-bold text-emerald-300 cursor-text outline-none focus:border-emerald-400"
+            title="Remover foto"
+            className="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-rose-400 p-2 cursor-pointer transition shrink-0"
           >
-            📋 Colar Foto
-          </div>
-          {compressedPreviewUrl && (
-            <button
-              type="button"
-              onClick={() => {
-                setIsCropping(false);
-                loadedImageRef.current = null;
-                setCompressedPreviewUrl(undefined);
-                setCompressedSizeKb('');
-                onAvatarCompressedChange(undefined);
-              }}
-              title="Remover foto"
-              className="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-rose-400 p-1.5 cursor-pointer transition"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          )}
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* Responsive 2-Column Grid for Escolher Foto & Colar Foto (100% Inside Card) */}
+      <div className="grid grid-cols-2 gap-2 w-full">
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-2.5 py-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm truncate"
+        >
+          <Camera className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+          <span className="truncate">📷 Escolher Foto</span>
+        </button>
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          onPaste={handlePasteAvatar}
+          onInput={(e) => {
+            const el = e.currentTarget;
+            const imgEl = el.querySelector('img');
+            if (imgEl && imgEl.src) {
+              loadAvatarFromDataUrl(imgEl.src);
+            }
+            el.innerHTML = '';
+          }}
+          className="w-full rounded-xl bg-zinc-900 border border-dashed border-[#00E5FF]/50 px-2.5 py-2 text-xs font-extrabold text-[#00E5FF] flex items-center justify-center cursor-text outline-none focus:border-[#00E5FF] truncate text-center"
+        >
+          📋 Colar Foto
         </div>
       </div>
 

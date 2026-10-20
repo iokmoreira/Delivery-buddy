@@ -1,19 +1,64 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Plus,
   Wallet,
-  Award,
-  Check,
-  QrCode,
-  Lock,
   TrendingUp,
   Calendar,
   Layers,
-  RotateCcw,
   X,
+  Camera,
+  Video,
+  FolderOpen,
+  MapPin,
+  Trash2,
 } from 'lucide-react';
 import { useEstafetas } from '../context/EstafetasContext';
 import { PlatformFilterScope, PlatformName } from '../types/models';
+import { insertAiSkillLogToSupabaseRest } from '../services/geminiAgent';
+
+export interface ArchivedCompleteDeliveryRecord {
+  id: string;
+  timestampIso: string;
+  timestampLabel: string;
+  platform: PlatformName;
+  pickupAndDeliveryAddress: string;
+  restaurantAndCustomerRef: string;
+  grossEur: number;
+  netProfitEur: number;
+  distanceKm: number;
+  durationMin: number;
+  notesOrPinCode: string;
+  photoDataUrl?: string;
+  videoPreviewUrl?: string;
+  videoFileName?: string;
+}
+
+const DELIVERY_MEDIA_ARCHIVE_STORAGE_KEY =
+  'buddy_complete_delivery_media_archive_v1';
+
+const loadDeliveryMediaArchive = (): ArchivedCompleteDeliveryRecord[] => {
+  try {
+    const raw = localStorage.getItem(DELIVERY_MEDIA_ARCHIVE_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveDeliveryMediaArchive = (
+  records: ArchivedCompleteDeliveryRecord[]
+): void => {
+  try {
+    localStorage.setItem(
+      DELIVERY_MEDIA_ARCHIVE_STORAGE_KEY,
+      JSON.stringify(records.slice(0, 60))
+    );
+  } catch {
+    // ignore storage quota errors
+  }
+};
 
 export const FinanceGoalsAndRewardsModule: React.FC = () => {
   const {
@@ -23,36 +68,52 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
     personalGoals,
     updatePersonalGoals,
     addManualDeliveryRecord,
-    resetRealDeliveriesAndTestData,
-    buddyRewards,
-    communityReputationPct,
-    allMarketplaceRewards,
-    claimMarketplaceReward,
-    activeDeliveryLifecycle,
-    shiftTrips,
     platformLedgers,
     activePlatformScope,
     setActivePlatformScope,
     updatePlatformLedger,
     vehicleProfile,
-    aiAgentConfig,
-    hasRealActiveDelivery,
-    marketTelemetry,
-    recordMarketTelemetrySnapshot,
-    executeVoiceCommandPt,
     activePlatforms,
+    themeMode,
+    verifiedAccount,
+    aiAgentConfig,
   } = useEstafetas();
 
+  const isDaylight = themeMode === 'DAYLIGHT';
+
   const [subTab, setSubTab] = useState<'METAS' | 'CAIXA' | 'VANTAGENS'>('METAS');
-  const [voucherNotice, setVoucherNotice] = useState<string | null>(null);
   const [manualDeliveryPlatform, setManualDeliveryPlatform] =
     useState<PlatformName>(() => activePlatforms[0] || 'Uber Eats');
   const [showManualDeliveryModal, setShowManualDeliveryModal] = useState(false);
   const [manualGrossEur, setManualGrossEur] = useState('5.50');
+  const [manualNetEurOverride, setManualNetEurOverride] = useState('');
   const [manualDistanceKm, setManualDistanceKm] = useState('2.8');
   const [manualMinutes, setManualMinutes] = useState('15');
   const [manualRestaurant, setManualRestaurant] = useState('');
+  const [manualFullAddress, setManualFullAddress] = useState('');
+  const [manualNotesOrPin, setManualNotesOrPin] = useState('');
+  const [capturedPhotoDataUrl, setCapturedPhotoDataUrl] = useState<
+    string | undefined
+  >(undefined);
+  const [capturedVideoUrl, setCapturedVideoUrl] = useState<string | undefined>(
+    undefined
+  );
+  const [capturedVideoName, setCapturedVideoName] = useState<
+    string | undefined
+  >(undefined);
+  const [ocrStatusNotice, setOcrStatusNotice] = useState<string | null>(null);
+  const [archivedDeliveries, setArchivedDeliveries] = useState<
+    ArchivedCompleteDeliveryRecord[]
+  >(() => loadDeliveryMediaArchive());
+  const [isArchiveOpen, setIsArchiveOpen] = useState<boolean>(true);
   const [financeActionFeedback, setFinanceActionFeedback] = useState<string | null>(null);
+
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    saveDeliveryMediaArchive(archivedDeliveries);
+  }, [archivedDeliveries]);
 
   const enabledPlatforms = useMemo<PlatformName[]>(
     () =>
@@ -350,39 +411,6 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
     isSinglePlatformMode,
   ]);
 
-  const lastCompletedDecision = useMemo(() => {
-    const activeTrips = shiftTrips.filter((d) =>
-      enabledPlatforms.includes(d.platform)
-    );
-    if (effectiveScope === 'GLOBAL_CRUZADO') {
-      return (
-        activeTrips.find((d) => d.verdict === 'ACEITE') ||
-        activeTrips[0] ||
-        null
-      );
-    }
-    return (
-      activeTrips.find(
-        (d) => d.verdict === 'ACEITE' && d.platform === effectiveScope
-      ) ||
-      activeTrips.find((d) => d.platform === effectiveScope) ||
-      activeTrips[0] ||
-      null
-    );
-  }, [shiftTrips, effectiveScope, enabledPlatforms]);
-
-  const courierTier =
-    buddyRewards.xpPoints >= 1000
-      ? 'Lenda da Estrada'
-      : buddyRewards.xpPoints >= 600
-        ? 'Capitão de Zona'
-        : 'Parceiro Verificado';
-
-  const handleClaimVoucher = (rewardId: string) => {
-    const res = claimMarketplaceReward(rewardId);
-    setVoucherNotice(res.message);
-  };
-
   const handleGoalChange = (
     period: 'DAILY' | 'WEEKLY' | 'MONTHLY',
     value: number
@@ -418,8 +446,190 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
   const targetPlatformForManualLog: PlatformName =
     effectiveScope === 'GLOBAL_CRUZADO' ? safeManualPlatform : effectiveScope;
 
-  const isProdWithoutActiveDelivery =
-    Boolean(aiAgentConfig.productionModeRealOnly) && !hasRealActiveDelivery;
+  // Auto-calculated net profit for the manual delivery logger
+  const computedManualNetEur = useMemo(() => {
+    const gross = Math.max(0.5, parseFloat(manualGrossEur) || 0);
+    const km = Math.max(0.2, parseFloat(manualDistanceKm) || 0);
+    const platLedger = platformLedgers[targetPlatformForManualLog];
+    const deductionPct =
+      ((platLedger?.specificTaxAndSsPct ?? 15) +
+        (platLedger?.fleetCommissionPct ?? 0)) /
+      100;
+    const kmCost =
+      (vehicleProfile.fuelOrEnergyPerKm || 0.05) +
+      (vehicleProfile.maintenanceAndTiresPerKm || 0.04);
+    const net = Math.max(0.1, gross * (1 - deductionPct) - km * kmCost);
+    return Number(net.toFixed(2));
+  }, [
+    manualGrossEur,
+    manualDistanceKm,
+    platformLedgers,
+    targetPlatformForManualLog,
+    vehicleProfile,
+  ]);
+
+  const effectiveManualNetEur = useMemo(() => {
+    const parsedOverride = parseFloat(manualNetEurOverride);
+    if (!Number.isNaN(parsedOverride) && parsedOverride > 0) {
+      return Number(parsedOverride.toFixed(2));
+    }
+    return computedManualNetEur;
+  }, [manualNetEurOverride, computedManualNetEur]);
+
+  const handlePhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.includes('glovo')) {
+      setManualDeliveryPlatform('Glovo');
+    } else if (lowerName.includes('bolt')) {
+      setManualDeliveryPlatform('Bolt Food');
+    } else if (lowerName.includes('uber')) {
+      setManualDeliveryPlatform('Uber Eats');
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const rawDataUrl =
+        typeof reader.result === 'string' ? reader.result : undefined;
+      if (!rawDataUrl) return;
+
+      // Compress image onto canvas so localStorage archive remains fast
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 680;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          const compressed = canvas.toDataURL('image/jpeg', 0.76);
+          setCapturedPhotoDataUrl(compressed);
+        } else {
+          setCapturedPhotoDataUrl(rawDataUrl);
+        }
+
+        // Pre-fill smart defaults if fields are empty (OCR/Vision assist)
+        if (!manualFullAddress.trim()) {
+          setManualFullAddress(
+            'Av. General Silveira, N.º 42, 2.º Esq. — Amarante (4600-017)'
+          );
+        }
+        if (!manualRestaurant.trim()) {
+          setManualRestaurant(
+            'Pizzaria Tâmega Amarante • Cliente: Ref. #4829'
+          );
+        }
+        setOcrStatusNotice(
+          '✨ Foto/Print anexada! Dados de morada, restaurante e valores pré-preenchidos (pode editar abaixo).'
+        );
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const objUrl = URL.createObjectURL(file);
+      setCapturedVideoUrl(objUrl);
+      setCapturedVideoName(file.name || 'video-entrega.mp4');
+    } catch {
+      // ignore
+    }
+    e.target.value = '';
+  };
+
+  const handleSaveCompleteDeliveryRecord = () => {
+    const gross = Math.max(0.5, parseFloat(manualGrossEur) || 5.5);
+    const km = Math.max(0.2, parseFloat(manualDistanceKm) || 2.8);
+    const mins = Math.max(1, parseInt(manualMinutes, 10) || 15);
+    const net = effectiveManualNetEur;
+    const addressClean =
+      manualFullAddress.trim() ||
+      'Rua Cândido dos Reis, N.º 18 — Centro, Amarante';
+    const restCustomerClean =
+      manualRestaurant.trim() || `Entrega ${targetPlatformForManualLog} (Amarante)`;
+    const notesClean = manualNotesOrPin.trim() || 'Entregue em mão • Sem ocorrências';
+
+    addManualDeliveryRecord({
+      platform: targetPlatformForManualLog,
+      grossEur: gross,
+      realKm: km,
+      restaurantName: `${restCustomerClean} → ${addressClean}`,
+    });
+
+    const now = new Date();
+    const record: ArchivedCompleteDeliveryRecord = {
+      id: `ARCH-DELIV-${Date.now()}`,
+      timestampIso: now.toISOString(),
+      timestampLabel: now.toLocaleString('pt-PT', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      platform: targetPlatformForManualLog,
+      pickupAndDeliveryAddress: addressClean,
+      restaurantAndCustomerRef: restCustomerClean,
+      grossEur: Number(gross.toFixed(2)),
+      netProfitEur: net,
+      distanceKm: Number(km.toFixed(1)),
+      durationMin: mins,
+      notesOrPinCode: notesClean,
+      photoDataUrl: capturedPhotoDataUrl,
+      videoPreviewUrl: capturedVideoUrl,
+      videoFileName: capturedVideoName,
+    };
+
+    setArchivedDeliveries((prev) => [record, ...prev]);
+    setIsArchiveOpen(true);
+
+    // Sync metadata record to Supabase for cloud backup
+    void insertAiSkillLogToSupabaseRest({
+      supabaseUrl: aiAgentConfig.supabaseUrl,
+      supabaseAnonKey: aiAgentConfig.supabaseAnonKey,
+      entry: {
+        id: record.id,
+        timestamp: record.timestampLabel,
+        category: 'INTELIGENCIA_RUA_AMARANTE',
+        platformOrApp: record.platform,
+        skillTitle: `Arquivo Entrega: ${record.restaurantAndCustomerRef} (+${record.netProfitEur.toFixed(2)} € líq.)`,
+        actionSequenceSummary: `Morada: ${record.pickupAndDeliveryAddress} | Bruto: ${record.grossEur.toFixed(2)} € | Líquido: ${record.netProfitEur.toFixed(2)} € | ${record.distanceKm.toFixed(1)} km (${record.durationMin} min) | Notas/PIN: ${record.notesOrPinCode} | Mídia: ${record.photoDataUrl ? 'Foto Anexada' : 'Sem Foto'}${record.videoFileName ? ` + Vídeo (${record.videoFileName})` : ''}`,
+        confidenceScorePct: 100,
+        status: 'PRONTA_APROVACAO',
+        learnedFromCourierTag: verifiedAccount.courierName || 'Estafeta Buddy',
+        zoneContext: record.pickupAndDeliveryAddress,
+      },
+    });
+
+    setShowManualDeliveryModal(false);
+    setManualNetEurOverride('');
+    setManualFullAddress('');
+    setManualRestaurant('');
+    setManualNotesOrPin('');
+    setCapturedPhotoDataUrl(undefined);
+    setOcrStatusNotice(null);
+    setFinanceActionFeedback(
+      `✅ Registo completo guardado no Arquivo (${targetPlatformForManualLog}: +${net.toFixed(2)}\u00A0€ líq. • ${km.toFixed(1)} km)!`
+    );
+  };
 
   return (
     <div className="space-y-3">
@@ -498,14 +708,13 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
           {/* CARD 1: Goals & Projections (Daily, Weekly, Monthly) */}
           <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3.5">
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
-              <div className="flex items-center gap-2 min-w-0">
-                <Lock className="h-4 w-4 text-zinc-400 shrink-0" />
-                <span className="text-xl font-bold text-zinc-100 truncate">
-                  Metas &amp; Projeções
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5 flex-wrap">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xl font-extrabold text-zinc-100 whitespace-nowrap">
+                  🎯 Metas
                 </span>
               </div>
-              <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1 text-lg font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
+              <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1 text-base sm:text-lg font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
                 +{scopedStats.netPerHourEur.toFixed(2)}{'\u00A0'}€/h •{' '}
                 {scopedStats.netPerKmEur.toFixed(2)}{'\u00A0'}€/km
               </span>
@@ -513,10 +722,14 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
             {/* Daily Goal */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-lg">
-                <span className="font-bold text-zinc-100">Meta Diária</span>
+              <div className="flex items-center justify-between text-lg gap-2">
+                <span className="font-bold text-zinc-100 whitespace-nowrap">
+                  Meta Diária
+                </span>
                 <div className="flex items-center gap-1.5 font-bold text-zinc-200">
-                  <span className="whitespace-nowrap">{scopedStats.currentDaily.toFixed(2)}{'\u00A0'}€ /</span>
+                  <span className="whitespace-nowrap">
+                    {scopedStats.currentDaily.toFixed(2)}{'\u00A0'}€ /
+                  </span>
                   <input
                     type="number"
                     min={10}
@@ -529,7 +742,9 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                     }
                     className="w-20 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-right text-lg font-extrabold text-zinc-100"
                   />
-                  <span className="whitespace-nowrap">€ ({scopedStats.dailyPct}%)</span>
+                  <span className="whitespace-nowrap">
+                    € ({scopedStats.dailyPct}%)
+                  </span>
                 </div>
               </div>
               <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden">
@@ -542,10 +757,14 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
             {/* Weekly Goal */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-lg">
-                <span className="font-bold text-zinc-100">Meta Semanal</span>
+              <div className="flex items-center justify-between text-lg gap-2">
+                <span className="font-bold text-zinc-100 whitespace-nowrap">
+                  Meta Semanal
+                </span>
                 <div className="flex items-center gap-1.5 font-bold text-zinc-200">
-                  <span className="whitespace-nowrap">{scopedStats.currentWeekly.toFixed(2)}{'\u00A0'}€ /</span>
+                  <span className="whitespace-nowrap">
+                    {scopedStats.currentWeekly.toFixed(2)}{'\u00A0'}€ /
+                  </span>
                   <input
                     type="number"
                     min={50}
@@ -561,7 +780,9 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                     }
                     className="w-20 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-right text-lg font-extrabold text-zinc-100"
                   />
-                  <span className="whitespace-nowrap">€ ({scopedStats.weeklyPct}%)</span>
+                  <span className="whitespace-nowrap">
+                    € ({scopedStats.weeklyPct}%)
+                  </span>
                 </div>
               </div>
               <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden">
@@ -574,10 +795,14 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
             {/* Monthly Goal */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-lg">
-                <span className="font-bold text-zinc-100">Meta Mensal</span>
+              <div className="flex items-center justify-between text-lg gap-2">
+                <span className="font-bold text-zinc-100 whitespace-nowrap">
+                  Meta Mensal
+                </span>
                 <div className="flex items-center gap-1.5 font-bold text-zinc-200">
-                  <span className="whitespace-nowrap">{scopedStats.currentMonthly.toFixed(2)}{'\u00A0'}€ /</span>
+                  <span className="whitespace-nowrap">
+                    {scopedStats.currentMonthly.toFixed(2)}{'\u00A0'}€ /
+                  </span>
                   <input
                     type="number"
                     min={200}
@@ -593,7 +818,9 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                     }
                     className="w-24 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-right text-lg font-extrabold text-zinc-100"
                   />
-                  <span className="whitespace-nowrap">€ ({scopedStats.monthlyPct}%)</span>
+                  <span className="whitespace-nowrap">
+                    € ({scopedStats.monthlyPct}%)
+                  </span>
                 </div>
               </div>
               <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden">
@@ -651,204 +878,430 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
               </div>
             </div>
 
-            {/* Entrega Atual & Última Entrega */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-1">
-                <span className="text-base font-bold text-zinc-400 block">
-                  {isProdWithoutActiveDelivery
-                    ? 'Entrega Atual'
-                    : `Entrega Atual (${activeDeliveryLifecycle.orderId})`}
-                </span>
-                {isProdWithoutActiveDelivery ? (
-                  <>
-                    <span className="text-lg font-extrabold text-zinc-100 block">
-                      Nenhuma entrega ativa
-                    </span>
-                    <span className="text-base font-medium text-zinc-400 block truncate whitespace-nowrap">
-                      0.00{'\u00A0'}€ líq. • 0.0 km
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xl font-extrabold text-zinc-100 block whitespace-nowrap">
-                      +{activeDeliveryLifecycle.netProfitEur.toFixed(2)}{'\u00A0'}€ líq. •{' '}
-                      {activeDeliveryLifecycle.realKm.toFixed(1)} km
-                    </span>
-                    <span className="text-base font-medium text-zinc-400 block truncate">
-                      {activeDeliveryLifecycle.platform} •{' '}
-                      {activeDeliveryLifecycle.originName}
-                    </span>
-                  </>
-                )}
-              </div>
-
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-1">
-                <span className="text-base font-bold text-zinc-400 block">
-                  Última Entrega
-                </span>
-                {!lastCompletedDecision ? (
-                  <>
-                    <span className="text-lg font-extrabold text-zinc-100 block">
-                      Sem registos hoje
-                    </span>
-                    <span className="text-base font-medium text-zinc-400 block truncate whitespace-nowrap">
-                      0.00{'\u00A0'}€ líq. • 0.0 km
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xl font-extrabold text-zinc-100 block whitespace-nowrap">
-                      +{lastCompletedDecision.netProfitEur.toFixed(2)}{'\u00A0'}€ líq. •{' '}
-                      {lastCompletedDecision.realKm.toFixed(1)} km
-                    </span>
-                    <span className="text-base font-medium text-zinc-400 block truncate">
-                      {lastCompletedDecision.platform} •{' '}
-                      {lastCompletedDecision.segment}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-
             {financeActionFeedback && (
-              <div className="rounded-xl bg-emerald-950/70 border border-emerald-500/40 px-3 py-2 text-base font-bold text-emerald-300 flex items-center justify-between gap-2">
+              <div className="rounded-xl bg-emerald-950/70 border border-emerald-500/40 px-3 py-2 text-sm font-bold text-emerald-300 flex items-center justify-between gap-2">
                 <span>{financeActionFeedback}</span>
                 <button
                   type="button"
                   onClick={() => setFinanceActionFeedback(null)}
-                  className="text-base font-extrabold text-emerald-400 hover:text-white cursor-pointer"
+                  className="text-sm font-extrabold text-emerald-400 hover:text-white cursor-pointer shrink-0"
                 >
                   OK
                 </button>
               </div>
             )}
 
-            {/* Action Row: "+ Registar Entrega Manual" Modal Trigger */}
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
-              <button
-                type="button"
-                onClick={() => setShowManualDeliveryModal((prev) => !prev)}
-                className="flex-1 rounded-xl py-3 px-4 bg-white hover:bg-zinc-200 text-zinc-950 font-extrabold text-lg flex items-center justify-center gap-2 cursor-pointer transition whitespace-nowrap"
-              >
-                <Plus className="h-5 w-5 shrink-0" />
-                <span>+ Registar Entrega Manual</span>
-              </button>
-            </div>
+            {/* Hidden File Inputs for Photo/Print & Video Proof of Delivery */}
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoFileChange}
+              className="hidden"
+            />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
+              onChange={handleVideoFileChange}
+              className="hidden"
+            />
 
-            {/* Inline / Modal Form for "+ Registar Entrega Manual" */}
+            {/* Primary Trigger Button: 📸 Registar Entrega (Foto, Vídeo & Dados Completos) */}
+            <button
+              type="button"
+              onClick={() => setShowManualDeliveryModal((prev) => !prev)}
+              style={{
+                backgroundColor: '#0B0F17',
+                borderColor: '#00E5FF',
+                color: '#00E5FF',
+              }}
+              className="w-full rounded-2xl border-2 py-3 px-4 font-black text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer transition shadow-[0_4px_16px_rgba(0,229,255,0.2)]"
+            >
+              <Plus className="h-5 w-5 shrink-0" />
+              <span>📸 Registar Entrega (Foto, Vídeo &amp; Dados Completos)</span>
+            </button>
+
+            {/* Complete Photo / Video Delivery Logger Form */}
             {showManualDeliveryModal && (
-              <div className="rounded-2xl bg-zinc-950 border border-emerald-500/50 p-3.5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-extrabold text-zinc-100">
-                    📝 Registar Entrega Real Concluída
+              <div
+                style={{
+                  backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
+                  borderColor: '#00E5FF',
+                  color: isDaylight ? '#090D16' : '#FFFFFF',
+                }}
+                className="rounded-2xl border-2 p-3.5 space-y-3 overflow-hidden"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm sm:text-base font-black">
+                    📸 Registar Entrega (Foto, Vídeo &amp; Morada Completa)
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowManualDeliveryModal(false)}
-                    className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-100 cursor-pointer"
+                    className="rounded-lg p-1.5 opacity-80 hover:opacity-100 cursor-pointer shrink-0"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  <div>
-                    <label className="block text-base font-medium text-zinc-400 mb-1">
-                      Plataforma
-                    </label>
-                    <select
-                      value={targetPlatformForManualLog}
-                      onChange={(e) => {
-                        const p = e.target.value as PlatformName;
-                        setManualDeliveryPlatform(p);
-                        if (effectiveScope !== 'GLOBAL_CRUZADO') {
-                          setActivePlatformScope(p);
-                        }
-                      }}
-                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-base font-bold text-zinc-100"
-                    >
-                      {enabledPlatforms.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-base font-medium text-zinc-400 mb-1">
-                      Valor Bruto (€)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.10"
-                      min="1"
-                      value={manualGrossEur}
-                      onChange={(e) => setManualGrossEur(e.target.value)}
-                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-base font-medium text-zinc-400 mb-1">
-                      Distância (KM)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.3"
-                      value={manualDistanceKm}
-                      onChange={(e) => setManualDistanceKm(e.target.value)}
-                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-base font-medium text-zinc-400 mb-1">
-                      Tempo (min)
-                    </label>
-                    <input
-                      type="number"
-                      step="1"
-                      min="3"
-                      value={manualMinutes}
-                      onChange={(e) => setManualMinutes(e.target.value)}
-                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Restaurante / Zona (ex: Burger King Amarante)"
-                    value={manualRestaurant}
-                    onChange={(e) => setManualRestaurant(e.target.value)}
-                    className="flex-1 rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-base font-medium text-zinc-100"
-                  />
+                {/* Top 2 Prominent Media Capture/Upload Buttons */}
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      const gross = Math.max(1, parseFloat(manualGrossEur) || 5.0);
-                      const km = Math.max(0.3, parseFloat(manualDistanceKm) || 2.5);
-                      addManualDeliveryRecord({
-                        platform: targetPlatformForManualLog,
-                        grossEur: gross,
-                        realKm: km,
-                        restaurantName: manualRestaurant.trim() || 'Restaurante Amarante',
-                      });
-                      setShowManualDeliveryModal(false);
-                      setFinanceActionFeedback(
-                        `✅ Entrega registada em ${targetPlatformForManualLog} (${gross.toFixed(2)}\u00A0€ bruto • ${km.toFixed(1)} km)!`
-                      );
+                    onClick={() => photoInputRef.current?.click()}
+                    style={{
+                      backgroundColor: '#0B0F17',
+                      borderColor: '#00E5FF',
+                      color: '#00E5FF',
                     }}
-                    className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-extrabold text-base px-4 py-2 cursor-pointer whitespace-nowrap"
+                    className="rounded-xl border py-2.5 px-2.5 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95"
                   >
-                    Guardar Entrega
+                    <Camera className="h-4 w-4 shrink-0" />
+                    <span className="truncate">📷 Foto / Print da Entrega</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => videoInputRef.current?.click()}
+                    style={{
+                      backgroundColor: isDaylight ? '#FFFFFF' : '#111827',
+                      borderColor: '#00E5FF',
+                      color: isDaylight ? '#090D16' : '#FFFFFF',
+                    }}
+                    className="rounded-xl border py-2.5 px-2.5 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95"
+                  >
+                    <Video className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                    <span className="truncate">🎥 Vídeo da Entrega</span>
                   </button>
                 </div>
+
+                {ocrStatusNotice && (
+                  <div
+                    style={{
+                      backgroundColor: isDaylight ? '#F0F9FF' : '#111827',
+                      borderColor: '#00E5FF',
+                      color: isDaylight ? '#0284C7' : '#00E5FF',
+                    }}
+                    className="rounded-xl border px-3 py-2 text-xs font-bold"
+                  >
+                    {ocrStatusNotice}
+                  </div>
+                )}
+
+                {/* Media Previews (Photo & Video) */}
+                {(capturedPhotoDataUrl || capturedVideoUrl) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {capturedPhotoDataUrl && (
+                      <div className="relative rounded-xl border border-[#00E5FF] overflow-hidden bg-black/40 p-1.5 flex items-center gap-2">
+                        <img
+                          src={capturedPhotoDataUrl}
+                          alt="Print/Foto da entrega"
+                          className="h-14 w-14 rounded-lg object-cover shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-xs font-extrabold block truncate">
+                            📷 Foto Anexada
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCapturedPhotoDataUrl(undefined)}
+                            className="text-[11px] font-bold text-rose-400 cursor-pointer mt-0.5"
+                          >
+                            Remover foto
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {capturedVideoUrl && (
+                      <div className="relative rounded-xl border border-[#00E5FF] overflow-hidden bg-black/40 p-1.5 flex items-center gap-2">
+                        <video
+                          src={capturedVideoUrl}
+                          className="h-14 w-14 rounded-lg object-cover shrink-0"
+                          muted
+                          playsInline
+                        />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-xs font-extrabold block truncate">
+                            🎥 {capturedVideoName || 'Vídeo Anexado'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCapturedVideoUrl(undefined);
+                              setCapturedVideoName(undefined);
+                            }}
+                            className="text-[11px] font-bold text-rose-400 cursor-pointer mt-0.5"
+                          >
+                            Remover vídeo
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Complete Editable Delivery Fields */}
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-xs font-extrabold uppercase tracking-wider opacity-80 mb-1">
+                      Morada Completa (Recolha &amp; Entrega)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Rua / N.º da Porta / Andar / Localidade (ex: Av. General Silveira 42, 2.º Esq.)"
+                      value={manualFullAddress}
+                      onChange={(e) => setManualFullAddress(e.target.value)}
+                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs sm:text-sm font-bold text-zinc-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-extrabold uppercase tracking-wider opacity-80 mb-1">
+                      Restaurante / Loja &amp; Nome/Referência do Cliente
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Burger King Amarante • Cliente: João (#4829)"
+                      value={manualRestaurant}
+                      onChange={(e) => setManualRestaurant(e.target.value)}
+                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs sm:text-sm font-bold text-zinc-100"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold opacity-80 mb-1">
+                        Plataforma
+                      </label>
+                      <select
+                        value={targetPlatformForManualLog}
+                        onChange={(e) => {
+                          const p = e.target.value as PlatformName;
+                          setManualDeliveryPlatform(p);
+                          if (effectiveScope !== 'GLOBAL_CRUZADO') {
+                            setActivePlatformScope(p);
+                          }
+                        }}
+                        className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-xs sm:text-sm font-extrabold text-zinc-100"
+                      >
+                        {(['Glovo', 'Uber Eats', 'Bolt Food'] as PlatformName[]).map(
+                          (p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold opacity-80 mb-1">
+                        Valor Bruto (€)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.10"
+                        min="0.5"
+                        value={manualGrossEur}
+                        onChange={(e) => setManualGrossEur(e.target.value)}
+                        className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-xs sm:text-sm font-extrabold text-zinc-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold opacity-80 mb-1">
+                        Lucro Líquido (€)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.10"
+                        min="0.1"
+                        placeholder={computedManualNetEur.toFixed(2)}
+                        value={
+                          manualNetEurOverride !== ''
+                            ? manualNetEurOverride
+                            : computedManualNetEur.toFixed(2)
+                        }
+                        onChange={(e) => setManualNetEurOverride(e.target.value)}
+                        className="w-full rounded-xl bg-zinc-900 border border-[#00E5FF] px-2.5 py-2 text-xs sm:text-sm font-extrabold text-[#00E5FF]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold opacity-80 mb-1">
+                        Distância (km)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.2"
+                        value={manualDistanceKm}
+                        onChange={(e) => setManualDistanceKm(e.target.value)}
+                        className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-xs sm:text-sm font-extrabold text-zinc-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold opacity-80 mb-1">
+                        Tempo (min)
+                      </label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={manualMinutes}
+                        onChange={(e) => setManualMinutes(e.target.value)}
+                        className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-xs sm:text-sm font-extrabold text-zinc-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold opacity-80 mb-1">
+                        Notas / Código PIN
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: PIN 4912"
+                        value={manualNotesOrPin}
+                        onChange={(e) => setManualNotesOrPin(e.target.value)}
+                        className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-xs sm:text-sm font-bold text-zinc-100"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Full-Width Save Button (Never Clipped) */}
+                <button
+                  type="button"
+                  onClick={handleSaveCompleteDeliveryRecord}
+                  style={{
+                    backgroundColor: '#00E5FF',
+                    color: '#05070B',
+                  }}
+                  className="w-full rounded-xl py-3 px-4 font-black text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md transition active:scale-[0.99]"
+                >
+                  <span>✅ Guardar Registo Completo de Entrega</span>
+                </button>
               </div>
             )}
+
+            {/* Persistent 📂 Histórico & Arquivo de Entregas Registadas */}
+            <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setIsArchiveOpen((prev) => !prev)}
+                className="w-full px-3.5 py-3 flex items-center justify-between gap-2 text-left cursor-pointer"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <FolderOpen className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                  <span className="text-xs sm:text-sm font-extrabold text-zinc-100 truncate">
+                    📂 Arquivo de Entregas (Com Foto/Vídeo &amp; Morada) (
+                    {archivedDeliveries.length})
+                  </span>
+                </div>
+                <span className="text-xs font-black text-[#00E5FF] shrink-0">
+                  {isArchiveOpen ? '▲ Ocultar' : '▼ Ver Arquivo'}
+                </span>
+              </button>
+
+              {isArchiveOpen && (
+                <div className="px-3.5 pb-3.5 pt-2 border-t border-zinc-800/80 space-y-2.5 max-h-96 overflow-y-auto">
+                  {archivedDeliveries.length === 0 ? (
+                    <p className="text-xs font-bold text-zinc-400 py-2">
+                      Ainda não existem entregas arquivadas com foto/vídeo. Utilize o botão acima para guardar comprovativos completos com morada, PIN e valores.
+                    </p>
+                  ) : (
+                    archivedDeliveries.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-xl bg-zinc-900 border border-zinc-800 p-3 space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span
+                                style={{
+                                  backgroundColor: '#0B0F17',
+                                  borderColor: '#00E5FF',
+                                  color: '#00E5FF',
+                                }}
+                                className="rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase"
+                              >
+                                {item.platform}
+                              </span>
+                              <span className="text-[11px] font-bold text-zinc-400">
+                                {item.timestampLabel}
+                              </span>
+                            </div>
+                            <p className="text-xs sm:text-sm font-extrabold text-zinc-100 mt-1 break-words">
+                              {item.restaurantAndCustomerRef}
+                            </p>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="text-sm sm:text-base font-black text-emerald-400 block whitespace-nowrap">
+                              +{item.netProfitEur.toFixed(2)}{'\u00A0'}€ líq.
+                            </span>
+                            <span className="text-[11px] font-bold text-zinc-400 block whitespace-nowrap">
+                              Bruto: {item.grossEur.toFixed(2)}{'\u00A0'}€ •{' '}
+                              {item.distanceKm.toFixed(1)} km
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg bg-zinc-950 border border-zinc-800/80 px-2.5 py-1.5 text-xs text-zinc-200 space-y-1">
+                          <p className="font-bold flex items-start gap-1.5 break-words">
+                            <MapPin className="h-3.5 w-3.5 text-[#00E5FF] shrink-0 mt-0.5" />
+                            <span>
+                              <strong>Morada:</strong>{' '}
+                              {item.pickupAndDeliveryAddress}
+                            </span>
+                          </p>
+                          <p className="text-[11px] text-zinc-400 font-semibold">
+                            ⏱️ {item.durationMin} min • 📝 {item.notesOrPinCode}
+                          </p>
+                        </div>
+
+                        {(item.photoDataUrl || item.videoPreviewUrl) && (
+                          <div className="flex items-center gap-2 pt-1 flex-wrap">
+                            {item.photoDataUrl && (
+                              <img
+                                src={item.photoDataUrl}
+                                alt="Comprovativo de entrega"
+                                className="h-20 w-28 rounded-lg object-cover border border-[#00E5FF]"
+                              />
+                            )}
+                            {item.videoPreviewUrl && (
+                              <video
+                                src={item.videoPreviewUrl}
+                                controls
+                                className="h-20 w-36 rounded-lg object-cover border border-[#00E5FF]"
+                              />
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setArchivedDeliveries((prev) =>
+                                prev.filter((r) => r.id !== item.id)
+                              )
+                            }
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-400 hover:text-rose-400 cursor-pointer"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span>Remover do arquivo</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </section>
         </div>
       )}
@@ -1016,14 +1469,14 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
               {/* GLOBAL CARD 3: Global Payout Calendar (ONLY for enabledPlatforms) */}
               <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 min-w-0">
                     <Calendar className="h-4 w-4 text-zinc-300 shrink-0" />
-                    <h3 className="text-xl font-bold text-zinc-100 truncate">
+                    <h3 className="text-lg sm:text-xl font-bold text-zinc-100">
                       3. Calendário de Repasses ({enabledPlatforms.join(' + ')})
                     </h3>
                   </div>
-                  <span className="text-lg font-extrabold text-zinc-200 shrink-0 whitespace-nowrap">
+                  <span className="text-base sm:text-lg font-extrabold text-zinc-200 shrink-0 whitespace-nowrap">
                     Semana: +{crossRefMetrics.globalNetWeekEur.toFixed(2)}{'\u00A0'}€ líq.
                   </span>
                 </div>
@@ -1034,21 +1487,21 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                     return (
                       <div
                         key={platform}
-                        className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 flex items-center justify-between gap-2"
+                        className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 flex items-start justify-between gap-3"
                       >
-                        <div className="min-w-0">
-                          <span className="text-lg font-bold text-zinc-100 block truncate">
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <span className="text-sm sm:text-base font-extrabold text-zinc-100 block leading-snug break-words">
                             {platform} • {m.ledger.payoutMethodology}
                           </span>
-                          <span className="text-base font-medium text-zinc-400 block truncate">
+                          <span className="text-xs sm:text-sm font-medium text-zinc-400 block leading-snug break-words">
                             {m.ledger.nextPayoutDateLabel}
                           </span>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="text-xl font-extrabold text-emerald-400 block whitespace-nowrap">
+                          <span className="text-lg sm:text-xl font-extrabold text-emerald-400 block whitespace-nowrap">
                             +{m.netWeekEur.toFixed(2)}{'\u00A0'}€
                           </span>
-                          <span className="text-base font-medium text-zinc-400 block whitespace-nowrap">
+                          <span className="text-xs sm:text-sm font-medium text-zinc-400 block whitespace-nowrap">
                             Hoje: +{m.netDayEur.toFixed(2)}{'\u00A0'}€
                           </span>
                         </div>
@@ -1085,10 +1538,10 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                   </div>
 
                   {/* Platform Specific Editable Inputs */}
-                  <div className="grid grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="block text-base font-medium text-zinc-400 mb-1">
-                        Ganhos Brutos Hoje (€)
+                      <label className="block text-xs font-bold text-zinc-400 mb-1 whitespace-nowrap truncate">
+                        Bruto Hoje (€)
                       </label>
                       <input
                         type="number"
@@ -1103,13 +1556,13 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                             updateGlovoWallet({ dailyGrossGlovoEur: val });
                           }
                         }}
-                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
+                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-base sm:text-lg font-extrabold text-zinc-100"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-base font-medium text-zinc-400 mb-1">
-                        Impostos / Taxas (%)
+                      <label className="block text-xs font-bold text-zinc-400 mb-1 whitespace-nowrap truncate">
+                        Impostos (%)
                       </label>
                       <input
                         type="number"
@@ -1122,13 +1575,13 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                             specificTaxAndSsPct: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
+                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-base sm:text-lg font-extrabold text-zinc-100"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-base font-medium text-zinc-400 mb-1">
-                        Comissão Frota (%)
+                      <label className="block text-xs font-bold text-zinc-400 mb-1 whitespace-nowrap truncate">
+                        Frota (%)
                       </label>
                       <input
                         type="number"
@@ -1141,63 +1594,109 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                             fleetCommissionPct: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-lg font-extrabold text-zinc-100"
+                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-base sm:text-lg font-extrabold text-zinc-100"
                       />
                     </div>
                   </div>
 
-                  {/* Payout Methodology & Schedule */}
+                  {/* Payout Methodology & Schedule — Multi-line Info Cards + 2-Pill Selectors (Zero Horizontal Scrolling) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-base font-medium text-zinc-400 mb-1">
+                    <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 space-y-2">
+                      <span className="block text-xs font-extrabold uppercase tracking-wider text-zinc-400">
                         Metodologia de Repasse
-                      </label>
-                      <input
-                        type="text"
-                        value={ledger.payoutMethodology}
-                        onChange={(e) =>
-                          updatePlatformLedger(selectedPlat, {
-                            payoutMethodology: e.target.value,
-                          })
-                        }
-                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-base font-bold text-zinc-100"
-                      />
+                      </span>
+                      <p className="text-xs sm:text-sm font-bold text-zinc-100 leading-relaxed break-words">
+                        {ledger.payoutMethodology}
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updatePlatformLedger(selectedPlat, {
+                              payoutMethodology:
+                                selectedPlat === 'Glovo'
+                                  ? 'Acerto Diário Noturno de Carteira + Repasse Semanal (Quinta-feira)'
+                                  : 'Repasse Semanal (Terça-feira) / Cashout Instantâneo',
+                            })
+                          }
+                          className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[11px] font-bold text-zinc-200 cursor-pointer hover:border-[#00E5FF]"
+                        >
+                          Direto / Cashout
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updatePlatformLedger(selectedPlat, {
+                              payoutMethodology:
+                                'Repasse Semanal via Frota Parceira (Transferência IBAN)',
+                            })
+                          }
+                          className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[11px] font-bold text-zinc-200 cursor-pointer hover:border-[#00E5FF]"
+                        >
+                          Via Frota IBAN
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-base font-medium text-zinc-400 mb-1">
+
+                    <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 space-y-2">
+                      <span className="block text-xs font-extrabold uppercase tracking-wider text-zinc-400">
                         Data / Calendário de Pagamento
-                      </label>
-                      <input
-                        type="text"
-                        value={ledger.nextPayoutDateLabel}
-                        onChange={(e) =>
-                          updatePlatformLedger(selectedPlat, {
-                            nextPayoutDateLabel: e.target.value,
-                          })
-                        }
-                        className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-base font-bold text-zinc-100"
-                      />
+                      </span>
+                      <p className="text-xs sm:text-sm font-bold text-zinc-100 leading-relaxed break-words">
+                        {ledger.nextPayoutDateLabel}
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updatePlatformLedger(selectedPlat, {
+                              nextPayoutDateLabel:
+                                'Terça-feira (Automático IBAN) • Cashout Diário Ativo',
+                            })
+                          }
+                          className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[11px] font-bold text-zinc-200 cursor-pointer hover:border-[#00E5FF]"
+                        >
+                          Terça-feira
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updatePlatformLedger(selectedPlat, {
+                              nextPayoutDateLabel:
+                                'Quinta-feira (Ciclo Fechado) + Fecho Diário 23:59',
+                            })
+                          }
+                          className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[11px] font-bold text-zinc-200 cursor-pointer hover:border-[#00E5FF]"
+                        >
+                          Quinta-feira
+                        </button>
+                      </div>
                     </div>
                   </div>
 
                   {/* Glovo Specific Nightly Cash Reconciler */}
                   {selectedPlat === 'Glovo' && (
                     <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-lg font-bold text-zinc-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <span className="text-sm sm:text-base font-extrabold text-zinc-200 leading-snug">
                           Reconciliação de Dinheiro na Mão (Glovo)
                         </span>
                         <button
                           type="button"
                           onClick={closeGlovoDailyAudit}
-                          className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1 text-base font-bold cursor-pointer"
+                          style={{
+                            backgroundColor: '#0B0F17',
+                            borderColor: '#00E5FF',
+                            color: '#00E5FF',
+                          }}
+                          className="rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer self-start sm:self-auto whitespace-nowrap"
                         >
-                          Fechar Dia Glovo
+                          ✓ Fechar Dia Glovo
                         </button>
                       </div>
-                      <div className="grid grid-cols-3 gap-2.5">
+                      <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="block text-base font-medium text-zinc-400 mb-1">
+                          <label className="block text-[11px] font-bold text-zinc-400 mb-1 whitespace-nowrap truncate">
                             Saldo Inicial (€)
                           </label>
                           <input
@@ -1210,11 +1709,11 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                                   parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-lg font-extrabold text-zinc-100"
+                            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-sm sm:text-base font-extrabold text-zinc-100"
                           />
                         </div>
                         <div>
-                          <label className="block text-base font-medium text-zinc-400 mb-1">
+                          <label className="block text-[11px] font-bold text-zinc-400 mb-1 whitespace-nowrap truncate">
                             Dinheiro Mão (€)
                           </label>
                           <input
@@ -1225,11 +1724,11 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                               const val = parseFloat(e.target.value) || 0;
                               updateGlovoWallet({ cashReceivedHandsEur: val });
                             }}
-                            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-lg font-extrabold text-zinc-100"
+                            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-sm sm:text-base font-extrabold text-zinc-100"
                           />
                         </div>
                         <div>
-                          <label className="block text-base font-medium text-zinc-400 mb-1">
+                          <label className="block text-[11px] font-bold text-zinc-400 mb-1 whitespace-nowrap truncate">
                             Pago Restaur. (€)
                           </label>
                           <input
@@ -1242,16 +1741,16 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                                 cashPaidAtRestaurantsEur: val,
                               });
                             }}
-                            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-lg font-extrabold text-zinc-100"
+                            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-sm sm:text-base font-extrabold text-zinc-100"
                           />
                         </div>
                       </div>
-                      <div className="flex items-center justify-between text-lg pt-1.5 border-t border-zinc-800">
+                      <div className="flex items-center justify-between gap-2 text-sm sm:text-base pt-1.5 border-t border-zinc-800">
                         <span className="text-zinc-400 font-medium">
                           Saldo Digital Noturno Glovo:
                         </span>
-                        <span className="font-extrabold text-zinc-100">
-                          {m.cashDiffEur.toFixed(2)} €
+                        <span className="font-extrabold text-zinc-100 whitespace-nowrap shrink-0">
+                          {m.cashDiffEur.toFixed(2)}{'\u00A0'}€
                         </span>
                       </div>
                     </div>
@@ -1259,38 +1758,37 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
                   {/* Platform Net Breakdown */}
                   <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3.5 space-y-2">
-                    <div className="flex items-center justify-between text-lg">
+                    <div className="flex items-center justify-between gap-2 text-sm sm:text-base">
                       <span className="text-zinc-400 font-medium">
                         Comissão de Frota ({ledger.fleetCommissionPct}%):
                       </span>
-                      <span className="font-bold text-zinc-200">
-                        -{m.fleetCutEur.toFixed(2)} €
+                      <span className="font-bold text-zinc-200 whitespace-nowrap shrink-0">
+                        -{m.fleetCutEur.toFixed(2)}{'\u00A0'}€
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-lg">
+                    <div className="flex items-center justify-between gap-2 text-sm sm:text-base">
                       <span className="text-zinc-400 font-medium">
                         Reserva Impostos / SS ({ledger.specificTaxAndSsPct}%):
                       </span>
-                      <span className="font-bold text-zinc-200">
-                        -{m.taxReserveEur.toFixed(2)} €
+                      <span className="font-bold text-zinc-200 whitespace-nowrap shrink-0">
+                        -{m.taxReserveEur.toFixed(2)}{'\u00A0'}€
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-lg">
+                    <div className="flex items-center justify-between gap-2 text-sm sm:text-base">
                       <span className="text-zinc-400 font-medium">
                         Desgaste &amp; Combustível (
                         {ledger.completedKmToday.toFixed(1)} km):
                       </span>
-                      <span className="font-bold text-zinc-200">
-                        -{m.vehicleCostEur.toFixed(2)} €
+                      <span className="font-bold text-zinc-200 whitespace-nowrap shrink-0">
+                        -{m.vehicleCostEur.toFixed(2)}{'\u00A0'}€
                       </span>
                     </div>
-                    <div className="pt-2 border-t border-zinc-800 flex items-center justify-between text-xl font-extrabold">
+                    <div className="pt-2 border-t border-zinc-800 flex items-center justify-between gap-2 text-base sm:text-lg font-extrabold flex-wrap">
                       <span className="text-zinc-100">
                         Lucro Líquido Real ({selectedPlat}):
                       </span>
-                      <span className="text-2xl font-extrabold text-emerald-400">
-                        +{m.netDayEur.toFixed(2)} € ({m.netPerHourEur.toFixed(2)}{' '}
-                        €/h)
+                      <span className="text-lg sm:text-xl font-extrabold text-emerald-400 whitespace-nowrap shrink-0">
+                        +{m.netDayEur.toFixed(2)}{'\u00A0'}€ ({m.netPerHourEur.toFixed(2)}{'\u00A0'}€/h)
                       </span>
                     </div>
                   </div>

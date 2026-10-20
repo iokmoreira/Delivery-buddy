@@ -1234,6 +1234,9 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
     useState<boolean>(false);
   const [isCardFlippedForCustomer, setIsCardFlippedForCustomer] =
     useState<boolean>(false);
+  const [isQuickPhrasesOpen, setIsQuickPhrasesOpen] = useState<boolean>(false);
+  const [isCustomerRepliesOpen, setIsCustomerRepliesOpen] =
+    useState<boolean>(false);
 
   // Tab 2: Libras — Mãos do Buddy State
   const [activeCoreSignId, setActiveCoreSignId] =
@@ -1796,28 +1799,27 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
             ================================================================= */}
         {translatorActiveTab === 'TRADUTOR' && (
           <div className="space-y-3">
-            {/* 1. Target Language 8-Pill Grid */}
+            {/* 1. Compact Horizontal Scrollable Pill Row for Idioma do Cliente */}
             <div
               style={{ backgroundColor: cardBg, borderColor: borderCol }}
-              className="rounded-2xl border p-2.5 space-y-2"
+              className="rounded-2xl border p-2.5 space-y-1.5"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span
                   style={{ color: secondaryText }}
                   className="text-[11px] font-extrabold uppercase tracking-wider"
                 >
-                  Idioma do Cliente (Toque para mudar):
+                  Idioma do Cliente:
                 </span>
                 <span
                   style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
-                  className="text-xs font-black"
+                  className="text-xs font-black truncate"
                 >
-                  {selectedLangOption.flag} {selectedLangOption.namePt} (
-                  {selectedLangOption.nativeName})
+                  {selectedLangOption.flag} {selectedLangOption.namePt}
                 </span>
               </div>
 
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
                 {TRANSLATOR_LANGUAGES.map((lang) => {
                   const isSel = lang.code === translatorTargetLang;
                   return (
@@ -1838,17 +1840,17 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                               color: primaryText,
                             }
                       }
-                      className="rounded-xl border py-1.5 px-2 text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer transition"
+                      className="rounded-xl border py-1.5 px-2.5 text-xs font-extrabold flex items-center gap-1 cursor-pointer transition shrink-0 whitespace-nowrap"
                     >
                       <span>{lang.flag}</span>
-                      <span className="truncate">{lang.namePt}</span>
+                      <span>{lang.namePt}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* 2. Giant Customer Display Card (with 180° Flip Toggle for Doorstep Reading) */}
+            {/* 2. Main Translation Display Card (with 180° Flip Toggle for Doorstep Reading) */}
             <div
               style={{
                 backgroundColor: cardBg,
@@ -1858,14 +1860,13 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
               }}
               className="rounded-2xl border-2 p-3.5 space-y-2.5 shadow-[0_4px_20px_rgba(0,229,255,0.18)]"
             >
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span
                   style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
                   className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
                 >
                   <span>
-                    {selectedLangOption.flag} Tradução p/ Cliente (
-                    {selectedLangOption.namePt})
+                    {selectedLangOption.flag} Tradução ({selectedLangOption.namePt})
                   </span>
                 </span>
 
@@ -1887,7 +1888,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                     className="rounded-lg border px-2.5 py-1 text-xs font-extrabold flex items-center gap-1 cursor-pointer"
                   >
                     <Volume2 className="h-3.5 w-3.5" />
-                    <span>Ouvir</span>
+                    <span>🔊 Ouvir</span>
                   </button>
 
                   <button
@@ -1920,7 +1921,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
               >
                 <p
                   style={{ color: primaryText }}
-                  className="text-xl sm:text-2xl font-black leading-snug"
+                  className="text-xl sm:text-2xl font-black leading-snug break-words"
                 >
                   {isTranslatingLoading
                     ? 'A traduzir...'
@@ -1933,9 +1934,32 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   🇵🇹 Original: &ldquo;{courierPtText}&rdquo;
                 </p>
               </div>
+
+              {customerTranslatedPtText && (
+                <div
+                  style={{
+                    backgroundColor: innerBg,
+                    borderColor: '#00E5FF',
+                  }}
+                  className="rounded-xl border p-2.5 space-y-1"
+                >
+                  <span
+                    style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                    className="text-[10px] font-extrabold uppercase block"
+                  >
+                    🗣️ Cliente disse (Traduzido p/ Português):
+                  </span>
+                  <p
+                    style={{ color: primaryText }}
+                    className="text-sm font-black"
+                  >
+                    &ldquo;{customerTranslatedPtText}&rdquo;
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* 3. Dual-Microphone Simultaneous Conversation Controls */}
+            {/* 2 Large Simultaneous Voice Buttons */}
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -1947,7 +1971,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   borderColor: '#00E5FF',
                   color: isListeningCourierMic ? '#05070B' : '#00E5FF',
                 }}
-                className="rounded-2xl border-2 py-3 px-3 text-xs sm:text-sm font-black flex flex-col items-center justify-center gap-1 cursor-pointer shadow-md transition active:scale-95"
+                className="rounded-2xl border-2 py-3 px-2.5 text-xs sm:text-sm font-black flex flex-col items-center justify-center gap-1 cursor-pointer shadow-md transition active:scale-95"
               >
                 <div className="flex items-center gap-1.5">
                   <Mic className="h-4 w-4 shrink-0" />
@@ -1972,14 +1996,14 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   borderColor: '#00E5FF',
                   color: isListeningCustomerMic ? '#05070B' : primaryText,
                 }}
-                className="rounded-2xl border-2 py-3 px-3 text-xs sm:text-sm font-black flex flex-col items-center justify-center gap-1 cursor-pointer shadow-md transition active:scale-95"
+                className="rounded-2xl border-2 py-3 px-2.5 text-xs sm:text-sm font-black flex flex-col items-center justify-center gap-1 cursor-pointer shadow-md transition active:scale-95"
               >
                 <div className="flex items-center gap-1.5">
                   <Mic className="h-4 w-4 text-[#00E5FF] shrink-0" />
                   <span>
                     {isListeningCustomerMic
                       ? `🎙️ A Ouvir ${selectedLangOption.shortLabel}...`
-                      : `🎙️ Ouvir Cliente (${selectedLangOption.shortLabel})`}
+                      : `🎙️ Ouvir Cliente`}
                   </span>
                 </div>
                 <span
@@ -1991,25 +2015,26 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
               </button>
             </div>
 
-            {/* Free-form Text Input for Courier */}
+            {/* 3. Properly Aligned Compact Manual Input Row (100% Inside Card, Never Overflows) */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 void handleTranslateAndSpeakCourierPt(courierPtText, true);
               }}
-              className="flex items-center gap-1.5"
+              style={{ backgroundColor: cardBg, borderColor: borderCol }}
+              className="w-full rounded-2xl border p-2 flex items-center gap-1.5 overflow-hidden"
             >
               <input
                 type="text"
                 value={courierPtText}
                 onChange={(e) => setCourierPtText(e.target.value)}
-                placeholder="Escrever frase em Português para traduzir..."
+                placeholder="Escrever em Português..."
                 style={{
                   backgroundColor: innerBg,
                   borderColor: borderCol,
                   color: primaryText,
                 }}
-                className="flex-1 rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#00E5FF]"
+                className="min-w-0 flex-1 rounded-xl border px-2.5 py-2 text-xs font-bold focus:outline-none focus:border-[#00E5FF]"
               />
               <button
                 type="submit"
@@ -2018,137 +2043,121 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   borderColor: '#00E5FF',
                   color: '#00E5FF',
                 }}
-                className="rounded-xl border px-3 py-2 text-xs font-extrabold flex items-center gap-1 cursor-pointer shrink-0"
+                className="rounded-xl border px-3 py-2 text-xs font-extrabold flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
               >
-                <Send className="h-3.5 w-3.5" />
+                <Send className="h-3.5 w-3.5 shrink-0" />
                 <span>Traduzir</span>
               </button>
             </form>
 
-            {/* 4. 1-Tap Doorstep Delivery Quick Phrases */}
+            {/* 4. Collapsible Drawer: ⚡ Frases Rápidas de Entrega (Closed by Default) */}
             <div
               style={{ backgroundColor: cardBg, borderColor: borderCol }}
-              className="rounded-2xl border p-3 space-y-2"
+              className="rounded-2xl border overflow-hidden"
             >
-              <span
+              <button
+                type="button"
+                onClick={() => setIsQuickPhrasesOpen((prev) => !prev)}
                 style={{ color: primaryText }}
-                className="text-xs font-extrabold block"
+                className="w-full px-3 py-2.5 text-xs font-extrabold flex items-center justify-between gap-2 cursor-pointer"
               >
-                ⚡ Frases Rápidas de Entrega (1 Toque = Traduz &amp; Fala):
-              </span>
-              <div className="space-y-1.5">
-                {DOORSTEP_PRESET_PHRASES.map((phrase) => (
-                  <button
-                    key={phrase.id}
-                    type="button"
-                    onClick={() => {
-                      setCourierPtText(phrase.ptText);
-                      const foreign =
-                        phrase.translations[translatorTargetLang];
-                      setTranslatedCustomerText(foreign);
-                      speakInForeignLanguage(
-                        foreign,
-                        translatorTargetLang,
-                        1.02
-                      );
-                    }}
-                    style={{
-                      backgroundColor: innerBg,
-                      borderColor: borderCol,
-                      color: primaryText,
-                    }}
-                    className="w-full rounded-xl border p-2.5 text-left flex items-center justify-between gap-2 cursor-pointer transition hover:border-[#00E5FF]"
-                  >
-                    <div className="min-w-0">
-                      <span className="text-xs font-extrabold block leading-snug">
+                <span>
+                  ⚡ Frases Rápidas de Entrega ({DOORSTEP_PRESET_PHRASES.length})
+                </span>
+                <span
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  className="text-xs font-black"
+                >
+                  {isQuickPhrasesOpen ? '▲ Ocultar' : '▼ Abrir'}
+                </span>
+              </button>
+
+              {isQuickPhrasesOpen && (
+                <div className="px-3 pb-3 space-y-1.5 border-t border-slate-500/20 pt-2">
+                  {DOORSTEP_PRESET_PHRASES.map((phrase) => (
+                    <button
+                      key={phrase.id}
+                      type="button"
+                      onClick={() => {
+                        setCourierPtText(phrase.ptText);
+                        const foreign =
+                          phrase.translations[translatorTargetLang];
+                        setTranslatedCustomerText(foreign);
+                        speakInForeignLanguage(
+                          foreign,
+                          translatorTargetLang,
+                          1.02
+                        );
+                      }}
+                      style={{
+                        backgroundColor: innerBg,
+                        borderColor: borderCol,
+                        color: primaryText,
+                      }}
+                      className="w-full rounded-xl border px-3 py-2 text-left flex items-center justify-between gap-2 cursor-pointer transition hover:border-[#00E5FF]"
+                    >
+                      <span className="text-xs font-extrabold truncate">
                         🇵🇹 {phrase.ptText}
+                      </span>
+                      <Volume2 className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 5. Collapsible Drawer: 💬 Respostas Rápidas do Cliente (Closed by Default) */}
+            <div
+              style={{ backgroundColor: cardBg, borderColor: borderCol }}
+              className="rounded-2xl border overflow-hidden"
+            >
+              <button
+                type="button"
+                onClick={() => setIsCustomerRepliesOpen((prev) => !prev)}
+                style={{ color: primaryText }}
+                className="w-full px-3 py-2.5 text-xs font-extrabold flex items-center justify-between gap-2 cursor-pointer"
+              >
+                <span>
+                  💬 Respostas Rápidas do Cliente ({selectedLangOption.namePt})
+                </span>
+                <span
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  className="text-xs font-black"
+                >
+                  {isCustomerRepliesOpen ? '▲ Ocultar' : '▼ Abrir'}
+                </span>
+              </button>
+
+              {isCustomerRepliesOpen && (
+                <div className="px-3 pb-3 grid grid-cols-1 gap-1.5 border-t border-slate-500/20 pt-2">
+                  {CUSTOMER_FOREIGN_QUICK_REPLIES.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() =>
+                        void handleTranslateAndSpeakCustomerForeign(
+                          item.byLang[translatorTargetLang]
+                        )
+                      }
+                      style={{
+                        backgroundColor: innerBg,
+                        borderColor: borderCol,
+                        color: primaryText,
+                      }}
+                      className="w-full rounded-xl border px-3 py-2 text-left text-xs font-bold flex items-center justify-between gap-2 cursor-pointer hover:border-[#00E5FF]"
+                    >
+                      <span className="truncate">
+                        {selectedLangOption.flag}{' '}
+                        {item.byLang[translatorTargetLang]}
                       </span>
                       <span
                         style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
-                        className="text-[11px] font-bold block mt-0.5 truncate"
+                        className="text-[10px] font-extrabold shrink-0"
                       >
-                        {selectedLangOption.flag}{' '}
-                        {phrase.translations[translatorTargetLang]}
+                        Ouvir PT
                       </span>
-                    </div>
-                    <Volume2 className="h-4 w-4 text-[#00E5FF] shrink-0" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 5. Customer Reply Box (Foreign -> Portuguese) */}
-            <div
-              style={{ backgroundColor: cardBg, borderColor: borderCol }}
-              className="rounded-2xl border p-3 space-y-2"
-            >
-              <span
-                style={{ color: primaryText }}
-                className="text-xs font-extrabold block"
-              >
-                💬 Resposta Rápida do Cliente ({selectedLangOption.namePt} →
-                Português):
-              </span>
-              <div className="grid grid-cols-1 gap-1.5">
-                {CUSTOMER_FOREIGN_QUICK_REPLIES.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() =>
-                      void handleTranslateAndSpeakCustomerForeign(
-                        item.byLang[translatorTargetLang]
-                      )
-                    }
-                    style={{
-                      backgroundColor: innerBg,
-                      borderColor: borderCol,
-                      color: primaryText,
-                    }}
-                    className="w-full rounded-xl border px-3 py-2 text-left text-xs font-bold flex items-center justify-between gap-2 cursor-pointer hover:border-[#00E5FF]"
-                  >
-                    <span className="truncate">
-                      {selectedLangOption.flag}{' '}
-                      {item.byLang[translatorTargetLang]}
-                    </span>
-                    <span
-                      style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
-                      className="text-[10px] font-extrabold shrink-0"
-                    >
-                      Ouvir PT
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {customerTranslatedPtText && (
-                <div
-                  style={{
-                    backgroundColor: innerBg,
-                    borderColor: '#00E5FF',
-                  }}
-                  className="rounded-xl border p-2.5 space-y-1"
-                >
-                  <span
-                    style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
-                    className="text-[10px] font-extrabold uppercase block"
-                  >
-                    Tradução para o Estafeta (Português):
-                  </span>
-                  <p
-                    style={{ color: primaryText }}
-                    className="text-sm font-black"
-                  >
-                    &ldquo;{customerTranslatedPtText}&rdquo;
-                  </p>
-                  {customerOriginalText && (
-                    <p
-                      style={{ color: secondaryText }}
-                      className="text-[11px]"
-                    >
-                      Cliente ({selectedLangOption.shortLabel}):{' '}
-                      {customerOriginalText}
-                    </p>
-                  )}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

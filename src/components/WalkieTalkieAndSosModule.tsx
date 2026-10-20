@@ -1022,10 +1022,9 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                           setBuddyPopupSizeMode('45VH');
                           setActiveBuddyPopupCourierId(courier.id);
                         }}
-                        className="w-full rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-[#00E5FF]/50 text-[#00E5FF] py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
+                        className="w-full rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-[#00E5FF]/50 text-[#00E5FF] py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
                       >
-                        <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">📊 Ver Estatísticas</span>
+                        <span>📊 Estatísticas</span>
                       </button>
 
                       {isFriend ? (
@@ -1040,14 +1039,13 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                             })
                           }
                           title={`Ditar mensagem por voz ao vivo para ${courier.callsign}`}
-                          className="w-full rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
+                          className="w-full rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
                         >
-                          <Mic className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">🎙️ Mensagem de Voz</span>
+                          <span>🎙️ Mensagem</span>
                         </button>
                       ) : courier.contactPermission === 'PENDENTE' ? (
-                        <span className="w-full rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 py-2 px-3 text-xs font-bold flex items-center justify-center">
-                          ◌ Pedido Pendente
+                        <span className="w-full rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 py-2 px-2 text-xs font-bold flex items-center justify-center whitespace-nowrap">
+                          ◌ Pendente
                         </span>
                       ) : (
                         <button
@@ -1055,10 +1053,10 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                           onClick={() =>
                             requestCourierContactPermission(courier.id)
                           }
-                          className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
+                          className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
                         >
                           <UserPlus className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">Adicionar Buddy</span>
+                          <span>Adicionar Buddy</span>
                         </button>
                       )}
                     </div>
@@ -1245,13 +1243,13 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                     type="text"
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
-                    placeholder="Mensagem curta no rádio de Amarante..."
-                    className="flex-1 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500"
+                    placeholder="Mensagem no rádio..."
+                    className="min-w-0 flex-1 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500"
                   />
                   <button
                     type="button"
                     onClick={() => handleSendText(messageInput, false)}
-                    className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-3 py-2 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                    className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-3 py-2 text-xs font-semibold flex items-center gap-1 cursor-pointer shrink-0"
                   >
                     <Send className="h-3.5 w-3.5" />
                   </button>
@@ -1377,8 +1375,8 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                 type="text"
                 value={blogPostInput}
                 onChange={(e) => setBlogPostInput(e.target.value)}
-                placeholder="Publicar alerta ou dica para os Buddys de Amarante..."
-                className="flex-1 rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-500"
+                placeholder="Partilhar dica ou alerta..."
+                className="min-w-0 flex-1 rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-500"
               />
               <button
                 type="submit"
