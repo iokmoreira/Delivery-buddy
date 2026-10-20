@@ -176,17 +176,34 @@ public class BuddyOverlayService extends Service {
         if (intent != null && intent.getAction() != null) {
             String action = intent.getAction();
             if (ACTION_SHOW_BUBBLE.equals(action)) {
+                MainActivity act = MainActivity.getInstance();
+                if (act != null && act.isActivityInForeground()) {
+                    removeFloatingBubble();
+                    return START_STICKY;
+                }
                 isListeningState = intent.getBooleanExtra(EXTRA_IS_LISTENING, false);
                 liveCaptionText = "";
                 showFloatingBubble();
             } else if (ACTION_HIDE_BUBBLE.equals(action)) {
                 removeFloatingBubble();
             } else if (ACTION_UPDATE_LISTENING.equals(action)) {
+                MainActivity act = MainActivity.getInstance();
+                if (act != null && act.isActivityInForeground()) {
+                    removeFloatingBubble();
+                    return START_STICKY;
+                }
                 isListeningState = intent.getBooleanExtra(EXTRA_IS_LISTENING, false);
                 liveCaptionText = intent.getStringExtra(EXTRA_LIVE_CAPTION);
                 if (liveCaptionText == null) liveCaptionText = "";
-                updateBubbleVisualStyle();
+                if (bubbleContainer != null) {
+                    updateBubbleVisualStyle();
+                }
             } else if (ACTION_REFRESH_MASCOT_OR_PRESET.equals(action)) {
+                MainActivity act = MainActivity.getInstance();
+                if (act != null && act.isActivityInForeground()) {
+                    removeFloatingBubble();
+                    return START_STICKY;
+                }
                 if (bubbleContainer != null) {
                     snapBubbleToConfiguredRestingPosition();
                     updateBubbleVisualStyle();
@@ -401,9 +418,15 @@ public class BuddyOverlayService extends Service {
     }
 
     private void restoreMainActivityToForeground() {
+        // Immediately remove the native overlay bubble so two bubbles never appear simultaneously
+        removeFloatingBubble();
+
         try {
             MainActivity activeInstance = MainActivity.getInstance();
             if (activeInstance != null) {
+                if (activeInstance.isActivityInForeground()) {
+                    return;
+                }
                 ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
                 if (am != null) {
                     am.moveTaskToFront(activeInstance.getTaskId(), ActivityManager.MOVE_TASK_WITH_HOME);
@@ -420,7 +443,6 @@ public class BuddyOverlayService extends Service {
             Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP
                 | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                | Intent.FLAG_ACTIVITY_CLEAR_TOP
         );
         restoreIntent.putExtra("RESTORE_FROM_BUBBLE", true);
 
@@ -437,13 +459,6 @@ public class BuddyOverlayService extends Service {
             startActivity(restoreIntent);
         } catch (Exception ignored) {
         }
-
-        uiHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                removeFloatingBubble();
-            }
-        }, 220L);
     }
 
     private void updateBubbleVisualStyle() {

@@ -456,59 +456,116 @@ export const ShiftRadarModule: React.FC = () => {
   const peerMarkersLayerRef = useRef<L.LayerGroup | null>(null);
   const isAutoFollowRef = useRef<boolean>(true);
   const hasCenteredOnFirstFixRef = useRef<boolean>(false);
+  const hasHighAccuracyFixRef = useRef<boolean>(false);
+  const lastHighAccuracyFixMsRef = useRef<number>(0);
+  const lastAcceptedCoordsRef = useRef<{ lat: number; lng: number } | null>(
+    localLiveCoords
+  );
 
   useEffect(() => {
     isAutoFollowRef.current = isAutoFollowActive;
   }, [isAutoFollowActive]);
 
-  // Purge ghost/duplicate rows in Supabase on map mount
+  // Unified GPS Filter: Filters out coarse cell-tower jumps once high-accuracy GPS (<=40m) is locked + 10m deadband
+  const applyFilteredGpsFix = useCallback(
+    (
+      lat: number,
+      lng: number,
+      accuracy?: number,
+      forceAccept = false
+    ): { lat: number; lng: number } | null => {
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        (lat === 0 && lng === 0)
+      ) {
+        return null;
+      }
+
+      const nowMs = Date.now();
+      const isHighAcc =
+        typeof accuracy === 'number' &&
+        Number.isFinite(accuracy) &&
+        accuracy > 0 &&
+        accuracy <= 40;
+
+      if (isHighAcc) {
+        hasHighAccuracyFixRef.current = true;
+        lastHighAccuracyFixMsRef.current = nowMs;
+      } else if (
+        !forceAccept &&
+        hasHighAccuracyFixRef.current &&
+        nowMs - lastHighAccuracyFixMsRef.current < 60000 &&
+        typeof accuracy === 'number' &&
+        accuracy > 45
+      ) {
+        // Ignore coarse cell-tower / network coordinate jumps once high-accuracy GPS is locked!
+        return null;
+      }
+
+      const prev = lastAcceptedCoordsRef.current;
+      if (prev && !forceAccept) {
+        const dLatRad = ((lat - prev.lat) * Math.PI) / 180;
+        const dLngRad = ((lng - prev.lng) * Math.PI) / 180;
+        const a =
+          Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
+          Math.cos((prev.lat * Math.PI) / 180) *
+            Math.cos((lat * Math.PI) / 180) *
+            Math.sin(dLngRad / 2) *
+            Math.sin(dLngRad / 2);
+        const distMeters =
+          6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        // 10-meter minimum movement filter (deadband) to prevent pin jumping
+        if (distMeters < 10) {
+          return null;
+        }
+      }
+
+      const nextCoords = {
+        lat: Number(lat.toFixed(6)),
+        lng: Number(lng.toFixed(6)),
+      };
+      lastAcceptedCoordsRef.current = nextCoords;
+      setLocalLiveCoords(nextCoords);
+      if (
+        typeof accuracy === 'number' &&
+        Number.isFinite(accuracy) &&
+        accuracy > 0
+      ) {
+        setLiveAccuracyMeters(Math.min(80, Math.max(6, accuracy)));
+      }
+      return nextCoords;
+    },
+    []
+  );
+
+  // Purge ghost/duplicate rows in Supabase on map mount (silently, no TTS)
   useEffect(() => {
     void cleanupGhostDuplicatePinsNow();
     void refreshLiveGpsPosition();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync from context when real device GPS updates
+  // Sync from context when real device GPS updates (through 10m deadband filter)
   useEffect(() => {
     if (
       realCourierProfile?.gpsSource === 'LIVE_GPS' &&
       Number.isFinite(realCourierProfile.lat) &&
       Number.isFinite(realCourierProfile.lng)
     ) {
-      setLocalLiveCoords({
-        lat: realCourierProfile.lat,
-        lng: realCourierProfile.lng,
-      });
+      applyFilteredGpsFix(realCourierProfile.lat, realCourierProfile.lng);
     }
   }, [
+    applyFilteredGpsFix,
     realCourierProfile?.gpsSource,
     realCourierProfile?.lat,
     realCourierProfile?.lng,
   ]);
 
-  // Direct high-frequency GPS watcher inside Map tab (Native Android + Instant Network <1s + High-Accuracy GPS)
+  // Direct high-frequency GPS watcher inside Map tab (Native Android + Instant Initial Network + High-Accuracy GPS)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
-    const applyIncomingFix = (
-      lat: number,
-      lng: number,
-      accuracy?: number
-    ) => {
-      if (
-        Number.isFinite(lat) &&
-        Number.isFinite(lng) &&
-        (lat !== 0 || lng !== 0)
-      ) {
-        setLocalLiveCoords({
-          lat: Number(lat.toFixed(6)),
-          lng: Number(lng.toFixed(6)),
-        });
-        if (typeof accuracy === 'number' && Number.isFinite(accuracy) && accuracy > 0) {
-          setLiveAccuracyMeters(Math.min(80, Math.max(6, accuracy)));
-        }
-      }
-    };
 
     const handleNativeLocationEvent = (e: Event) => {
       const detail = (
@@ -519,7 +576,7 @@ export const ShiftRadarModule: React.FC = () => {
         }>
       ).detail;
       if (detail) {
-        applyIncomingFix(detail.lat, detail.lng, detail.accuracy);
+        applyFilteredGpsFix(detail.lat, detail.lng, detail.accuracy);
       }
     };
 
@@ -550,55 +607,63 @@ export const ShiftRadarModule: React.FC = () => {
 
     let watchId: number | null = null;
     try {
-      // 1. Instant Network/Wi-Fi Location Fix (<1s even indoors)
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          applyIncomingFix(
-            pos.coords.latitude,
-            pos.coords.longitude,
-            pos.coords.accuracy
-          );
-        },
-        () => {
-          // ignore and wait for watchPosition
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 3000,
-          maximumAge: 60000,
-        }
-      );
+      // 1. Use coarse Network/Wi-Fi Location ONLY for the very first initial center if no GPS fix exists yet
+      if (!lastAcceptedCoordsRef.current) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (!lastAcceptedCoordsRef.current) {
+              applyFilteredGpsFix(
+                pos.coords.latitude,
+                pos.coords.longitude,
+                pos.coords.accuracy
+              );
+            }
+          },
+          () => {
+            // ignore and wait for watchPosition
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 3000,
+            maximumAge: 60000,
+          }
+        );
+      }
 
-      // 2. Continuous High-Accuracy GPS Watch + Network Fallback on Timeout
+      // 2. Continuous High-Accuracy Satellite GPS Watch
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          applyIncomingFix(
+          applyFilteredGpsFix(
             pos.coords.latitude,
             pos.coords.longitude,
             pos.coords.accuracy
           );
         },
         () => {
-          try {
-            navigator.geolocation.getCurrentPosition(
-              (netPos) => {
-                applyIncomingFix(
-                  netPos.coords.latitude,
-                  netPos.coords.longitude,
-                  netPos.coords.accuracy
-                );
-              },
-              () => {
-                // Keep waiting for GPS without placing fake pins
-              },
-              {
-                enableHighAccuracy: false,
-                timeout: 4000,
-                maximumAge: 60000,
-              }
-            );
-          } catch {
-            // ignore
+          if (!lastAcceptedCoordsRef.current) {
+            try {
+              navigator.geolocation.getCurrentPosition(
+                (netPos) => {
+                  if (!lastAcceptedCoordsRef.current) {
+                    applyFilteredGpsFix(
+                      netPos.coords.latitude,
+                      netPos.coords.longitude,
+                      netPos.coords.accuracy
+                    );
+                  }
+                },
+                () => {
+                  // Keep waiting for GPS without placing fake pins
+                },
+                {
+                  enableHighAccuracy: false,
+                  timeout: 4000,
+                  maximumAge: 60000,
+                }
+              );
+            } catch {
+              // ignore
+            }
           }
         },
         {
@@ -624,7 +689,7 @@ export const ShiftRadarModule: React.FC = () => {
         }
       }
     };
-  }, []);
+  }, [applyFilteredGpsFix]);
 
   // Only show active peer couriers (within last 5 minutes, excluding self and ghost rows)
   const activePeerCouriers = useMemo(() => {
@@ -704,10 +769,29 @@ export const ShiftRadarModule: React.FC = () => {
 
     const peerLayer = L.layerGroup().addTo(map);
 
-    // Pause auto-follow when user drags the map manually
-    map.on('dragstart', () => {
-      setIsAutoFollowActive(false);
-    });
+    // Immediately pause auto-follow on any user touch/drag/zoom so the map NEVER snaps back while panning
+    const disableAutoFollowOnUserGesture = () => {
+      if (isAutoFollowRef.current) {
+        isAutoFollowRef.current = false;
+        setIsAutoFollowActive(false);
+      }
+    };
+
+    map.on('dragstart', disableAutoFollowOnUserGesture);
+    map.on('mousedown', disableAutoFollowOnUserGesture);
+    const containerEl = mapContainerRef.current;
+    if (containerEl) {
+      containerEl.addEventListener(
+        'touchstart',
+        disableAutoFollowOnUserGesture,
+        { passive: true }
+      );
+      containerEl.addEventListener(
+        'pointerdown',
+        disableAutoFollowOnUserGesture,
+        { passive: true }
+      );
+    }
 
     leafletMapRef.current = map;
     tileLayerRef.current = tileLayer;
@@ -719,6 +803,16 @@ export const ShiftRadarModule: React.FC = () => {
 
     return () => {
       window.clearTimeout(timer);
+      if (containerEl) {
+        containerEl.removeEventListener(
+          'touchstart',
+          disableAutoFollowOnUserGesture
+        );
+        containerEl.removeEventListener(
+          'pointerdown',
+          disableAutoFollowOnUserGesture
+        );
+      }
       map.remove();
       leafletMapRef.current = null;
       tileLayerRef.current = null;
@@ -874,63 +968,44 @@ export const ShiftRadarModule: React.FC = () => {
   }, [activePeerCouriers, handleOpenBuddyProfilePopup]);
 
   const handleRecenterAndFollowGps = () => {
+    isAutoFollowRef.current = true;
     setIsAutoFollowActive(true);
     void refreshLiveGpsPosition();
+
+    const currentFix = lastAcceptedCoordsRef.current || localLiveCoords;
+    if (currentFix && leafletMapRef.current) {
+      leafletMapRef.current.flyTo([currentFix.lat, currentFix.lng], 17, {
+        animate: true,
+        duration: 0.5,
+      });
+    }
 
     if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
       try {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            const lat = Number(pos.coords.latitude.toFixed(6));
-            const lng = Number(pos.coords.longitude.toFixed(6));
-            setLocalLiveCoords({ lat, lng });
-            if (leafletMapRef.current) {
-              leafletMapRef.current.flyTo([lat, lng], 17, {
+            const accepted = applyFilteredGpsFix(
+              pos.coords.latitude,
+              pos.coords.longitude,
+              pos.coords.accuracy,
+              true
+            );
+            const target = accepted || lastAcceptedCoordsRef.current;
+            if (target && leafletMapRef.current && isAutoFollowRef.current) {
+              leafletMapRef.current.flyTo([target.lat, target.lng], 17, {
                 animate: true,
-                duration: 0.6,
+                duration: 0.5,
               });
             }
           },
           () => {
             // ignore
           },
-          { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 }
-        );
-
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const lat = Number(pos.coords.latitude.toFixed(6));
-            const lng = Number(pos.coords.longitude.toFixed(6));
-            setLocalLiveCoords({ lat, lng });
-            if (leafletMapRef.current) {
-              leafletMapRef.current.flyTo([lat, lng], 17, {
-                animate: true,
-                duration: 0.6,
-              });
-            }
-          },
-          () => {
-            if (localLiveCoords && leafletMapRef.current) {
-              leafletMapRef.current.flyTo(
-                [localLiveCoords.lat, localLiveCoords.lng],
-                17,
-                { animate: true, duration: 0.6 }
-              );
-            }
-          },
           { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
         );
       } catch {
         // ignore
       }
-    }
-
-    if (localLiveCoords && leafletMapRef.current) {
-      leafletMapRef.current.flyTo(
-        [localLiveCoords.lat, localLiveCoords.lng],
-        17,
-        { animate: true, duration: 0.6 }
-      );
     }
   };
 

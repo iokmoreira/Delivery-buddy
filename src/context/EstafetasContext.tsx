@@ -140,6 +140,7 @@ import {
   buildSurgicalOfferStreetTts,
   cancelBuddySpeechNow,
   getSavedBuddyVoiceRate,
+  playBuddyConfirmationChime,
   saveBuddyVoiceRate,
   selectBestGeminiLikePtVoice,
   speakWithBuddyVoiceEngine,
@@ -328,6 +329,7 @@ interface EstafetasContextValue {
   ttsVoiceEnabled: boolean;
   toggleTtsVoice: () => void;
   speakTextPt: (text: string) => void;
+  cancelSpeechNow: () => void;
   isSpeakingTts: boolean;
   lastSpokenTranscript: string;
 
@@ -3088,7 +3090,7 @@ Solicita-se a revisão imediata do cálculo cartográfico deste trecho e o créd
       speakWithBuddyVoiceEngine({
         text,
         rate: buddyVoiceRate,
-        pitch: 1.0,
+        pitch: 1.05,
         isPaused: state.isAppPaused,
         onStart: () => {
           isSpeakingTtsRef.current = true;
@@ -3957,8 +3959,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const setIsBubbleMinimized = useCallback(
     (minimized: boolean) => {
-      cancelSpeechNow();
       if (minimized) {
+        cancelSpeechNow();
         setIsQuickSummaryOpenState(false);
       }
 
@@ -3981,17 +3983,17 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         // Keep the normal React dashboard rendered in the WebView (isBubbleMinimized = false)
         // and let MainActivity moveTaskToBack(true) + show BuddyOverlayService floating DB bubble!
         if (winAny.BuddyNativeOverlay) {
-          setState((prev) => ({
-            ...prev,
-            isBubbleMinimized: false,
-          }));
+          setState((prev) =>
+            prev.isBubbleMinimized ? { ...prev, isBubbleMinimized: false } : prev
+          );
           if (minimized) {
             try {
               winAny.BuddyNativeOverlay.minimizeToFloatingBubble?.();
             } catch {
               // ignore native overlay error
             }
-          } else {
+          } else if (typeof document !== 'undefined' && document.hidden) {
+            // Only call native maximizeFromBubble when actually transitioning from background to foreground!
             try {
               winAny.BuddyNativeOverlay.maximizeFromBubble?.();
             } catch {
@@ -4002,10 +4004,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         }
 
         // Web / PWA fallback when not inside Native Android .APK
-        setState((prev) => ({
-          ...prev,
-          isBubbleMinimized: minimized,
-        }));
+        setState((prev) =>
+          prev.isBubbleMinimized === minimized
+            ? prev
+            : {
+                ...prev,
+                isBubbleMinimized: minimized,
+              }
+        );
 
         if (minimized) {
           try {
@@ -4033,10 +4039,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           }
         }
       } else {
-        setState((prev) => ({
-          ...prev,
-          isBubbleMinimized: minimized,
-        }));
+        setState((prev) =>
+          prev.isBubbleMinimized === minimized
+            ? prev
+            : {
+                ...prev,
+                isBubbleMinimized: minimized,
+              }
+        );
       }
     },
     [cancelSpeechNow]
@@ -4052,6 +4062,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       };
       __onNativeBubbleRestore?: () => void;
       onBuddyNativeListeningState?: (listening: boolean) => void;
+      onBuddyNativeSpeakingState?: (speaking: boolean) => void;
     };
     try {
       winAny.BuddyNativeOverlay?.setBubbleListeningState?.(
@@ -4068,13 +4079,17 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       keepVoiceListeningRef.current = Boolean(listening);
       setIsListeningSpeechRecognition(Boolean(listening));
     };
+    winAny.onBuddyNativeSpeakingState = (speaking: boolean) => {
+      isSpeakingTtsRef.current = Boolean(speaking);
+      setIsSpeakingTts(Boolean(speaking));
+    };
     winAny.__onNativeBubbleRestore = () => {
       setState((prev) =>
         prev.isBubbleMinimized ? { ...prev, isBubbleMinimized: false } : prev
       );
-      speakTextPt('Tela aberta.');
+      // Never speak "Tela aberta" on restore — keep open modals & active speech intact!
     };
-  }, [isListeningSpeechRecognition, speakTextPt]);
+  }, [isListeningSpeechRecognition]);
 
   const dismissBubbleAnimation = useCallback(() => {
     setActiveBubbleAnimation(null);
@@ -6097,35 +6112,83 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     [state.aiAgentConfig.supabaseUrl, state.aiAgentConfig.supabaseAnonKey]
   );
 
-  const applyLiveDeviceGpsFix = useCallback((rawLat: number, rawLng: number) => {
-    if (
-      !Number.isFinite(rawLat) ||
-      !Number.isFinite(rawLng) ||
-      (rawLat === 0 && rawLng === 0)
-    ) {
-      return;
-    }
-    setRealCourierProfile((prev) => {
-      const updated: RealCourierMapProfile = {
-        ...prev,
-        lat: Number(rawLat.toFixed(6)),
-        lng: Number(rawLng.toFixed(6)),
-        gpsSource: 'LIVE_GPS',
-        updated_at: new Date().toISOString(),
-      };
-      if (updated.isRegistered && updated.name.trim().length > 0) {
-        try {
-          localStorage.setItem(
-            REAL_COURIER_MAP_PROFILE_STORAGE_KEY,
-            JSON.stringify(updated)
-          );
-        } catch {
-          // ignore
-        }
+  const hasHighAccuracyGpsFixRef = useRef<boolean>(false);
+  const lastHighAccuracyGpsFixMsRef = useRef<number>(0);
+
+  const applyLiveDeviceGpsFix = useCallback(
+    (rawLat: number, rawLng: number, accuracy?: number) => {
+      if (
+        !Number.isFinite(rawLat) ||
+        !Number.isFinite(rawLng) ||
+        (rawLat === 0 && rawLng === 0)
+      ) {
+        return;
       }
-      return updated;
-    });
-  }, []);
+
+      const nowMs = Date.now();
+      const isHighAcc =
+        typeof accuracy === 'number' &&
+        Number.isFinite(accuracy) &&
+        accuracy > 0 &&
+        accuracy <= 40;
+
+      if (isHighAcc) {
+        hasHighAccuracyGpsFixRef.current = true;
+        lastHighAccuracyGpsFixMsRef.current = nowMs;
+      } else if (
+        hasHighAccuracyGpsFixRef.current &&
+        nowMs - lastHighAccuracyGpsFixMsRef.current < 60000 &&
+        typeof accuracy === 'number' &&
+        accuracy > 45
+      ) {
+        // Once a high-accuracy GPS fix is active, ignore coarse cell-tower / network jumps!
+        return;
+      }
+
+      setRealCourierProfile((prev) => {
+        if (
+          prev.gpsSource === 'LIVE_GPS' &&
+          Number.isFinite(prev.lat) &&
+          Number.isFinite(prev.lng)
+        ) {
+          const dLatRad = ((rawLat - prev.lat) * Math.PI) / 180;
+          const dLngRad = ((rawLng - prev.lng) * Math.PI) / 180;
+          const a =
+            Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
+            Math.cos((prev.lat * Math.PI) / 180) *
+              Math.cos((rawLat * Math.PI) / 180) *
+              Math.sin(dLngRad / 2) *
+              Math.sin(dLngRad / 2);
+          const distMeters =
+            6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          // 10-meter minimum movement filter (deadband) to prevent pin jitter
+          if (distMeters < 10) {
+            return prev;
+          }
+        }
+
+        const updated: RealCourierMapProfile = {
+          ...prev,
+          lat: Number(rawLat.toFixed(6)),
+          lng: Number(rawLng.toFixed(6)),
+          gpsSource: 'LIVE_GPS',
+          updated_at: new Date().toISOString(),
+        };
+        if (updated.isRegistered && updated.name.trim().length > 0) {
+          try {
+            localStorage.setItem(
+              REAL_COURIER_MAP_PROFILE_STORAGE_KEY,
+              JSON.stringify(updated)
+            );
+          } catch {
+            // ignore
+          }
+        }
+        return updated;
+      });
+    },
+    []
+  );
 
   // Listen to native Android LocationManager bridge (window.onNativeLocationUpdate)
   useEffect(() => {
@@ -6147,14 +6210,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       accuracy?: number,
       speed?: number
     ) => {
-      applyLiveDeviceGpsFix(Number(lat), Number(lng));
+      applyLiveDeviceGpsFix(Number(lat), Number(lng), Number(accuracy ?? 12));
       try {
         window.dispatchEvent(
           new CustomEvent('buddy-native-location', {
             detail: {
               lat: Number(lat),
               lng: Number(lng),
-              accuracy: Number(accuracy ?? 10),
+              accuracy: Number(accuracy ?? 12),
               speed: Number(speed ?? 0),
             },
           })
@@ -6203,25 +6266,35 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       }
 
       try {
-        // 1. Instant Network/Wi-Fi Location Fix in under 1 second (works indoors & outdoors)
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            applyLiveDeviceGpsFix(pos.coords.latitude, pos.coords.longitude);
-          },
-          () => {
-            // ignore and wait for GPS
-          },
-          {
-            enableHighAccuracy: false,
-            timeout: 3000,
-            maximumAge: 60000,
-          }
-        );
+        // 1. Instant Network/Wi-Fi Location Fix ONLY if no GPS fix exists yet
+        if (realCourierProfileRef.current.gpsSource !== 'LIVE_GPS') {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              applyLiveDeviceGpsFix(
+                pos.coords.latitude,
+                pos.coords.longitude,
+                pos.coords.accuracy
+              );
+            },
+            () => {
+              // ignore and wait for GPS
+            },
+            {
+              enableHighAccuracy: false,
+              timeout: 3000,
+              maximumAge: 60000,
+            }
+          );
+        }
 
         // 2. High-Accuracy Satellite GPS One-Shot
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            applyLiveDeviceGpsFix(pos.coords.latitude, pos.coords.longitude);
+            applyLiveDeviceGpsFix(
+              pos.coords.latitude,
+              pos.coords.longitude,
+              pos.coords.accuracy
+            );
           },
           () => {
             // Keep waiting for watchPosition or native GPS fix; never overwrite a LIVE_GPS fix
@@ -6238,40 +6311,47 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           gpsWatchIdRef.current = null;
         }
 
-        // 3. Continuous High-Accuracy GPS Watch + Network Fallback on Timeout
+        // 3. Continuous High-Accuracy GPS Watch
         gpsWatchIdRef.current = navigator.geolocation.watchPosition(
           (pos) => {
-            applyLiveDeviceGpsFix(pos.coords.latitude, pos.coords.longitude);
+            applyLiveDeviceGpsFix(
+              pos.coords.latitude,
+              pos.coords.longitude,
+              pos.coords.accuracy
+            );
           },
           () => {
-            try {
-              navigator.geolocation.getCurrentPosition(
-                (netPos) => {
-                  applyLiveDeviceGpsFix(
-                    netPos.coords.latitude,
-                    netPos.coords.longitude
-                  );
-                },
-                () => {
-                  setRealCourierProfile((prev) => {
-                    if (prev.gpsSource === 'LIVE_GPS') return prev;
-                    return {
-                      ...prev,
-                      lat: fallbackCoords.lat,
-                      lng: fallbackCoords.lng,
-                      gpsSource: 'AMARANTE_FALLBACK',
-                      updated_at: new Date().toISOString(),
-                    };
-                  });
-                },
-                {
-                  enableHighAccuracy: false,
-                  timeout: 4000,
-                  maximumAge: 60000,
-                }
-              );
-            } catch {
-              // ignore
+            if (realCourierProfileRef.current.gpsSource !== 'LIVE_GPS') {
+              try {
+                navigator.geolocation.getCurrentPosition(
+                  (netPos) => {
+                    applyLiveDeviceGpsFix(
+                      netPos.coords.latitude,
+                      netPos.coords.longitude,
+                      netPos.coords.accuracy
+                    );
+                  },
+                  () => {
+                    setRealCourierProfile((prev) => {
+                      if (prev.gpsSource === 'LIVE_GPS') return prev;
+                      return {
+                        ...prev,
+                        lat: fallbackCoords.lat,
+                        lng: fallbackCoords.lng,
+                        gpsSource: 'AMARANTE_FALLBACK',
+                        updated_at: new Date().toISOString(),
+                      };
+                    });
+                  },
+                  {
+                    enableHighAccuracy: false,
+                    timeout: 4000,
+                    maximumAge: 60000,
+                  }
+                );
+              } catch {
+                // ignore
+              }
             }
           },
           {
@@ -6878,8 +6958,18 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   // =========================================================================
   // LIVE OPEN-METEO AMARANTE WEATHER ENGINE & RAIN BONUS TOGGLE
   // =========================================================================
-  const [isAmaranteWeatherModalOpen, setIsAmaranteWeatherModalOpen] =
+  const [isAmaranteWeatherModalOpen, setIsAmaranteWeatherModalOpenState] =
     useState<boolean>(false);
+
+  const setIsAmaranteWeatherModalOpen = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        cancelSpeechNow();
+      }
+      setIsAmaranteWeatherModalOpenState(open);
+    },
+    [cancelSpeechNow]
+  );
   const [isLoadingAmaranteWeather, setIsLoadingAmaranteWeather] =
     useState<boolean>(false);
   const [rainBonusFinanceActive, setRainBonusFinanceActive] = useState<boolean>(
@@ -6931,8 +7021,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const openAndFetchAmaranteWeather = useCallback(
     async (speakNow = true) => {
-      setIsBubbleMinimized(false);
-      setIsAmaranteWeatherModalOpen(true);
+      setIsAmaranteWeatherModalOpenState(true);
       setIsLoadingAmaranteWeather(true);
       try {
         const res = await fetch(
@@ -6992,27 +7081,26 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
         if (speakNow) {
           const tempSpoken = String(Math.round(temp));
-          const rainNote =
-            rain > 0
-              ? `, com ${rain.toFixed(1).replace('.', ' vírgula ')} milímetros de chuva`
-              : ', sem chuva neste momento';
+          const rainNote = rain > 0 ? ', com chuva' : ', sem chuva';
           speakTextPt(
-            `Clima em Amarante: ${tempSpoken} graus, ${desc.label.toLowerCase()}${rainNote}. Vento a ${Math.round(wind)} quilómetros por hora.`
+            `Amarante: ${tempSpoken} graus, ${desc.label.toLowerCase()}${rainNote}.`
           );
         }
       } catch {
         setIsLoadingAmaranteWeather(false);
         if (speakNow) {
+          const rainNote =
+            amaranteLiveWeather.rainMm > 0 ? ', com chuva' : ', sem chuva';
           speakTextPt(
-            `Clima em Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}.`
+            `Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}${rainNote}.`
           );
         }
       }
     },
     [
       amaranteLiveWeather.conditionLabel,
+      amaranteLiveWeather.rainMm,
       amaranteLiveWeather.temperatureC,
-      setIsBubbleMinimized,
       speakTextPt,
     ]
   );
@@ -7186,10 +7274,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           )
       )
     );
-    speakTextPt('Pinos fantasmas antigos limpos do mapa e do Supabase.');
   }, [
     isGhostDuplicateOfSelf,
-    speakTextPt,
     state.aiAgentConfig.supabaseAnonKey,
     state.aiAgentConfig.supabaseUrl,
   ]);
@@ -7910,14 +7996,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         if (state.isAppPaused) {
           toggleAppPauseMode();
         }
-        commandMatched = '"Maximizar" (Tela Aberta)';
-        actionSummary = 'Tela aberta.';
-        showLiveMicTranscriptFeedback(
-          `✅ Comando: "${clean}" → Tela aberta`,
-          clean,
-          'Maximizar → Tela aberta.'
-        );
-        speakTextPt('Tela aberta.');
+        commandMatched = '"Maximizar"';
+        actionSummary = 'Aplicação em primeiro plano.';
+        playBuddyConfirmationChime();
         const resultObj = {
           phrase: clean,
           commandMatched,
@@ -9501,6 +9582,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   }, [showLiveMicTranscriptFeedback, startContinuousRecognitionInstance]);
 
   const toggleVoiceMicListening = useCallback(() => {
+    // Always stop any ongoing speech immediately when the user taps the Buddy bubble
+    cancelSpeechNow();
     if (isListeningSpeechRecognition || keepVoiceListeningRef.current) {
       stopContinuousVoiceMic();
       showLiveMicTranscriptFeedback('Microfone desligado');
@@ -9508,6 +9591,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       startContinuousVoiceMic();
     }
   }, [
+    cancelSpeechNow,
     isListeningSpeechRecognition,
     showLiveMicTranscriptFeedback,
     startContinuousVoiceMic,
@@ -12088,6 +12172,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         ttsVoiceEnabled: state.ttsVoiceEnabled,
         toggleTtsVoice,
         speakTextPt,
+        cancelSpeechNow,
         isSpeakingTts,
         lastSpokenTranscript,
         preFilledRouteTrapDraft,

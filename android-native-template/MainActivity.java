@@ -26,6 +26,8 @@ import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
+import android.speech.tts.Voice;
 import android.view.WindowManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
@@ -44,6 +46,7 @@ import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.json.JSONObject;
 
 public class MainActivity extends BridgeActivity {
@@ -53,6 +56,10 @@ public class MainActivity extends BridgeActivity {
 
     public static MainActivity getInstance() {
         return instanceRef != null ? instanceRef.get() : null;
+    }
+
+    public boolean isActivityInForeground() {
+        return isInForeground;
     }
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -65,12 +72,15 @@ public class MainActivity extends BridgeActivity {
     private LocationListener nativeLocationListener;
     private double lastNativeLat = 0.0;
     private double lastNativeLng = 0.0;
-    private float lastNativeAccuracy = 0.0f;
+    private float lastNativeAccuracy = 999.0f;
     private boolean hasNativeGpsFix = false;
+    private boolean hasHighAccuracyNativeGpsFix = false;
+    private long lastHighAccuracyFixTimeMs = 0L;
 
     // 100% Silent by Default: single-shot on-demand voice only (NEVER loops!)
     private boolean isSingleShotListening = false;
     private boolean isInForeground = true;
+    private boolean wasMinimizedToBubble = false;
     private long lastDirectJavaCommandTs = 0L;
     private String lastPartialTranscript = "";
     private String pendingWakeTranscript = null;
@@ -202,14 +212,16 @@ public class MainActivity extends BridgeActivity {
                 if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                     locationManager.requestLocationUpdates(
                         LocationManager.NETWORK_PROVIDER,
-                        1500L,
-                        1.0f,
+                        4000L,
+                        10.0f,
                         nativeLocationListener,
                         Looper.getMainLooper()
                     );
-                    Location lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                    if (lastNet != null) {
-                        dispatchNativeLocationToWebView(lastNet);
+                    if (!hasNativeGpsFix) {
+                        Location lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                        if (lastNet != null) {
+                            dispatchNativeLocationToWebView(lastNet);
+                        }
                     }
                 }
             } catch (Exception ignored) {
@@ -219,8 +231,8 @@ public class MainActivity extends BridgeActivity {
                 if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                     locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER,
-                        1500L,
-                        1.0f,
+                        2000L,
+                        5.0f,
                         nativeLocationListener,
                         Looper.getMainLooper()
                     );
@@ -236,8 +248,8 @@ public class MainActivity extends BridgeActivity {
                 if (locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER)) {
                     locationManager.requestLocationUpdates(
                         LocationManager.PASSIVE_PROVIDER,
-                        2000L,
-                        1.0f,
+                        3000L,
+                        10.0f,
                         nativeLocationListener,
                         Looper.getMainLooper()
                     );
@@ -259,8 +271,33 @@ public class MainActivity extends BridgeActivity {
         final double lat = location.getLatitude();
         final double lng = location.getLongitude();
         if (lat == 0.0 && lng == 0.0) return;
-        final float accuracy = location.hasAccuracy() ? location.getAccuracy() : 12.0f;
+
+        final String provider = location.getProvider() != null
+            ? location.getProvider().toLowerCase(Locale.US)
+            : "";
+        final float accuracy = location.hasAccuracy() ? location.getAccuracy() : 25.0f;
         final float speedMps = location.hasSpeed() ? location.getSpeed() : 0.0f;
+        final long nowMs = System.currentTimeMillis();
+
+        final boolean isHighAcc = "gps".equals(provider) || accuracy <= 40.0f;
+        if (isHighAcc) {
+            hasHighAccuracyNativeGpsFix = true;
+            lastHighAccuracyFixTimeMs = nowMs;
+        } else if (hasHighAccuracyNativeGpsFix && (nowMs - lastHighAccuracyFixTimeMs < 60000L)) {
+            // Once a high-accuracy GPS fix is active, ignore coarse cell-tower / network jumps!
+            return;
+        }
+
+        // Apply 10-meter minimum movement filter (deadband) after initial fix, unless accuracy improved significantly
+        if (hasNativeGpsFix) {
+            float[] distMeters = new float[1];
+            Location.distanceBetween(lastNativeLat, lastNativeLng, lat, lng, distMeters);
+            boolean accuracyImprovedSignificantly = (accuracy + 15.0f < lastNativeAccuracy);
+            if (distMeters[0] < 10.0f && !accuracyImprovedSignificantly) {
+                return;
+            }
+        }
+
         lastNativeLat = lat;
         lastNativeLng = lng;
         lastNativeAccuracy = accuracy;
@@ -285,18 +322,87 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private void notifyWebViewSpeakingState(final boolean speaking) {
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            final WebView webView = getBridge().getWebView();
+            webView.post(new Runnable() {
+                @Override
+                public void run() {
+                    webView.evaluateJavascript(
+                        "window.onBuddyNativeSpeakingState && window.onBuddyNativeSpeakingState("
+                            + (speaking ? "true" : "false") + ");",
+                        null
+                    );
+                }
+            });
+        }
+    }
+
     private void initNativeTts() {
         try {
             nativeTts = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
                 @Override
                 public void onInit(int status) {
                     if (status == TextToSpeech.SUCCESS && nativeTts != null) {
-                        int res = nativeTts.setLanguage(new Locale("pt", "PT"));
+                        Locale ptBrLocale = new Locale("pt", "BR");
+                        int res = nativeTts.setLanguage(ptBrLocale);
                         if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-                            nativeTts.setLanguage(new Locale("pt", "BR"));
+                            nativeTts.setLanguage(new Locale("pt", "PT"));
                         }
-                        nativeTts.setSpeechRate(1.05f);
-                        nativeTts.setPitch(1.0f);
+
+                        // Select Friendly Male Brazilian Portuguese (pt-BR) Voice
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            try {
+                                Set<Voice> voices = nativeTts.getVoices();
+                                if (voices != null) {
+                                    Voice bestMalePtBr = null;
+                                    Voice fallbackPtBr = null;
+                                    for (Voice v : voices) {
+                                        if (v == null || v.getLocale() == null) continue;
+                                        String lang = v.getLocale().getLanguage().toLowerCase(Locale.US);
+                                        String country = v.getLocale().getCountry().toLowerCase(Locale.US);
+                                        String vName = v.getName() != null ? v.getName().toLowerCase(Locale.US) : "";
+                                        if ("pt".equals(lang) && ("br".equals(country) || vName.contains("pt-br") || vName.contains("pt_br"))) {
+                                            if (fallbackPtBr == null) fallbackPtBr = v;
+                                            boolean isKnownMale = vName.contains("pte")
+                                                || vName.contains("afs")
+                                                || vName.contains("ptd")
+                                                || vName.contains("male")
+                                                || vName.contains("antonio")
+                                                || vName.contains("daniel")
+                                                || vName.contains("fabio")
+                                                || vName.contains("ricardo")
+                                                || vName.contains("nicolau");
+                                            boolean isKnownFemale = vName.contains("female")
+                                                || vName.contains("ptc")
+                                                || vName.contains("bmg")
+                                                || vName.contains("francisca")
+                                                || vName.contains("luciana")
+                                                || vName.contains("thalita")
+                                                || vName.contains("vitoria")
+                                                || vName.contains("camila");
+                                            if (isKnownMale && !isKnownFemale) {
+                                                bestMalePtBr = v;
+                                                if (vName.contains("local") || !v.isNetworkConnectionRequired()) {
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (bestMalePtBr != null) {
+                                        nativeTts.setVoice(bestMalePtBr);
+                                    } else if (fallbackPtBr != null) {
+                                        nativeTts.setVoice(fallbackPtBr);
+                                    }
+                                }
+                            } catch (Exception ignored) {
+                            }
+                        }
+
+                        // Friendly, warm, natural companion tuning: pitch = 1.05f, speechRate = 1.1f
+                        nativeTts.setPitch(1.05f);
+                        nativeTts.setSpeechRate(1.1f);
+
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                             AudioAttributes attrs = new AudioAttributes.Builder()
                                 .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -305,12 +411,45 @@ public class MainActivity extends BridgeActivity {
                                 .build();
                             nativeTts.setAudioAttributes(attrs);
                         }
+
+                        nativeTts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                            @Override
+                            public void onStart(String utteranceId) {
+                                notifyWebViewSpeakingState(true);
+                            }
+
+                            @Override
+                            public void onDone(String utteranceId) {
+                                notifyWebViewSpeakingState(false);
+                            }
+
+                            @Override
+                            public void onError(String utteranceId) {
+                                notifyWebViewSpeakingState(false);
+                            }
+                        });
+
                         nativeTtsReady = true;
                     }
                 }
             });
         } catch (Exception ignored) {
         }
+    }
+
+    public void stopSpeakingNow() {
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (nativeTts != null) {
+                    try {
+                        nativeTts.stop();
+                    } catch (Exception ignored) {
+                    }
+                }
+                notifyWebViewSpeakingState(false);
+            }
+        });
     }
 
     public void speakWithNativeTts(final String text) {
@@ -320,6 +459,7 @@ public class MainActivity extends BridgeActivity {
             public void run() {
                 try {
                     if (nativeTts != null && nativeTtsReady) {
+                        notifyWebViewSpeakingState(true);
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                             Bundle params = new Bundle();
                             params.putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC);
@@ -334,10 +474,12 @@ public class MainActivity extends BridgeActivity {
                             java.util.HashMap<String, String> params = new java.util.HashMap<>();
                             params.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_MUSIC));
                             params.put(TextToSpeech.Engine.KEY_PARAM_VOLUME, "1.0");
+                            params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "buddy_tts_" + System.currentTimeMillis());
                             nativeTts.speak(text.trim(), TextToSpeech.QUEUE_FLUSH, params);
                         }
                     }
                 } catch (Exception ignored) {
+                    notifyWebViewSpeakingState(false);
                 }
             }
         });
@@ -393,11 +535,20 @@ public class MainActivity extends BridgeActivity {
         final String netStr = String.format(Locale.FRANCE, "%.2f", netProfit);
         final String perKmStr = String.format(Locale.FRANCE, "%.2f", netPerKm);
 
+        final int eurosWhole = (int) Math.floor(euros);
+        final int eurosCents = (int) Math.round((euros - eurosWhole) * 100);
+        final int perKmWhole = (int) Math.floor(netPerKm);
+        final int perKmCents = (int) Math.round((netPerKm - perKmWhole) * 100);
+        final String eurosSpoken = eurosCents > 0
+            ? (eurosWhole + " euros e " + eurosCents)
+            : (eurosWhole + " euros");
+        final String perKmSpoken = perKmCents > 0
+            ? (perKmWhole + " e " + String.format(Locale.US, "%02d", perKmCents))
+            : String.valueOf(perKmWhole);
+
         final String spokenVerdict = isWorthIt
-            ? "Nova oferta " + safePlatform + ": " + eurosStr + " euros para " + kmStr
-                + " quilómetros. Lucro líquido: " + netStr + " euros, " + perKmStr + " por quilómetro. Compensa aceitar!"
-            : "Atenção na " + safePlatform + ": " + eurosStr + " euros para " + kmStr
-                + " quilómetros. Apenas " + perKmStr + " por quilómetro. Não compensa!";
+            ? eurosSpoken + ", dá " + perKmSpoken + " por quilômetro. Compensa!"
+            : eurosSpoken + ", dá " + perKmSpoken + " por quilômetro. Não compensa!";
 
         final String bannerToast = (isWorthIt ? "✅ COMPENSA (" : "⚠️ NÃO COMPENSA (")
             + safePlatform + "): " + eurosStr + "€ / " + kmStr + "km → Líq: " + netStr + "€ (" + perKmStr + "€/km)";
@@ -411,7 +562,9 @@ public class MainActivity extends BridgeActivity {
                     } catch (Exception ignored) {
                     }
                     act.speakWithNativeTts(spokenVerdict);
-                    BuddyOverlayService.updateListeningStateWithCaption(act, false, bannerToast);
+                    if (!act.isInForeground) {
+                        BuddyOverlayService.updateListeningStateWithCaption(act, false, bannerToast);
+                    }
                     if (act.getBridge() != null && act.getBridge().getWebView() != null) {
                         final String quotedPlat = JSONObject.quote(safePlatform);
                         final String js = String.format(
@@ -515,8 +668,8 @@ public class MainActivity extends BridgeActivity {
             RecognizerIntent.EXTRA_LANGUAGE_MODEL,
             RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
         );
-        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-PT");
-        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "pt-PT");
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR");
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "pt-BR");
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
     }
@@ -531,6 +684,9 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void startSingleShotVoiceRecognition() {
+        // Immediately stop any ongoing speech before opening the microphone
+        stopSpeakingNow();
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(
@@ -552,7 +708,9 @@ public class MainActivity extends BridgeActivity {
                 @Override
                 public void onReadyForSpeech(Bundle params) {
                     isSingleShotListening = true;
-                    BuddyOverlayService.updateListeningStateWithCaption(MainActivity.this, true, "Ouvindo...");
+                    if (!isInForeground) {
+                        BuddyOverlayService.updateListeningStateWithCaption(MainActivity.this, true, "Ouvindo...");
+                    }
                     notifyWebViewListeningState(true);
                 }
 
@@ -630,11 +788,13 @@ public class MainActivity extends BridgeActivity {
                     String combinedPartial = sb.toString().trim();
                     if (!combinedPartial.isEmpty()) {
                         lastPartialTranscript = combinedPartial;
-                        BuddyOverlayService.updateListeningStateWithCaption(
-                            MainActivity.this,
-                            true,
-                            combinedPartial
-                        );
+                        if (!isInForeground) {
+                            BuddyOverlayService.updateListeningStateWithCaption(
+                                MainActivity.this,
+                                true,
+                                combinedPartial
+                            );
+                        }
                         handleRecognizedSpeech(combinedPartial, false);
                     }
                 }
@@ -645,7 +805,9 @@ public class MainActivity extends BridgeActivity {
             });
 
             isSingleShotListening = true;
-            BuddyOverlayService.updateListeningStateWithCaption(MainActivity.this, true, "Ouvindo...");
+            if (!isInForeground) {
+                BuddyOverlayService.updateListeningStateWithCaption(MainActivity.this, true, "Ouvindo...");
+            }
             notifyWebViewListeningState(true);
             speechRecognizer.startListening(recognizerIntent);
 
@@ -661,7 +823,11 @@ public class MainActivity extends BridgeActivity {
         isSingleShotListening = false;
         mainHandler.removeCallbacks(singleShotTimeoutRunnable);
         destroySpeechRecognizerInternal();
-        BuddyOverlayService.updateListeningStateWithCaption(MainActivity.this, false, "");
+        if (!isInForeground) {
+            BuddyOverlayService.updateListeningStateWithCaption(MainActivity.this, false, "");
+        } else {
+            BuddyOverlayService.hideBubble(MainActivity.this);
+        }
         notifyWebViewListeningState(false);
     }
 
@@ -892,6 +1058,8 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void run() {
                 if (ensureOverlayPermission()) {
+                    wasMinimizedToBubble = true;
+                    isInForeground = false;
                     BuddyOverlayService.showBubble(MainActivity.this, isSingleShotListening);
                     moveTaskToBack(true);
                 }
@@ -903,6 +1071,12 @@ public class MainActivity extends BridgeActivity {
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
+                // If already in foreground, just hide any stray overlay bubble and do NOT re-launch Activity!
+                if (isInForeground && !wasMinimizedToBubble) {
+                    BuddyOverlayService.hideBubble(MainActivity.this);
+                    return;
+                }
+
                 // Delegate foreground launch to BuddyOverlayService while its overlay window is active
                 BuddyOverlayService.wakeAndMaximizeActivity(MainActivity.this);
 
@@ -921,7 +1095,6 @@ public class MainActivity extends BridgeActivity {
                     Intent.FLAG_ACTIVITY_NEW_TASK
                         | Intent.FLAG_ACTIVITY_SINGLE_TOP
                         | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
                 );
                 bringFrontIntent.putExtra("RESTORE_FROM_BUBBLE", true);
 
@@ -950,9 +1123,12 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        BuddyOverlayService.hideBubble(this);
         if (intent != null && intent.getBooleanExtra("RESTORE_FROM_BUBBLE", false)) {
-            BuddyOverlayService.hideBubble(this);
-            notifyRestoredFromBubble();
+            if (wasMinimizedToBubble) {
+                wasMinimizedToBubble = false;
+                notifyRestoredFromBubble();
+            }
             mainHandler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
@@ -969,11 +1145,24 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            isInForeground = true;
+            BuddyOverlayService.hideBubble(this);
+        }
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
+        boolean cameFromBubble = wasMinimizedToBubble;
         isInForeground = true;
+        wasMinimizedToBubble = false;
         BuddyOverlayService.hideBubble(this);
-        notifyRestoredFromBubble();
+        if (cameFromBubble) {
+            notifyRestoredFromBubble();
+        }
         startNativeGpsTrackingIfPermitted();
         if (pendingWakeTranscript != null) {
             mainHandler.postDelayed(new Runnable() {
@@ -998,16 +1187,15 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPause() {
         super.onPause();
-        isInForeground = false;
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)) {
-            BuddyOverlayService.showBubble(this, isSingleShotListening);
-        }
+        // Do NOT show the native overlay bubble in onPause() while MainActivity is still visible on screen!
+        // Showing the bubble in onPause() caused duplicate bubbles when system dialogs or speech recognition opened.
     }
 
     @Override
     public void onStop() {
         super.onStop();
         isInForeground = false;
+        wasMinimizedToBubble = true;
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)) {
             BuddyOverlayService.showBubble(this, isSingleShotListening);
         }
@@ -1120,7 +1308,7 @@ public class MainActivity extends BridgeActivity {
                 public void run() {
                     if (!listening) {
                         stopAndReleaseMicrophoneNow();
-                    } else {
+                    } else if (!isInForeground) {
                         BuddyOverlayService.updateListeningState(MainActivity.this, true);
                     }
                 }
@@ -1129,7 +1317,7 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public int getNativeBridgeVersion() {
-            return 8;
+            return 9;
         }
 
         @JavascriptInterface
@@ -1143,18 +1331,13 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public void stopSpeaking() {
+            stopSpeakingNow();
+        }
+
+        @JavascriptInterface
         public void stopNativeTts() {
-            mainHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (nativeTts != null) {
-                        try {
-                            nativeTts.stop();
-                        } catch (Exception ignored) {
-                        }
-                    }
-                }
-            });
+            stopSpeakingNow();
         }
 
         @JavascriptInterface

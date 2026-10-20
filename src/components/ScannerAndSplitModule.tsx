@@ -31,6 +31,7 @@ export const ScannerAndSplitModule: React.FC = () => {
     totalCostPerKm,
     vehicleProfile,
     speakTextPt,
+    cancelSpeechNow,
     openRouteTrapModalFromOffer,
     recordOfferDecision,
     backpackWeightLimitKg,
@@ -828,7 +829,10 @@ export const ScannerAndSplitModule: React.FC = () => {
       {isEarningsModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-          onClick={() => setIsEarningsModalOpen(false)}
+          onClick={() => {
+            cancelSpeechNow();
+            setIsEarningsModalOpen(false);
+          }}
         >
           <div
             className="w-full max-w-md rounded-2xl bg-slate-950 border border-emerald-500/40 p-5 text-white shadow-2xl space-y-4"
@@ -845,7 +849,10 @@ export const ScannerAndSplitModule: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setIsEarningsModalOpen(false)}
+                onClick={() => {
+                  cancelSpeechNow();
+                  setIsEarningsModalOpen(false);
+                }}
                 className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 px-2.5 py-1 text-xs font-bold text-slate-300 cursor-pointer"
               >
                 ✕
@@ -925,7 +932,10 @@ export const ScannerAndSplitModule: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setIsEarningsModalOpen(false)}
+              onClick={() => {
+                cancelSpeechNow();
+                setIsEarningsModalOpen(false);
+              }}
               className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs py-2.5 cursor-pointer transition"
             >
               Fechar Resumo

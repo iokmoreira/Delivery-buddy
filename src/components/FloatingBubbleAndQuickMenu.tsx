@@ -161,6 +161,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
     lastAutoDetectedOfferBanner,
     dismissAutoDetectedOfferBanner,
     speakTextPt,
+    cancelSpeechNow,
     isAmaranteWeatherModalOpen,
     setIsAmaranteWeatherModalOpen,
     amaranteLiveWeather,
@@ -1344,7 +1345,6 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
     const restoreFromInvisibleBubble = () => {
       cancelLiveVoiceTranscription();
       setIsBubbleMinimized(false);
-      speakTextPt('Tela aberta.');
     };
 
     return (
@@ -1444,6 +1444,24 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
 
   return (
     <>
+      {/* 1-Tap Immediate Stop / Cancel Speech Floating Pill Whenever Buddy is Speaking */}
+      {isSpeakingTts && (
+        <button
+          type="button"
+          onClick={cancelSpeechNow}
+          style={{
+            backgroundColor: '#dc2626',
+            color: '#ffffff',
+            pointerEvents: 'auto',
+          }}
+          className="fixed top-14 left-1/2 -translate-x-1/2 z-[1400] rounded-full border-2 border-white px-4 py-2 text-xs font-black shadow-[0_6px_24px_rgba(220,38,38,0.65)] flex items-center gap-2 cursor-pointer active:scale-95 transition"
+          aria-label="Parar Fala do Buddy"
+        >
+          <VolumeX className="h-4 w-4 shrink-0" />
+          <span>🔇 Parar Fala</span>
+        </button>
+      )}
+
       {/* ±45% Screen Ephemeral Alert Pop-up */}
       {renderEphemeralVoiceOverlayCard()}
       {/* Freely Draggable Floating Bubbles */}
@@ -1680,7 +1698,10 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
       {isAmaranteWeatherModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-          onClick={() => setIsAmaranteWeatherModalOpen(false)}
+          onClick={() => {
+            cancelSpeechNow();
+            setIsAmaranteWeatherModalOpen(false);
+          }}
         >
           <div
             className="w-full max-w-md rounded-2xl bg-slate-950 border border-emerald-500/40 p-5 text-white shadow-2xl space-y-4"
@@ -1700,7 +1721,10 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setIsAmaranteWeatherModalOpen(false)}
+                onClick={() => {
+                  cancelSpeechNow();
+                  setIsAmaranteWeatherModalOpen(false);
+                }}
                 className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 text-slate-300 cursor-pointer"
                 aria-label="Fechar Clima de Amarante"
               >
@@ -1760,22 +1784,34 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
 
             {/* Actions */}
             <div className="grid grid-cols-2 gap-2.5 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  const rainNote =
-                    amaranteLiveWeather.rainMm > 0
-                      ? `, com ${amaranteLiveWeather.rainMm.toFixed(1).replace('.', ' vírgula ')} milímetros de chuva`
-                      : ', sem chuva neste momento';
-                  speakTextPt(
-                    `Clima em Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}${rainNote}. Vento a ${Math.round(amaranteLiveWeather.windSpeedKmh)} quilómetros por hora.`
-                  );
-                }}
-                className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2.5 px-3 text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Volume2 className="h-4 w-4 text-emerald-400" />
-                <span>Ouvir em Voz Alta</span>
-              </button>
+              {isSpeakingTts ? (
+                <button
+                  type="button"
+                  onClick={cancelSpeechNow}
+                  style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+                  className="rounded-xl border border-red-400 py-2.5 px-3 text-xs font-black text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <VolumeX className="h-4 w-4" />
+                  <span>🔇 Parar Fala</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rainNote =
+                      amaranteLiveWeather.rainMm > 0
+                        ? ', com chuva'
+                        : ', sem chuva';
+                    speakTextPt(
+                      `Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}${rainNote}.`
+                    );
+                  }}
+                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2.5 px-3 text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Volume2 className="h-4 w-4 text-emerald-400" />
+                  <span>Ouvir em Voz Alta</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void openAndFetchAmaranteWeather(true)}

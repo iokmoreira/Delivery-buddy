@@ -1,10 +1,12 @@
 import { PlatformName } from '../types/models';
 
 export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate';
-export const DEFAULT_BUDDY_VOICE_RATE = 1.15;
-export const DEFAULT_BUDDY_VOICE_PITCH = 1.0;
+export const DEFAULT_BUDDY_VOICE_RATE = 1.1;
+export const DEFAULT_BUDDY_VOICE_PITCH = 1.05;
 
 let activeHtml5TtsAudio: HTMLAudioElement | null = null;
+let activeNativeSpeechEndTimer: number | null = null;
+let activeOnEndCallback: (() => void) | null = null;
 
 export function getSavedBuddyVoiceRate(): number {
   if (typeof window === 'undefined') return DEFAULT_BUDDY_VOICE_RATE;
@@ -58,37 +60,85 @@ export function selectBestGeminiLikePtVoice(
 
   const candidatePool = ptBrVoices.length > 0 ? ptBrVoices : ptVoices;
 
-  const tier1Keywords = [
-    'google português do brasil',
-    'google portugues do brasil',
-    'pt-br-neural',
-    'neural',
-    'natural',
+  const knownFemaleTokens = [
     'francisca',
-    'antonio',
+    'luciana',
     'thalita',
+    'vitoria',
+    'camila',
+    'maria',
+    'fernanda',
+    'joana',
+    'catarina',
+    'raquel',
+    'female',
+    'ptc',
+    'bmg',
   ];
 
-  for (const kw of tier1Keywords) {
-    const match = candidatePool.find((v) => v.name.toLowerCase().includes(kw));
+  const nonFemalePool = candidatePool.filter((v) => {
+    const lowerName = v.name.toLowerCase();
+    return !knownFemaleTokens.some((tok) => lowerName.includes(tok));
+  });
+
+  const searchPool = nonFemalePool.length > 0 ? nonFemalePool : candidatePool;
+
+  // Tier 1: Friendly Male Brazilian Portuguese (pt-BR) voices
+  const maleKeywords = [
+    'antonio',
+    'daniel',
+    'fabio',
+    'ricardo',
+    'nicolau',
+    'pte',
+    'afs',
+    'ptd',
+    'male',
+    'google português do brasil',
+    'google portugues do brasil',
+  ];
+
+  for (const kw of maleKeywords) {
+    const match = searchPool.find((v) => v.name.toLowerCase().includes(kw));
     if (match) return match;
   }
 
-  const tier2Keywords = ['google', 'premium', 'enhanced', 'luciana', 'microsoft'];
+  const tier2Keywords = ['google', 'natural', 'neural', 'microsoft'];
   for (const kw of tier2Keywords) {
-    const match = candidatePool.find((v) => v.name.toLowerCase().includes(kw));
+    const match = searchPool.find((v) => v.name.toLowerCase().includes(kw));
     if (match) return match;
   }
 
-  return candidatePool[0];
+  return searchPool[0];
+}
+
+export function stopBuddySpeech(): void {
+  cancelBuddySpeechNow();
 }
 
 export function cancelBuddySpeechNow(): void {
   if (typeof window === 'undefined') return;
+  if (activeNativeSpeechEndTimer !== null) {
+    window.clearTimeout(activeNativeSpeechEndTimer);
+    activeNativeSpeechEndTimer = null;
+  }
+  if (activeOnEndCallback) {
+    const cb = activeOnEndCallback;
+    activeOnEndCallback = null;
+    try {
+      cb();
+    } catch {
+      // ignore
+    }
+  }
   try {
     const winAny = window as unknown as {
-      BuddyNativeOverlay?: { stopNativeTts?: () => void };
+      BuddyNativeOverlay?: {
+        stopSpeaking?: () => void;
+        stopNativeTts?: () => void;
+      };
     };
+    winAny.BuddyNativeOverlay?.stopSpeaking?.();
     winAny.BuddyNativeOverlay?.stopNativeTts?.();
   } catch {
     // ignore
@@ -155,13 +205,13 @@ function playHtml5StreamTtsFallback(
       activeHtml5TtsAudio = null;
     }
     const cleanChunk = text.trim().slice(0, 190);
-    const ttsUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=pt-PT&client=tw-ob&q=${encodeURIComponent(
+    const ttsUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=pt-BR&client=tw-ob&q=${encodeURIComponent(
       cleanChunk
     )}`;
     const audio = new Audio(ttsUrl);
     audio.setAttribute('referrerpolicy', 'no-referrer');
     audio.volume = 1.0;
-    audio.playbackRate = 1.08;
+    audio.playbackRate = 1.1;
     activeHtml5TtsAudio = audio;
     audio.onplay = () => onStart?.();
     audio.onended = () => {
@@ -200,10 +250,10 @@ export interface SpeakBuddyVoiceOptions {
 }
 
 /**
- * Centralized Gemini-Style Natural Voice Engine (+15% Faster 1.15x Default).
+ * Centralized Friendly Male Brazilian Portuguese (pt-BR) Companion Voice Engine.
  * 1. Uses Native Android TextToSpeech (`window.BuddyNativeOverlay.speakText`) when available.
- * 2. Guarantees spoken audio via HTML5 Audio TTS stream (`translate_tts`) on older OTA APK shells.
- * 3. Falls back to Web SpeechSynthesis in desktop browsers.
+ * 2. Guarantees spoken audio via HTML5 Audio TTS stream (`translate_tts` pt-BR) on older OTA APK shells.
+ * 3. Falls back to Web SpeechSynthesis (pt-BR Male) in desktop browsers.
  */
 export function speakWithBuddyVoiceEngine(
   options: SpeakBuddyVoiceOptions
@@ -223,6 +273,12 @@ export function speakWithBuddyVoiceEngine(
     return;
   }
 
+  if (activeNativeSpeechEndTimer !== null) {
+    window.clearTimeout(activeNativeSpeechEndTimer);
+    activeNativeSpeechEndTimer = null;
+  }
+  activeOnEndCallback = onEnd || null;
+
   playBuddyConfirmationChime();
 
   const winAny = window as unknown as {
@@ -240,10 +296,15 @@ export function speakWithBuddyVoiceEngine(
     if (typeof nativeSpeakFn === 'function') {
       onStart?.();
       nativeSpeakFn.call(winAny.BuddyNativeOverlay, text.trim());
-      onVoiceResolved?.('Voz Nativa Android PT');
-      window.setTimeout(() => {
-        onEnd?.();
-      }, Math.min(8000, Math.max(1500, text.length * 60)));
+      onVoiceResolved?.('Voz Masculina PT-BR (Android)');
+      activeNativeSpeechEndTimer = window.setTimeout(() => {
+        activeNativeSpeechEndTimer = null;
+        if (activeOnEndCallback) {
+          const cb = activeOnEndCallback;
+          activeOnEndCallback = null;
+          cb();
+        }
+      }, Math.min(7000, Math.max(1600, text.length * 58)));
       return;
     }
   } catch {
@@ -251,12 +312,12 @@ export function speakWithBuddyVoiceEngine(
   }
 
   // 2. Immediate OTA Guarantee for Android APK shells without native speakText:
-  // Play HTML5 Audio TTS stream in European Portuguese
+  // Play HTML5 Audio TTS stream in Brazilian Portuguese (pt-BR)
   const hasNativeOverlayShell = Boolean(winAny.BuddyNativeOverlay);
   if (hasNativeOverlayShell) {
     const startedStream = playHtml5StreamTtsFallback(text, onStart, onEnd);
     if (startedStream) {
-      onVoiceResolved?.('Voz Audio Stream PT-PT (OTA)');
+      onVoiceResolved?.('Voz Audio Stream PT-BR (OTA)');
     }
   }
 
@@ -278,7 +339,7 @@ export function speakWithBuddyVoiceEngine(
         : getSavedBuddyVoiceRate();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'pt-PT';
+    utterance.lang = 'pt-BR';
     utterance.rate = activeRate;
     utterance.pitch = pitch;
     utterance.volume = 1.0;
@@ -291,9 +352,15 @@ export function speakWithBuddyVoiceEngine(
     }
 
     if (onStart) utterance.onstart = onStart;
-    if (onEnd) utterance.onend = onEnd;
+    if (onEnd) {
+      utterance.onend = () => {
+        activeOnEndCallback = null;
+        onEnd();
+      };
+    }
     if (onError) {
       utterance.onerror = () => {
+        activeOnEndCallback = null;
         if (!hasNativeOverlayShell) {
           playHtml5StreamTtsFallback(text, onStart, onEnd);
         }
@@ -314,10 +381,22 @@ function formatShortNumberPt(val: number): string {
   return val.toFixed(2).replace('.', ',');
 }
 
-function shortPlatformLabel(platform: PlatformName): string {
-  if (platform === 'Uber Eats') return 'Uber';
-  if (platform === 'Bolt Food') return 'Bolt';
-  return 'Glovo';
+function formatSpokenEurosPtBr(val: number): string {
+  const whole = Math.floor(val);
+  const cents = Math.round((val - whole) * 100);
+  if (cents > 0) {
+    return `${whole} euros e ${cents}`;
+  }
+  return `${whole} euros`;
+}
+
+function formatSpokenPerKmPtBr(val: number): string {
+  const whole = Math.floor(val);
+  const cents = Math.round((val - whole) * 100);
+  if (cents > 0) {
+    return `${whole} e ${String(cents).padStart(2, '0')}`;
+  }
+  return `${whole}`;
 }
 
 export function buildSurgicalOfferStreetTts(input: {
@@ -325,23 +404,24 @@ export function buildSurgicalOfferStreetTts(input: {
   verdictCode: 'ACEITAR' | 'RECUSAR';
   netProfitEur: number;
   netEurPerKm: number;
+  grossAmountEur?: number;
   isOverweight?: boolean;
   totalWeightKg?: number;
 }): string {
   if (input.isOverweight && (input.totalWeightKg ?? 0) > 10) {
     const roundedKg = Math.round(input.totalWeightKg || 14);
-    return `Atenção: ${roundedKg} quilos estimados. Diga 'dividir pedido' para acionar suporte.`;
+    return `Atenção: ${roundedKg} quilos. Diga dividir pedido.`;
   }
 
-  const plat = shortPlatformLabel(input.platform);
-  const netStr = formatShortNumberPt(input.netProfitEur);
-  const kmRateStr = formatShortNumberPt(input.netEurPerKm);
+  const baseEur = input.grossAmountEur ?? input.netProfitEur;
+  const eurosSpoken = formatSpokenEurosPtBr(baseEur);
+  const perKmSpoken = formatSpokenPerKmPtBr(input.netEurPerKm);
 
   if (input.verdictCode === 'ACEITAR') {
-    return `${plat}: ${netStr} limpos, ${kmRateStr} por km. Vale a pena.`;
+    return `${eurosSpoken}, dá ${perKmSpoken} por quilômetro. Compensa!`;
   }
 
-  return `${plat}: ${kmRateStr} por km com retorno vazio. Não compensa.`;
+  return `${eurosSpoken}, dá ${perKmSpoken} por quilômetro. Não compensa!`;
 }
 
 export function buildSurgicalHeavyOrderStreetTts(totalWeightKg: number): string {
