@@ -377,7 +377,7 @@ export function speakWithBuddyVoiceEngine(
           activeOnEndCallback = null;
           cb();
         }
-      }, Math.min(6000, Math.max(1300, Math.round(text.length * 46))));
+      }, Math.min(26000, Math.max(1300, Math.round(text.length * 52))));
       return;
     }
   } catch {

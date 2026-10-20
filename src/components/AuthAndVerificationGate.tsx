@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   MessageSquare,
   Send,
@@ -9,6 +9,8 @@ import {
   UserPlus,
   LogIn,
   HelpCircle,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { useEstafetas } from '../context/EstafetasContext';
 import {
@@ -17,6 +19,19 @@ import {
   PlatformName,
 } from '../types/models';
 import { findExistingCourierByNameInSupabaseRest } from '../services/geminiAgent';
+import {
+  cancelBuddySpeechNow,
+  DEFAULT_BUDDY_VOICE_PITCH,
+  playBuddyConfirmationChime,
+  selectBestGeminiLikePtVoice,
+} from '../services/voiceEngine';
+
+export const BUDDY_LOGIN_INTRO_SENTENCES: string[] = [
+  'Olá, Buddy! Eu sou o teu copiloto inteligente de rua, criado para organizar a tua rotina, proteger-te no trânsito e aumentar os teus ganhos reais.',
+  'Enquanto trabalhas na Glovo, Uber ou Bolt, eu fico flutuando na tua tela. Tocou pedido? Eu leio na hora e desconto combustível, desgaste do veículo e impostos. Faço toda a tua gestão financeira automática, acompanhando as tuas metas e projeções diárias, semanais e mensais para saberes ao cêntimo o teu lucro por quilómetro e por hora.',
+  'Comigo tens acesso a um banco de dados completo da tua região: vês o clima em tempo real, acordos de piso mínimo, alertas de perigos na via e todo o registo de rotas proibidas, problemas e reclamações para evitares atrasos e ciladas.',
+  'Além disso, comunicas com outros Buddys pelo chat, walkie-talkie e blog informativo, comandas tudo por voz sem tirar a mão da direção e contas com deteção automática de queda e alerta SOS de emergência. Faz login ou cria a tua conta aqui embaixo e vamos trabalhar. Boas entregas e conduza com segurança!',
+];
 
 export interface SavedLocalAccountRecord {
   username: string;
@@ -387,6 +402,246 @@ export const AuthAndVerificationGate: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Interactive 3D Buddy Voice Introduction & Synchronized Live Subtitles State
+  const [isIntroSpeaking, setIsIntroSpeaking] = useState<boolean>(false);
+  const [activeSentenceIdx, setActiveSentenceIdx] = useState<number>(0);
+  const introSessionIdRef = useRef<number>(0);
+  const sentenceTimerRef = useRef<number | null>(null);
+  const waitingForGestureRef = useRef<boolean>(false);
+  const userStoppedOrTypedRef = useRef<boolean>(false);
+
+  const clearIntroTimers = useCallback(() => {
+    if (sentenceTimerRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(sentenceTimerRef.current);
+      sentenceTimerRef.current = null;
+    }
+  }, []);
+
+  const stopBuddyIntroPresentation = useCallback(
+    (markUserStopped = true) => {
+      if (markUserStopped) {
+        userStoppedOrTypedRef.current = true;
+        waitingForGestureRef.current = false;
+      }
+      introSessionIdRef.current += 1;
+      clearIntroTimers();
+      setIsIntroSpeaking(false);
+      cancelBuddySpeechNow();
+      if (typeof window !== 'undefined') {
+        try {
+          window.speechSynthesis?.cancel();
+        } catch {
+          // ignore
+        }
+        try {
+          const winAny = window as unknown as {
+            BuddyNativeOverlay?: {
+              stopSpeaking?: () => void;
+              stopNativeTts?: () => void;
+            };
+          };
+          winAny.BuddyNativeOverlay?.stopSpeaking?.();
+          winAny.BuddyNativeOverlay?.stopNativeTts?.();
+        } catch {
+          // ignore
+        }
+      }
+    },
+    [clearIntroTimers]
+  );
+
+  const speakSentenceAtIndex = useCallback(
+    (idx: number, sessionId: number) => {
+      if (
+        typeof window === 'undefined' ||
+        introSessionIdRef.current !== sessionId
+      ) {
+        return;
+      }
+
+      if (idx >= BUDDY_LOGIN_INTRO_SENTENCES.length) {
+        clearIntroTimers();
+        setIsIntroSpeaking(false);
+        setActiveSentenceIdx(0);
+        return;
+      }
+
+      const sentence = BUDDY_LOGIN_INTRO_SENTENCES[idx];
+      setActiveSentenceIdx(idx);
+      setIsIntroSpeaking(true);
+      clearIntroTimers();
+
+      const winAny = window as unknown as {
+        BuddyNativeOverlay?: {
+          speakText?: (spokenText: string) => void;
+          speakNativeTts?: (spokenText: string) => void;
+          setSpeechRate?: (rateVal: number) => void;
+        };
+      };
+
+      const nativeSpeakFn =
+        winAny.BuddyNativeOverlay?.speakText ||
+        winAny.BuddyNativeOverlay?.speakNativeTts;
+
+      // Engine 1: Native Android APK TextToSpeech Bridge (pt-BR Male @ 1.30x)
+      if (typeof nativeSpeakFn === 'function') {
+        try {
+          winAny.BuddyNativeOverlay?.setSpeechRate?.(1.3);
+        } catch {
+          // ignore
+        }
+        try {
+          nativeSpeakFn.call(winAny.BuddyNativeOverlay, sentence);
+          const estimatedDurationMs = Math.max(
+            4200,
+            Math.round(sentence.length * 54) + 550
+          );
+          sentenceTimerRef.current = window.setTimeout(() => {
+            if (introSessionIdRef.current !== sessionId) return;
+            speakSentenceAtIndex(idx + 1, sessionId);
+          }, estimatedDurationMs);
+          return;
+        } catch {
+          // fallback to Web SpeechSynthesis below
+        }
+      }
+
+      // Engine 2: Web SpeechSynthesis (strictly pt-BR Male @ 1.30x, pitch 0.95)
+      if ('speechSynthesis' in window) {
+        try {
+          if (idx === 0) {
+            window.speechSynthesis.cancel();
+          }
+          window.speechSynthesis.resume?.();
+
+          const utterance = new SpeechSynthesisUtterance(sentence);
+          utterance.lang = 'pt-BR';
+          utterance.rate = 1.3;
+          utterance.pitch = DEFAULT_BUDDY_VOICE_PITCH;
+          utterance.volume = 1.0;
+
+          const voices = window.speechSynthesis.getVoices();
+          const chosenVoice = selectBestGeminiLikePtVoice(voices);
+          if (chosenVoice) {
+            utterance.voice = chosenVoice;
+          }
+
+          let advanced = false;
+          const advanceNext = () => {
+            if (advanced || introSessionIdRef.current !== sessionId) return;
+            advanced = true;
+            clearIntroTimers();
+            speakSentenceAtIndex(idx + 1, sessionId);
+          };
+
+          utterance.onstart = () => {
+            if (introSessionIdRef.current !== sessionId) return;
+            waitingForGestureRef.current = false;
+            setActiveSentenceIdx(idx);
+            setIsIntroSpeaking(true);
+          };
+
+          utterance.onend = () => {
+            advanceNext();
+          };
+
+          utterance.onerror = (ev) => {
+            if (introSessionIdRef.current !== sessionId) return;
+            if (ev?.error === 'not-allowed' || ev?.error === 'audio-busy') {
+              waitingForGestureRef.current = true;
+              clearIntroTimers();
+              setIsIntroSpeaking(false);
+              return;
+            }
+            if (ev?.error !== 'canceled' && ev?.error !== 'interrupted') {
+              advanceNext();
+            }
+          };
+
+          // Safety timer in case mobile WebView/browser skips onend
+          const fallbackMs = Math.max(
+            4800,
+            Math.round(sentence.length * 60) + 900
+          );
+          sentenceTimerRef.current = window.setTimeout(() => {
+            advanceNext();
+          }, fallbackMs);
+
+          window.speechSynthesis.speak(utterance);
+          return;
+        } catch {
+          // ignore
+        }
+      }
+
+      // If no speech engine is available, still cycle subtitles gracefully
+      sentenceTimerRef.current = window.setTimeout(() => {
+        if (introSessionIdRef.current !== sessionId) return;
+        speakSentenceAtIndex(idx + 1, sessionId);
+      }, Math.max(4000, Math.round(sentence.length * 50)));
+    },
+    [clearIntroTimers]
+  );
+
+  const startBuddyIntroPresentation = useCallback(
+    (startIdx = 0) => {
+      userStoppedOrTypedRef.current = false;
+      waitingForGestureRef.current = false;
+      stopBuddyIntroPresentation(false);
+      const nextSession = introSessionIdRef.current + 1;
+      introSessionIdRef.current = nextSession;
+      playBuddyConfirmationChime();
+      speakSentenceAtIndex(startIdx, nextSession);
+    },
+    [speakSentenceAtIndex, stopBuddyIntroPresentation]
+  );
+
+  // Auto-start the voice introduction when the Login screen opens
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // Warm up Web Speech voices list if needed
+    try {
+      window.speechSynthesis?.getVoices?.();
+    } catch {
+      // ignore
+    }
+
+    const autoStartTimer = window.setTimeout(() => {
+      if (!userStoppedOrTypedRef.current) {
+        startBuddyIntroPresentation(0);
+      }
+    }, 520);
+
+    const handleFirstInteractionFallback = (ev: Event) => {
+      if (userStoppedOrTypedRef.current || !waitingForGestureRef.current) {
+        return;
+      }
+      const target = ev.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'SELECT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.closest('[data-buddy-audio-pill="true"]') ||
+          target.closest('[data-buddy-stop-intro="true"]'))
+      ) {
+        return;
+      }
+      waitingForGestureRef.current = false;
+      startBuddyIntroPresentation(0);
+    };
+
+    window.addEventListener('pointerdown', handleFirstInteractionFallback, {
+      passive: true,
+    });
+
+    return () => {
+      window.clearTimeout(autoStartTimer);
+      window.removeEventListener('pointerdown', handleFirstInteractionFallback);
+      stopBuddyIntroPresentation(true);
+    };
+  }, [startBuddyIntroPresentation, stopBuddyIntroPresentation]);
+
   const togglePlatform = (plat: PlatformName) => {
     setSelectedPlatforms((prev) => {
       if (prev.includes(plat)) {
@@ -399,6 +654,7 @@ export const AuthAndVerificationGate: React.FC = () => {
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    stopBuddyIntroPresentation(true);
     setErrorMsg(null);
     const cleanName = username.trim();
     const cleanContact = emailOrPhone.trim();
@@ -515,21 +771,125 @@ export const AuthAndVerificationGate: React.FC = () => {
             : 'bg-zinc-900 border-zinc-800 shadow-black/70'
         }`}
       >
-        {/* Top: Delivery Buddy 3D Mascot / Animation Header */}
-        <div className="flex flex-col items-center text-center space-y-2.5 pt-1">
-          <div className="relative">
-            <span className="absolute -inset-1.5 rounded-full bg-emerald-500/25 blur-md animate-pulse pointer-events-none" />
-            <div className="relative h-24 w-24 rounded-full overflow-hidden border-[3px] border-emerald-400 bg-[#090e13] shadow-[0_0_25px_rgba(16,185,129,0.55)] flex items-center justify-center p-1">
+        {/* Top: Large Interactive 3D Mascot Hero (136px, object-contain, no overlaid badges) + Voice Intro + Live Subtitles */}
+        <div className="flex flex-col items-center text-center space-y-3 pt-1">
+          <div className="relative flex items-center justify-center">
+            {isIntroSpeaking && (
+              <>
+                <span className="absolute -inset-3 rounded-full border-2 border-emerald-400/55 animate-ping pointer-events-none" />
+                <span className="absolute -inset-2 rounded-full bg-emerald-500/35 blur-lg animate-pulse pointer-events-none" />
+              </>
+            )}
+            {!isIntroSpeaking && (
+              <span className="absolute -inset-1.5 rounded-full bg-emerald-500/20 blur-md pointer-events-none" />
+            )}
+            <div
+              onClick={() => {
+                if (isIntroSpeaking) {
+                  stopBuddyIntroPresentation(true);
+                } else {
+                  startBuddyIntroPresentation(0);
+                }
+              }}
+              title={
+                isIntroSpeaking
+                  ? 'Toca para parar a apresentação de voz'
+                  : 'Toca para ouvir a apresentação do Buddy'
+              }
+              className={`relative h-[136px] w-[136px] rounded-full overflow-hidden border-[3px] bg-[#090e13] flex items-center justify-center p-2 cursor-pointer transition-transform duration-300 ${
+                isIntroSpeaking
+                  ? 'border-emerald-400 shadow-[0_0_36px_rgba(16,185,129,0.85)] scale-[1.03]'
+                  : 'border-emerald-500/80 shadow-[0_0_24px_rgba(16,185,129,0.45)] hover:scale-[1.02]'
+              }`}
+            >
               <img
                 src={buddyMascotImages.mascotActive}
                 alt="Mascote 3D Delivery Buddy"
-                className="h-full w-full object-contain"
+                className="h-full w-full object-contain select-none pointer-events-none"
               />
             </div>
-            <span className="absolute -bottom-1 -right-1 rounded-full bg-emerald-500 text-slate-950 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider border border-white shadow">
-              3D AI
-            </span>
           </div>
+
+          {/* 1-Tap Audio Control Pill Directly Below the Mascot */}
+          <button
+            type="button"
+            data-buddy-audio-pill="true"
+            onClick={() => {
+              if (isIntroSpeaking) {
+                stopBuddyIntroPresentation(true);
+              } else {
+                startBuddyIntroPresentation(0);
+              }
+            }}
+            className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-xs font-extrabold tracking-wide border shadow-md transition-all cursor-pointer ${
+              isIntroSpeaking
+                ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-400 text-amber-300 shadow-amber-500/15'
+                : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400/70 text-emerald-300 shadow-emerald-500/15'
+            }`}
+          >
+            {isIntroSpeaking ? (
+              <>
+                <VolumeX className="h-4 w-4 text-amber-400 shrink-0" />
+                <span>🔇 Parar Apresentação</span>
+                <span
+                  className="inline-flex items-end gap-0.5 h-3.5 ml-0.5"
+                  aria-hidden="true"
+                >
+                  <span className="w-0.5 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                  <span className="w-0.5 h-3.5 bg-emerald-400 rounded-full animate-bounce" />
+                  <span className="w-0.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
+                  <span className="w-0.5 h-3 bg-emerald-400 rounded-full animate-bounce" />
+                </span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                <span>🔊 Ouvir quem é o Buddy (Resumo Rápido)</span>
+              </>
+            )}
+          </button>
+
+          {/* Synchronized Live Subtitles (Legendas) while speaking */}
+          {isIntroSpeaking && (
+            <div
+              onClick={() => stopBuddyIntroPresentation(true)}
+              data-buddy-stop-intro="true"
+              className={`w-full rounded-2xl border px-3.5 py-2.5 text-left transition-all cursor-pointer ${
+                isDay
+                  ? 'bg-emerald-50/90 border-emerald-400 text-slate-900 shadow-sm'
+                  : 'bg-emerald-950/40 border-emerald-500/50 text-emerald-100 shadow-[0_0_20px_rgba(16,185,129,0.18)]'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                  Legenda ao Vivo • Parte {activeSentenceIdx + 1}/
+                  {BUDDY_LOGIN_INTRO_SENTENCES.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  {BUDDY_LOGIN_INTRO_SENTENCES.map((_, idx) => (
+                    <span
+                      key={idx}
+                      className={`h-1.5 rounded-full transition-all ${
+                        idx === activeSentenceIdx
+                          ? 'w-4 bg-emerald-400'
+                          : idx < activeSentenceIdx
+                            ? 'w-1.5 bg-emerald-500/60'
+                            : 'w-1.5 bg-zinc-700'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <p
+                className={`text-xs sm:text-[13px] font-bold leading-snug ${
+                  isDay ? 'text-slate-900' : 'text-zinc-100'
+                }`}
+              >
+                “{BUDDY_LOGIN_INTRO_SENTENCES[activeSentenceIdx]}”
+              </p>
+            </div>
+          )}
 
           <div>
             <div className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 mb-1">
@@ -596,6 +956,7 @@ export const AuthAndVerificationGate: React.FC = () => {
           <button
             type="button"
             onClick={() => {
+              stopBuddyIntroPresentation(true);
               setAuthMode('SUPORTE');
               setErrorMsg(null);
             }}
@@ -634,7 +995,11 @@ export const AuthAndVerificationGate: React.FC = () => {
               <input
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onFocus={() => stopBuddyIntroPresentation(true)}
+                onChange={(e) => {
+                  stopBuddyIntroPresentation(true);
+                  setUsername(e.target.value);
+                }}
                 placeholder={
                   authMode === 'ENTRAR'
                     ? 'Ex: Caio Moreira ou email@exemplo.pt'
@@ -661,7 +1026,11 @@ export const AuthAndVerificationGate: React.FC = () => {
                 <input
                   type="text"
                   value={emailOrPhone}
-                  onChange={(e) => setEmailOrPhone(e.target.value)}
+                  onFocus={() => stopBuddyIntroPresentation(true)}
+                  onChange={(e) => {
+                    stopBuddyIntroPresentation(true);
+                    setEmailOrPhone(e.target.value);
+                  }}
                   placeholder="Ex: 912 345 678 ou estafeta@email.pt"
                   autoComplete="email"
                   className={`w-full rounded-xl border px-3.5 py-2.5 text-sm font-bold focus:outline-none ${
@@ -684,7 +1053,11 @@ export const AuthAndVerificationGate: React.FC = () => {
               <input
                 type="password"
                 value={pinOrPassword}
-                onChange={(e) => setPinOrPassword(e.target.value)}
+                onFocus={() => stopBuddyIntroPresentation(true)}
+                onChange={(e) => {
+                  stopBuddyIntroPresentation(true);
+                  setPinOrPassword(e.target.value);
+                }}
                 placeholder="••••"
                 autoComplete={
                   authMode === 'ENTRAR' ? 'current-password' : 'new-password'
@@ -824,6 +1197,7 @@ export const AuthAndVerificationGate: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
+                  stopBuddyIntroPresentation(true);
                   setAuthMode('SUPORTE');
                   setErrorMsg(null);
                 }}

@@ -468,6 +468,9 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private volatile String pendingTtsText = null;
+    private volatile String lastUtteranceId = "";
+
     private void initNativeTts() {
         try {
             nativeTts = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
@@ -493,16 +496,25 @@ public class MainActivity extends BridgeActivity {
 
                             @Override
                             public void onDone(String utteranceId) {
-                                notifyWebViewSpeakingState(false);
+                                if (utteranceId == null || utteranceId.equals(lastUtteranceId)) {
+                                    notifyWebViewSpeakingState(false);
+                                }
                             }
 
                             @Override
                             public void onError(String utteranceId) {
-                                notifyWebViewSpeakingState(false);
+                                if (utteranceId == null || utteranceId.equals(lastUtteranceId)) {
+                                    notifyWebViewSpeakingState(false);
+                                }
                             }
                         });
 
                         nativeTtsReady = true;
+                        final String queued = pendingTtsText;
+                        pendingTtsText = null;
+                        if (queued != null && !queued.trim().isEmpty()) {
+                            speakWithNativeTts(queued);
+                        }
                     }
                 }
             });
@@ -511,6 +523,8 @@ public class MainActivity extends BridgeActivity {
     }
 
     public void stopSpeakingNow() {
+        pendingTtsText = null;
+        lastUtteranceId = "";
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -531,30 +545,35 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void run() {
                 try {
-                    if (nativeTts != null && nativeTtsReady) {
-                        try {
-                            nativeTts.stop();
-                        } catch (Exception ignored) {
-                        }
-                        applyMalePtBrVoiceAndRate();
-                        notifyWebViewSpeakingState(true);
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            Bundle params = new Bundle();
-                            params.putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC);
-                            params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f);
-                            nativeTts.speak(
-                                text.trim(),
-                                TextToSpeech.QUEUE_FLUSH,
-                                params,
-                                "buddy_tts_" + System.currentTimeMillis()
-                            );
-                        } else {
-                            java.util.HashMap<String, String> params = new java.util.HashMap<>();
-                            params.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_MUSIC));
-                            params.put(TextToSpeech.Engine.KEY_PARAM_VOLUME, "1.0");
-                            params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "buddy_tts_" + System.currentTimeMillis());
-                            nativeTts.speak(text.trim(), TextToSpeech.QUEUE_FLUSH, params);
-                        }
+                    if (nativeTts == null || !nativeTtsReady) {
+                        pendingTtsText = text.trim();
+                        return;
+                    }
+                    pendingTtsText = null;
+                    try {
+                        nativeTts.stop();
+                    } catch (Exception ignored) {
+                    }
+                    applyMalePtBrVoiceAndRate();
+                    final String utteranceId = "buddy_tts_" + System.currentTimeMillis();
+                    lastUtteranceId = utteranceId;
+                    notifyWebViewSpeakingState(true);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        Bundle params = new Bundle();
+                        params.putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC);
+                        params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f);
+                        nativeTts.speak(
+                            text.trim(),
+                            TextToSpeech.QUEUE_FLUSH,
+                            params,
+                            utteranceId
+                        );
+                    } else {
+                        java.util.HashMap<String, String> params = new java.util.HashMap<>();
+                        params.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_MUSIC));
+                        params.put(TextToSpeech.Engine.KEY_PARAM_VOLUME, "1.0");
+                        params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId);
+                        nativeTts.speak(text.trim(), TextToSpeech.QUEUE_FLUSH, params);
                     }
                 } catch (Exception ignored) {
                     notifyWebViewSpeakingState(false);
