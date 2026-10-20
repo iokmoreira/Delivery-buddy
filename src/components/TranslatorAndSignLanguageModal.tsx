@@ -1228,6 +1228,8 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
     useState<boolean>(false);
   const [isListeningCustomerMic, setIsListeningCustomerMic] =
     useState<boolean>(false);
+  const [isListeningLibrasMic, setIsListeningLibrasMic] =
+    useState<boolean>(false);
   const [isTranslatingLoading, setIsTranslatingLoading] =
     useState<boolean>(false);
   const [isCardFlippedForCustomer, setIsCardFlippedForCustomer] =
@@ -1296,6 +1298,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
     }
     setIsListeningCourierMic(false);
     setIsListeningCustomerMic(false);
+    setIsListeningLibrasMic(false);
     setIsPlayingSpellingSequence(false);
     stopBuddySpeech();
     cancelSpeechNow();
@@ -1303,160 +1306,47 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
   }, [cancelSpeechNow, setIsTranslatorModalOpen]);
 
   // Translate and speak Courier -> Customer
-  const handleTranslateAndSpeakCourierPt = async (
-    ptPhrase: string,
-    autoSpeakForeign = true
-  ) => {
-    const clean = ptPhrase.trim();
-    if (!clean) return;
-    setCourierPtText(clean);
-    setIsTranslatingLoading(true);
-    const translated = await translateTextBetweenLanguages(
-      clean,
-      'pt',
-      translatorTargetLang
-    );
-    setTranslatedCustomerText(translated);
-    setIsTranslatingLoading(false);
-    if (autoSpeakForeign) {
-      speakInForeignLanguage(translated, translatorTargetLang, 1.02);
-    }
-  };
+  const handleTranslateAndSpeakCourierPt = useCallback(
+    async (ptPhrase: string, autoSpeakForeign = true) => {
+      const clean = ptPhrase.trim();
+      if (!clean) return;
+      setCourierPtText(clean);
+      setIsTranslatingLoading(true);
+      const translated = await translateTextBetweenLanguages(
+        clean,
+        'pt',
+        translatorTargetLang
+      );
+      setTranslatedCustomerText(translated);
+      setIsTranslatingLoading(false);
+      if (autoSpeakForeign) {
+        speakInForeignLanguage(translated, translatorTargetLang, 1.02);
+      }
+    },
+    [translatorTargetLang]
+  );
 
   // Translate and speak Customer -> Courier (Portuguese at 1.15x)
-  const handleTranslateAndSpeakCustomerForeign = async (
-    foreignPhrase: string
-  ) => {
-    const clean = foreignPhrase.trim();
-    if (!clean) return;
-    setCustomerOriginalText(clean);
-    setIsTranslatingLoading(true);
-    const ptTranslation = await translateTextBetweenLanguages(
-      clean,
-      translatorTargetLang,
-      'pt-PT'
-    );
-    setCustomerTranslatedPtText(ptTranslation);
-    setIsTranslatingLoading(false);
-    speakTextPt(`O cliente disse: ${ptTranslation}`);
-  };
-
-  // Start Web Speech API recognition for either Courier (pt-PT) or Customer (targetLang)
-  const startVoiceRecognition = (role: 'COURIER_PT' | 'CUSTOMER_FOREIGN') => {
-    if (speechRecRef.current) {
-      try {
-        speechRecRef.current.stop();
-      } catch {
-        // ignore
-      }
-      speechRecRef.current = null;
-    }
-
-    const winAny = window as unknown as {
-      SpeechRecognition?: new () => {
-        lang: string;
-        continuous: boolean;
-        interimResults: boolean;
-        onresult: ((ev: unknown) => void) | null;
-        onerror: (() => void) | null;
-        onend: (() => void) | null;
-        start: () => void;
-        stop: () => void;
-      };
-      webkitSpeechRecognition?: new () => {
-        lang: string;
-        continuous: boolean;
-        interimResults: boolean;
-        onresult: ((ev: unknown) => void) | null;
-        onerror: (() => void) | null;
-        onend: (() => void) | null;
-        start: () => void;
-        stop: () => void;
-      };
-    };
-
-    const SpeechRecClass =
-      winAny.SpeechRecognition || winAny.webkitSpeechRecognition;
-
-    if (!SpeechRecClass) {
-      // Fallback if WebView SpeechRecognition isn't exposed: cycle/translate current input and speak
-      if (role === 'COURIER_PT') {
-        void handleTranslateAndSpeakCourierPt(
-          courierPtText || 'Olá! Trouxe a sua encomenda.',
-          true
-        );
-      } else {
-        const sampleReply =
-          CUSTOMER_FOREIGN_QUICK_REPLIES[0].byLang[translatorTargetLang];
-        void handleTranslateAndSpeakCustomerForeign(sampleReply);
-      }
-      return;
-    }
-
-    try {
-      const rec = new SpeechRecClass();
-      rec.lang = role === 'COURIER_PT' ? 'pt-PT' : translatorTargetLang;
-      rec.continuous = false;
-      rec.interimResults = true;
-
-      if (role === 'COURIER_PT') {
-        setIsListeningCourierMic(true);
-        setIsListeningCustomerMic(false);
-      } else {
-        setIsListeningCustomerMic(true);
-        setIsListeningCourierMic(false);
-      }
-
-      let latestTranscript = '';
-      rec.onresult = (event: unknown) => {
-        const ev = event as {
-          results?: {
-            length: number;
-            [idx: number]: { 0?: { transcript?: string } };
-          };
-        };
-        if (!ev.results) return;
-        let combined = '';
-        for (let i = 0; i < ev.results.length; i++) {
-          combined += ev.results[i]?.[0]?.transcript || '';
-        }
-        latestTranscript = combined.trim();
-        if (latestTranscript) {
-          if (role === 'COURIER_PT') {
-            setCourierPtText(latestTranscript);
-          } else {
-            setCustomerOriginalText(latestTranscript);
-          }
-        }
-      };
-
-      rec.onerror = () => {
-        setIsListeningCourierMic(false);
-        setIsListeningCustomerMic(false);
-      };
-
-      rec.onend = () => {
-        setIsListeningCourierMic(false);
-        setIsListeningCustomerMic(false);
-        if (latestTranscript) {
-          if (role === 'COURIER_PT') {
-            void handleTranslateAndSpeakCourierPt(latestTranscript, true);
-          } else {
-            void handleTranslateAndSpeakCustomerForeign(latestTranscript);
-          }
-        }
-      };
-
-      speechRecRef.current = rec;
-      rec.start();
-    } catch {
-      setIsListeningCourierMic(false);
-      setIsListeningCustomerMic(false);
-    }
-  };
+  const handleTranslateAndSpeakCustomerForeign = useCallback(
+    async (foreignPhrase: string) => {
+      const clean = foreignPhrase.trim();
+      if (!clean) return;
+      setCustomerOriginalText(clean);
+      setIsTranslatingLoading(true);
+      const ptTranslation = await translateTextBetweenLanguages(
+        clean,
+        translatorTargetLang,
+        'pt-PT'
+      );
+      setCustomerTranslatedPtText(ptTranslation);
+      setIsTranslatingLoading(false);
+      speakTextPt(`O cliente disse: ${ptTranslation}`);
+    },
+    [speakTextPt, translatorTargetLang]
+  );
 
   // Play a fingerspelling sequence (A-Z / 0-9) on Buddy's 3D Robotic Hands
-  const startFingerspellingWord = (wordRaw: string) => {
+  const startFingerspellingWord = useCallback((wordRaw: string) => {
     const cleanChars = wordRaw
       .toUpperCase()
       .normalize('NFD')
@@ -1489,41 +1379,263 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
       setSpellingProgressIndex(idx);
       setActiveFingerspellChar(cleanChars[idx]);
     }, 720);
-  };
+  }, []);
 
   // Match typed/spoken Portuguese phrase to a Core Libras Sign or fingerspell it
-  const handleTriggerLibrasFromText = (textRaw: string) => {
-    const clean = textRaw.trim();
-    if (!clean) return;
-    const lower = clean.toLowerCase();
+  const handleTriggerLibrasFromText = useCallback(
+    (textRaw: string) => {
+      const clean = textRaw.trim();
+      if (!clean) return;
+      const lower = clean.toLowerCase();
 
-    if (lower.includes('pin') || lower.includes('código') || lower.includes('codigo') || lower.includes('senha')) {
-      setActiveFingerspellChar(null);
-      setActiveCoreSignId('CODIGO_PIN');
+      if (
+        lower.includes('pin') ||
+        lower.includes('código') ||
+        lower.includes('codigo') ||
+        lower.includes('senha')
+      ) {
+        setActiveFingerspellChar(null);
+        setActiveCoreSignId('CODIGO_PIN');
+        return;
+      }
+      if (
+        lower.includes('encomenda') ||
+        lower.includes('pedido') ||
+        lower.includes('entrega')
+      ) {
+        setActiveFingerspellChar(null);
+        setActiveCoreSignId('ENCOMENDA');
+        return;
+      }
+      if (
+        lower.includes('obrigad') ||
+        lower.includes('bom dia') ||
+        lower.includes('apetite')
+      ) {
+        setActiveFingerspellChar(null);
+        setActiveCoreSignId('OBRIGADO');
+        return;
+      }
+      if (
+        lower.includes('minuto') ||
+        lower.includes('aguard') ||
+        lower.includes('esper')
+      ) {
+        setActiveFingerspellChar(null);
+        setActiveCoreSignId('AGUARDAR');
+        return;
+      }
+      if (
+        lower.includes('confirm') ||
+        lower.includes('porta') ||
+        lower.includes('ok')
+      ) {
+        setActiveFingerspellChar(null);
+        setActiveCoreSignId('CONFIRMAR');
+        return;
+      }
+      // Otherwise fingerspell the custom word/number!
+      startFingerspellingWord(clean);
+    },
+    [startFingerspellingWord]
+  );
+
+  // Register Native Android Bridge callbacks for multi-language SpeechRecognizer
+  useEffect(() => {
+    if (!isTranslatorModalOpen || typeof window === 'undefined') return;
+    const winAny = window as unknown as {
+      onBuddyTranslatorTranscript?: (
+        text: string,
+        isFinal: boolean,
+        role: string,
+        langCode: string
+      ) => void;
+      onBuddyTranslatorListeningEnded?: () => void;
+    };
+
+    winAny.onBuddyTranslatorTranscript = (
+      text: string,
+      isFinal: boolean,
+      role: string
+    ) => {
+      const clean = (text || '').trim();
+      if (!clean) return;
+      if (role === 'COURIER_PT') {
+        setCourierPtText(clean);
+        if (isFinal) {
+          setIsListeningCourierMic(false);
+          void handleTranslateAndSpeakCourierPt(clean, true);
+        }
+      } else if (role === 'CUSTOMER_FOREIGN') {
+        setCustomerOriginalText(clean);
+        if (isFinal) {
+          setIsListeningCustomerMic(false);
+          void handleTranslateAndSpeakCustomerForeign(clean);
+        }
+      } else if (role === 'LIBRAS_VOICE') {
+        setCustomLibrasInput(clean);
+        if (isFinal) {
+          setIsListeningLibrasMic(false);
+          handleTriggerLibrasFromText(clean);
+        }
+      }
+    };
+
+    winAny.onBuddyTranslatorListeningEnded = () => {
+      setIsListeningCourierMic(false);
+      setIsListeningCustomerMic(false);
+      setIsListeningLibrasMic(false);
+    };
+
+    return () => {
+      delete winAny.onBuddyTranslatorTranscript;
+      delete winAny.onBuddyTranslatorListeningEnded;
+    };
+  }, [
+    isTranslatorModalOpen,
+    handleTranslateAndSpeakCourierPt,
+    handleTranslateAndSpeakCustomerForeign,
+    handleTriggerLibrasFromText,
+  ]);
+
+  // Start Native Android SpeechRecognizer or Web Speech API for Courier (pt-PT), Customer (targetLang), or Libras (pt-PT)
+  const startVoiceRecognition = (
+    role: 'COURIER_PT' | 'CUSTOMER_FOREIGN' | 'LIBRAS_VOICE'
+  ) => {
+    if (speechRecRef.current) {
+      try {
+        speechRecRef.current.stop();
+      } catch {
+        // ignore
+      }
+      speechRecRef.current = null;
+    }
+
+    const langForRole =
+      role === 'CUSTOMER_FOREIGN' ? translatorTargetLang : 'pt-PT';
+
+    const winAny = window as unknown as {
+      BuddyNativeOverlay?: {
+        startTranslatorVoice?: (langCode: string, role: string) => void;
+      };
+      SpeechRecognition?: new () => {
+        lang: string;
+        continuous: boolean;
+        interimResults: boolean;
+        onresult: ((ev: unknown) => void) | null;
+        onerror: (() => void) | null;
+        onend: (() => void) | null;
+        start: () => void;
+        stop: () => void;
+      };
+      webkitSpeechRecognition?: new () => {
+        lang: string;
+        continuous: boolean;
+        interimResults: boolean;
+        onresult: ((ev: unknown) => void) | null;
+        onerror: (() => void) | null;
+        onend: (() => void) | null;
+        start: () => void;
+        stop: () => void;
+      };
+    };
+
+    // 1. Prefer Native Android SpeechRecognizer Bridge when running inside the APK
+    if (typeof winAny.BuddyNativeOverlay?.startTranslatorVoice === 'function') {
+      try {
+        setIsListeningCourierMic(role === 'COURIER_PT');
+        setIsListeningCustomerMic(role === 'CUSTOMER_FOREIGN');
+        setIsListeningLibrasMic(role === 'LIBRAS_VOICE');
+        winAny.BuddyNativeOverlay.startTranslatorVoice(langForRole, role);
+        return;
+      } catch {
+        // fallback below
+      }
+    }
+
+    const SpeechRecClass =
+      winAny.SpeechRecognition || winAny.webkitSpeechRecognition;
+
+    if (!SpeechRecClass) {
+      // Fallback if Web SpeechRecognition isn't exposed in browser
+      if (role === 'COURIER_PT') {
+        void handleTranslateAndSpeakCourierPt(
+          courierPtText || 'Olá! Trouxe a sua encomenda.',
+          true
+        );
+      } else if (role === 'CUSTOMER_FOREIGN') {
+        const sampleReply =
+          CUSTOMER_FOREIGN_QUICK_REPLIES[0].byLang[translatorTargetLang];
+        void handleTranslateAndSpeakCustomerForeign(sampleReply);
+      } else {
+        handleTriggerLibrasFromText(customLibrasInput || 'ENCOMENDA');
+      }
       return;
     }
-    if (lower.includes('encomenda') || lower.includes('pedido') || lower.includes('entrega')) {
-      setActiveFingerspellChar(null);
-      setActiveCoreSignId('ENCOMENDA');
-      return;
+
+    try {
+      const rec = new SpeechRecClass();
+      rec.lang = langForRole;
+      rec.continuous = false;
+      rec.interimResults = true;
+
+      setIsListeningCourierMic(role === 'COURIER_PT');
+      setIsListeningCustomerMic(role === 'CUSTOMER_FOREIGN');
+      setIsListeningLibrasMic(role === 'LIBRAS_VOICE');
+
+      let latestTranscript = '';
+      rec.onresult = (event: unknown) => {
+        const ev = event as {
+          results?: {
+            length: number;
+            [idx: number]: { 0?: { transcript?: string } };
+          };
+        };
+        if (!ev.results) return;
+        let combined = '';
+        for (let i = 0; i < ev.results.length; i++) {
+          combined += ev.results[i]?.[0]?.transcript || '';
+        }
+        latestTranscript = combined.trim();
+        if (latestTranscript) {
+          if (role === 'COURIER_PT') {
+            setCourierPtText(latestTranscript);
+          } else if (role === 'CUSTOMER_FOREIGN') {
+            setCustomerOriginalText(latestTranscript);
+          } else {
+            setCustomLibrasInput(latestTranscript);
+          }
+        }
+      };
+
+      rec.onerror = () => {
+        setIsListeningCourierMic(false);
+        setIsListeningCustomerMic(false);
+        setIsListeningLibrasMic(false);
+      };
+
+      rec.onend = () => {
+        setIsListeningCourierMic(false);
+        setIsListeningCustomerMic(false);
+        setIsListeningLibrasMic(false);
+        if (latestTranscript) {
+          if (role === 'COURIER_PT') {
+            void handleTranslateAndSpeakCourierPt(latestTranscript, true);
+          } else if (role === 'CUSTOMER_FOREIGN') {
+            void handleTranslateAndSpeakCustomerForeign(latestTranscript);
+          } else {
+            handleTriggerLibrasFromText(latestTranscript);
+          }
+        }
+      };
+
+      speechRecRef.current = rec;
+      rec.start();
+    } catch {
+      setIsListeningCourierMic(false);
+      setIsListeningCustomerMic(false);
+      setIsListeningLibrasMic(false);
     }
-    if (lower.includes('obrigad') || lower.includes('bom dia') || lower.includes('apetite')) {
-      setActiveFingerspellChar(null);
-      setActiveCoreSignId('OBRIGADO');
-      return;
-    }
-    if (lower.includes('minuto') || lower.includes('aguard') || lower.includes('esper')) {
-      setActiveFingerspellChar(null);
-      setActiveCoreSignId('AGUARDAR');
-      return;
-    }
-    if (lower.includes('confirm') || lower.includes('porta') || lower.includes('ok')) {
-      setActiveFingerspellChar(null);
-      setActiveCoreSignId('CONFIRMAR');
-      return;
-    }
-    // Otherwise fingerspell the custom word/number!
-    startFingerspellingWord(clean);
   };
 
   if (!isTranslatorModalOpen) return null;
@@ -1739,7 +1851,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
             {/* 2. Giant Customer Display Card (with 180° Flip Toggle for Doorstep Reading) */}
             <div
               style={{
-                backgroundColor: '#0B0F17',
+                backgroundColor: cardBg,
                 borderColor: '#00E5FF',
                 transform: isCardFlippedForCustomer ? 'rotate(180deg)' : 'none',
                 transition: 'transform 0.35s ease',
@@ -1748,7 +1860,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
             >
               <div className="flex items-center justify-between gap-2">
                 <span
-                  style={{ color: '#00E5FF' }}
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
                   className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
                 >
                   <span>
@@ -1768,7 +1880,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                       )
                     }
                     style={{
-                      backgroundColor: '#111827',
+                      backgroundColor: '#0B0F17',
                       borderColor: '#00E5FF',
                       color: '#00E5FF',
                     }}
@@ -1786,9 +1898,9 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                     style={{
                       backgroundColor: isCardFlippedForCustomer
                         ? '#00E5FF'
-                        : '#111827',
+                        : '#0B0F17',
                       borderColor: '#00E5FF',
-                      color: isCardFlippedForCustomer ? '#05070B' : '#FFFFFF',
+                      color: isCardFlippedForCustomer ? '#05070B' : '#00E5FF',
                     }}
                     className="rounded-lg border px-2.5 py-1 text-xs font-extrabold flex items-center gap-1 cursor-pointer"
                   >
@@ -1799,13 +1911,25 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
               </div>
 
               {/* Giant High-Contrast Foreign Text for Customer */}
-              <div className="rounded-xl bg-[#05070B] border border-[#00E5FF]/40 p-3">
-                <p className="text-xl sm:text-2xl font-black text-white leading-snug">
+              <div
+                style={{
+                  backgroundColor: innerBg,
+                  borderColor: borderCol,
+                }}
+                className="rounded-xl border p-3"
+              >
+                <p
+                  style={{ color: primaryText }}
+                  className="text-xl sm:text-2xl font-black leading-snug"
+                >
                   {isTranslatingLoading
                     ? 'A traduzir...'
                     : translatedCustomerText}
                 </p>
-                <p className="text-xs font-bold text-[#94A3B8] mt-1.5">
+                <p
+                  style={{ color: secondaryText }}
+                  className="text-xs font-bold mt-1.5"
+                >
                   🇵🇹 Original: &ldquo;{courierPtText}&rdquo;
                 </p>
               </div>
@@ -1999,19 +2123,28 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
               {customerTranslatedPtText && (
                 <div
                   style={{
-                    backgroundColor: '#0B0F17',
+                    backgroundColor: innerBg,
                     borderColor: '#00E5FF',
                   }}
                   className="rounded-xl border p-2.5 space-y-1"
                 >
-                  <span className="text-[10px] font-extrabold uppercase text-[#00E5FF] block">
+                  <span
+                    style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                    className="text-[10px] font-extrabold uppercase block"
+                  >
                     Tradução para o Estafeta (Português):
                   </span>
-                  <p className="text-sm font-black text-white">
+                  <p
+                    style={{ color: primaryText }}
+                    className="text-sm font-black"
+                  >
                     &ldquo;{customerTranslatedPtText}&rdquo;
                   </p>
                   {customerOriginalText && (
-                    <p className="text-[11px] text-[#94A3B8]">
+                    <p
+                      style={{ color: secondaryText }}
+                      className="text-[11px]"
+                    >
                       Cliente ({selectedLangOption.shortLabel}):{' '}
                       {customerOriginalText}
                     </p>
@@ -2030,7 +2163,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
             {/* 1. Centerpiece Stage: Two Friendly 3D-Styled Buddy Robotic Hands */}
             <div
               style={{
-                backgroundColor: '#05070B',
+                backgroundColor: isDaylight ? '#F8FAFC' : '#05070B',
                 borderColor: '#00E5FF',
               }}
               className="rounded-3xl border-2 p-3.5 space-y-3 shadow-[0_0_28px_rgba(0,229,255,0.22)] relative overflow-hidden"
@@ -2061,7 +2194,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                       setActiveFingerspellChar(null);
                     }}
                     style={{
-                      backgroundColor: '#111827',
+                      backgroundColor: '#0B0F17',
                       borderColor: '#00E5FF',
                       color: '#00E5FF',
                     }}
@@ -2104,12 +2237,15 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
               {/* Giant High-Contrast Live Caption Banner & Gesture Breakdown */}
               <div
                 style={{
-                  backgroundColor: '#0B0F17',
-                  borderColor: 'rgba(0, 229, 255, 0.45)',
+                  backgroundColor: innerBg,
+                  borderColor: borderCol,
                 }}
                 className="rounded-2xl border p-3 text-center space-y-1"
               >
-                <p className="text-lg sm:text-xl font-black text-white leading-snug">
+                <p
+                  style={{ color: primaryText }}
+                  className="text-lg sm:text-xl font-black leading-snug"
+                >
                   {activeFingerspellChar
                     ? customLibrasInput.trim()
                       ? `A soletrar: "${customLibrasInput.toUpperCase()}" (${
@@ -2118,7 +2254,10 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                       : `Sinal Manual Libras: "${activeFingerspellChar}"`
                     : currentCoreSign.ptCaption}
                 </p>
-                <p className="text-xs font-bold text-[#00E5FF]">
+                <p
+                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  className="text-xs font-bold"
+                >
                   {spellingInfo
                     ? spellingInfo.desc
                     : currentCoreSign.gestureDescription}
@@ -2175,7 +2314,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
               </div>
             </div>
 
-            {/* 3. Interactive Fingerspelling Input + Alphabet (A–Z) & Numbers (0–9) */}
+            {/* 3. Interactive Fingerspelling Input + Voice Mic + Alphabet (A–Z) & Numbers (0–9) */}
             <div
               style={{ backgroundColor: cardBg, borderColor: borderCol }}
               className="rounded-2xl border p-3 space-y-2.5"
@@ -2185,7 +2324,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   style={{ color: primaryText }}
                   className="text-xs font-extrabold"
                 >
-                  🔤 Soletrar Palavra, Nome ou Alfabeto (A–Z &amp; 0–9):
+                  🔤 Soletrar ou Falar p/ Mãos do Buddy (A–Z &amp; 0–9):
                 </span>
                 {isPlayingSpellingSequence && (
                   <button
@@ -2216,7 +2355,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   type="text"
                   value={customLibrasInput}
                   onChange={(e) => setCustomLibrasInput(e.target.value)}
-                  placeholder="Escrever palavra ou frase p/ Mãos do Buddy..."
+                  placeholder="Escrever ou falar p/ Mãos do Buddy..."
                   style={{
                     backgroundColor: innerBg,
                     borderColor: borderCol,
@@ -2224,6 +2363,22 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   }}
                   className="flex-1 rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#00E5FF]"
                 />
+                <button
+                  type="button"
+                  onClick={() => startVoiceRecognition('LIBRAS_VOICE')}
+                  style={{
+                    backgroundColor: isListeningLibrasMic
+                      ? '#00E5FF'
+                      : '#0B0F17',
+                    borderColor: '#00E5FF',
+                    color: isListeningLibrasMic ? '#05070B' : '#00E5FF',
+                  }}
+                  className="rounded-xl border px-2.5 py-2 text-xs font-extrabold flex items-center gap-1 cursor-pointer shrink-0"
+                  title="Falar no microfone para animar as Mãos do Buddy"
+                >
+                  <Mic className="h-3.5 w-3.5" />
+                  <span>{isListeningLibrasMic ? 'A Ouvir...' : '🎙️ Voz'}</span>
+                </button>
                 <button
                   type="submit"
                   style={{
@@ -2311,7 +2466,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                     sign: 'AGUARDAR' as LibrasCoreSignId,
                   },
                   {
-                    label: '🚪 Deixar na porta',
+                    label: '🚪 Pode deixar na porta',
                     spoken: 'O cliente indicou que pode deixar na porta.',
                     sign: 'CONFIRMAR' as LibrasCoreSignId,
                   },
@@ -2326,9 +2481,9 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                       speakTextPt(reply.spoken);
                     }}
                     style={{
-                      backgroundColor: '#0B0F17',
+                      backgroundColor: innerBg,
                       borderColor: '#00E5FF',
-                      color: '#FFFFFF',
+                      color: primaryText,
                     }}
                     className="rounded-xl border py-2.5 px-2 text-xs font-black text-center cursor-pointer transition active:scale-95"
                   >
@@ -2387,11 +2542,11 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                       <div
                         key={slot}
                         style={{
-                          backgroundColor: '#0B0F17',
+                          backgroundColor: cardBg,
                           borderColor: digit
                             ? '#00E5FF'
-                            : 'rgba(0, 229, 255, 0.3)',
-                          color: '#00E5FF',
+                            : borderCol,
+                          color: isDaylight ? '#090D16' : '#00E5FF',
                         }}
                         className="h-12 rounded-xl border-2 flex items-center justify-center text-2xl font-black"
                       >
@@ -2415,11 +2570,11 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                         );
                       }}
                       style={{
-                        backgroundColor: '#0B0F17',
-                        borderColor: 'rgba(0, 229, 255, 0.4)',
-                        color: '#FFFFFF',
+                        backgroundColor: cardBg,
+                        borderColor: borderCol,
+                        color: primaryText,
                       }}
-                      className="h-11 rounded-xl border text-lg font-black flex items-center justify-center cursor-pointer active:scale-95"
+                      className="h-11 rounded-xl border text-lg font-black flex items-center justify-center cursor-pointer active:scale-95 hover:border-[#00E5FF]"
                     >
                       {num}
                     </button>
@@ -2435,11 +2590,11 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                       );
                     }}
                     style={{
-                      backgroundColor: '#0B0F17',
-                      borderColor: 'rgba(0, 229, 255, 0.4)',
-                      color: '#FFFFFF',
+                      backgroundColor: cardBg,
+                      borderColor: borderCol,
+                      color: primaryText,
                     }}
-                    className="h-11 rounded-xl border text-lg font-black flex items-center justify-center cursor-pointer active:scale-95"
+                    className="h-11 rounded-xl border text-lg font-black flex items-center justify-center cursor-pointer active:scale-95 hover:border-[#00E5FF]"
                   >
                     0
                   </button>

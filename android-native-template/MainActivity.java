@@ -87,6 +87,8 @@ public class MainActivity extends BridgeActivity {
     private long lastDirectJavaCommandTs = 0L;
     private String lastPartialTranscript = "";
     private String pendingWakeTranscript = null;
+    private volatile String activeTranslatorVoiceRole = null;
+    private volatile String activeTranslatorVoiceLang = "pt-PT";
 
     // 7.5-second single-shot watchdog: stops listening so final results flush, then releases mic
     private final Runnable singleShotTimeoutRunnable = new Runnable() {
@@ -788,9 +790,27 @@ public class MainActivity extends BridgeActivity {
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
+                activeTranslatorVoiceRole = null;
+                activeTranslatorVoiceLang = "pt-BR";
+                initRecognizerIntent();
                 startSingleShotVoiceRecognition();
             }
         });
+    }
+
+    private void startTranslatorVoiceRecognitionInternal(final String langCode, final String role) {
+        activeTranslatorVoiceRole = (role != null && !role.trim().isEmpty()) ? role.trim() : "COURIER_PT";
+        activeTranslatorVoiceLang = (langCode != null && !langCode.trim().isEmpty()) ? langCode.trim() : "pt-PT";
+        recognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        recognizerIntent.putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+        );
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, activeTranslatorVoiceLang);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, activeTranslatorVoiceLang);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+        startSingleShotVoiceRecognition();
     }
 
     private void startSingleShotVoiceRecognition() {
@@ -931,6 +951,8 @@ public class MainActivity extends BridgeActivity {
 
     private void stopAndReleaseMicrophoneNow() {
         isSingleShotListening = false;
+        activeTranslatorVoiceRole = null;
+        initRecognizerIntent();
         mainHandler.removeCallbacks(singleShotTimeoutRunnable);
         destroySpeechRecognizerInternal();
         if (!isInForeground) {
@@ -939,6 +961,18 @@ public class MainActivity extends BridgeActivity {
             BuddyOverlayService.hideBubble(MainActivity.this);
         }
         notifyWebViewListeningState(false);
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            final WebView webView = getBridge().getWebView();
+            webView.post(new Runnable() {
+                @Override
+                public void run() {
+                    webView.evaluateJavascript(
+                        "window.onBuddyTranslatorListeningEnded && window.onBuddyTranslatorListeningEnded();",
+                        null
+                    );
+                }
+            });
+        }
     }
 
     private void destroySpeechRecognizerInternal() {
@@ -1052,6 +1086,32 @@ public class MainActivity extends BridgeActivity {
         if (text == null || text.trim().isEmpty()) return;
 
         final String cleanText = text.trim();
+
+        // If Translator / Libras modal initiated multi-language voice capture, route directly to translator callback!
+        if (activeTranslatorVoiceRole != null) {
+            final String roleSnap = activeTranslatorVoiceRole;
+            final String langSnap = activeTranslatorVoiceLang;
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                final WebView webView = getBridge().getWebView();
+                webView.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        String qText = JSONObject.quote(cleanText);
+                        String qRole = JSONObject.quote(roleSnap);
+                        String qLang = JSONObject.quote(langSnap);
+                        String js = "window.onBuddyTranslatorTranscript && window.onBuddyTranslatorTranscript("
+                            + qText + ", " + (isFinal ? "true" : "false") + ", " + qRole + ", " + qLang + ");";
+                        webView.evaluateJavascript(js, null);
+                    }
+                });
+            }
+            if (isFinal) {
+                activeTranslatorVoiceRole = null;
+                initRecognizerIntent();
+            }
+            return;
+        }
+
         String norm = normalizeText(cleanText);
         long now = SystemClock.uptimeMillis();
         boolean matchedFastCmd = isActionableFastCommand(norm);
@@ -1433,7 +1493,20 @@ public class MainActivity extends BridgeActivity {
             mainHandler.post(new Runnable() {
                 @Override
                 public void run() {
+                    activeTranslatorVoiceRole = null;
+                    activeTranslatorVoiceLang = "pt-BR";
+                    initRecognizerIntent();
                     startSingleShotVoiceRecognition();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void startTranslatorVoice(final String langCode, final String role) {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    startTranslatorVoiceRecognitionInternal(langCode, role);
                 }
             });
         }
