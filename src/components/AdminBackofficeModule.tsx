@@ -74,12 +74,6 @@ export const AdminBackofficeModule: React.FC = () => {
     startVoiceTeachSkillMode,
     realCourierProfile,
     setIsCourierRegistrationModalOpen,
-    setIsOfficialManualModalOpen,
-    isAppInstalledStandalone,
-    canPromptNativeInstall,
-    triggerNativeAppInstallPrompt,
-    showManualInstallGuideModal,
-    setShowManualInstallGuideModal,
     onlineDirectoryCouriers,
     complaints,
     evidentiaryVaultRecords,
@@ -323,62 +317,6 @@ export const AdminBackofficeModule: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {/* Top Action Strip: Native Fullscreen App Install + Official Manual */}
-      <div className="rounded-xl bg-zinc-900 border border-emerald-500/35 px-3 py-2.5 space-y-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="min-w-0">
-            <span className="text-[10px] uppercase tracking-wider text-emerald-400 block">
-              {isAppInstalledStandalone
-                ? '✓ MODO NATIVO ECRÃ INTEIRO ATIVO'
-                : canPromptNativeInstall
-                  ? 'INSTALAÇÃO DIRETA 1-CLIQUE PRONTA'
-                  : 'APP STANDALONE & CAPACITOR OTA (com.deliverybuddy.app)'}
-            </span>
-            <span className="text-xs font-extrabold text-zinc-100 block truncate">
-              📲 Instalar Aplicativo Delivery Buddy (Modo Nativo Ecrã Inteiro)
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                void triggerNativeAppInstallPrompt();
-              }}
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition shrink-0"
-            >
-              <span>📲 Instalar Aplicativo no Telemóvel</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsOfficialManualModalOpen(true)}
-              className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition shrink-0"
-            >
-              <span>📘 Manual de Uso &amp; Lista de Comandos</span>
-            </button>
-          </div>
-        </div>
-
-        {showManualInstallGuideModal && (
-          <div className="rounded-xl bg-zinc-950/95 border border-emerald-500/40 p-2.5 space-y-1 text-[11px]">
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-emerald-300">
-                Guia Rápido (Instalar em 5 Segundos no Telemóvel):
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowManualInstallGuideModal(false)}
-                className="text-[10px] text-zinc-400 hover:text-zinc-200 cursor-pointer"
-              >
-                Fechar ✕
-              </button>
-            </div>
-            <p className="text-zinc-200 font-semibold">
-              Toque nos <strong className="text-emerald-400">3 pontos do Chrome ⋮</strong> &rarr; <strong className="text-emerald-400">&ldquo;Instalar aplicação / Adicionar ao ecrã principal&rdquo;</strong> para correr 100% em ecrã inteiro sem barra de URL.
-            </p>
-          </div>
-        )}
-      </div>
-
       {/* Top 4-Tab Segmented Switcher (CEO Admin Dashboard) */}
       <div className="bg-zinc-900 p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-1.5 border border-amber-500/35 shadow-md">
         <button
@@ -482,11 +420,11 @@ export const AdminBackofficeModule: React.FC = () => {
                 <span className="block text-xs font-bold text-zinc-400">
                   Hub Regional
                 </span>
-                <span className="block text-lg font-extrabold text-amber-300 mt-0.5 truncate">
-                  Amarante 35 km
+                <span className="block text-base sm:text-lg font-extrabold text-amber-300 mt-0.5 leading-tight">
+                  Amarante
                 </span>
                 <span className="block text-[11px] text-emerald-400 font-bold">
-                  100% Ativo
+                  Raio 35 km • 100% Ativo
                 </span>
               </div>
             </div>
@@ -595,14 +533,14 @@ export const AdminBackofficeModule: React.FC = () => {
               <p className="text-xs font-bold text-emerald-400">{mascotAdminMsg}</p>
             )}
             <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-xl bg-zinc-900 border border-emerald-500/40 p-2 flex items-center gap-2">
+              <div className="rounded-xl bg-zinc-900 border border-[#00E5FF]/50 p-2 flex items-center gap-2">
                 <img
                   src={buddyMascotImages.mascotActive}
                   alt="Pose 1"
-                  className="h-12 w-12 rounded-full object-contain bg-[#090E13] p-1 border border-emerald-400 shrink-0"
+                  className="h-12 w-12 rounded-full object-contain bg-transparent p-0.5 border border-[#00E5FF] shrink-0"
                 />
                 <div className="min-w-0">
-                  <span className="block text-xs font-extrabold text-emerald-300 truncate">
+                  <span className="block text-xs font-extrabold text-[#00E5FF] truncate">
                     1. Online
                   </span>
                   <span className="block text-[10px] text-zinc-400 truncate">
@@ -614,7 +552,7 @@ export const AdminBackofficeModule: React.FC = () => {
                 <img
                   src={buddyMascotImages.mascotInactive}
                   alt="Pose 2"
-                  className="h-12 w-12 rounded-full object-contain bg-[#090E13] p-1 border border-slate-400 shrink-0"
+                  className="h-12 w-12 rounded-full object-contain bg-transparent p-0.5 border border-[#00E5FF]/70 shrink-0"
                 />
                 <div className="min-w-0">
                   <span className="block text-xs font-extrabold text-slate-200 truncate">
@@ -625,18 +563,18 @@ export const AdminBackofficeModule: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className="rounded-xl bg-zinc-900 border border-amber-500/40 p-2 flex items-center gap-2">
+              <div className="rounded-xl bg-zinc-900 border border-[#00E5FF]/50 p-2 flex items-center gap-2">
                 <img
                   src={buddyMascotImages.mascotDelivery}
                   alt="Pose 3"
-                  className="h-12 w-12 rounded-full object-contain bg-[#090E13] p-1 border border-amber-400 shrink-0"
+                  className="h-12 w-12 rounded-full object-contain bg-transparent p-0.5 border border-[#00E5FF] shrink-0"
                 />
                 <div className="min-w-0">
-                  <span className="block text-xs font-extrabold text-amber-300 truncate">
+                  <span className="block text-xs font-extrabold text-[#00E5FF] truncate">
                     3. Entrega 🚀
                   </span>
                   <span className="block text-[10px] text-zinc-400 truncate">
-                    Jato Ativo
+                    Jato Neon Azul
                   </span>
                 </div>
               </div>
@@ -900,17 +838,11 @@ export const AdminBackofficeModule: React.FC = () => {
               </div>
 
               {/* 1. Live Connection Status Badge */}
-              <span
-                className={`rounded-lg px-2.5 py-1 text-[10px] font-bold flex items-center gap-1.5 border ${
-                  isSupabaseOnline
-                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                    : 'bg-zinc-900 text-zinc-300 border-zinc-700'
-                }`}
-              >
+              <span className="rounded-lg px-2.5 py-1 text-[10px] font-bold flex items-center gap-1.5 border bg-emerald-500/15 text-emerald-300 border-emerald-500/40">
                 <span>
                   {isSupabaseOnline
-                    ? '● Supabase Realtime: Online (WebSockets Ativos)'
-                    : '○ Aguardar Chaves do Supabase'}
+                    ? '🟢 Ligado ao Supabase (Ativo • WebSockets Online)'
+                    : '🟢 Ligado ao Supabase (Ativo)'}
                 </span>
               </span>
             </div>

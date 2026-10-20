@@ -9,7 +9,7 @@ import { AppTabId } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
 import { playBuddyOpenChime } from '../services/voiceEngine';
 
-const CURRENT_OTA_BUILD_VERSION = 'v3.0.0-login-voice-intro';
+const CURRENT_OTA_BUILD_VERSION = 'v3.1.0-neon-blue-mascot';
 const LAST_SEEN_OTA_BUILD_KEY = 'buddy_last_seen_ota_build_v1';
 const PENDING_OTA_TOAST_KEY = 'buddy_pending_ota_toast_v1';
 
@@ -105,8 +105,8 @@ export const CockpitNavigation: React.FC = () => {
       }
     : {
         ringClass:
-          'ring-2 ring-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.6)]',
-        dotClass: 'bg-emerald-400',
+          'ring-2 ring-[#00E5FF] shadow-[0_0_16px_rgba(0,229,255,0.6)]',
+        dotClass: 'bg-[#00E5FF]',
         badgeEmoji: '🟢',
         statusShort: 'Online',
       };
@@ -187,11 +187,11 @@ export const CockpitNavigation: React.FC = () => {
                     role="status"
                     onClick={() => setShowOtaUpdatedPopup(false)}
                     style={{
-                      backgroundColor: '#064e3b',
-                      borderColor: '#34d399',
+                      backgroundColor: '#042f49',
+                      borderColor: '#00E5FF',
                       color: '#ffffff',
                     }}
-                    className="absolute -top-18 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-2xl border-2 px-3.5 py-2 shadow-[0_8px_25px_rgba(16,185,129,0.55)] animate-bounce cursor-pointer flex flex-col items-center"
+                    className="absolute -top-18 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-2xl border-2 px-3.5 py-2 shadow-[0_8px_25px_rgba(0,229,255,0.55)] animate-bounce cursor-pointer flex flex-col items-center"
                   >
                     <span className="text-xs font-black tracking-tight text-white flex items-center gap-1.5">
                       <span>🤖 ✅ Aplicativo atualizado!</span>
@@ -201,7 +201,7 @@ export const CockpitNavigation: React.FC = () => {
                     </span>
                     <div
                       style={{
-                        borderTopColor: '#34d399',
+                        borderTopColor: '#00E5FF',
                       }}
                       className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[7px] absolute -bottom-[8px] left-1/2 -translate-x-1/2"
                     />
@@ -221,7 +221,7 @@ export const CockpitNavigation: React.FC = () => {
                     border: 'none',
                     boxShadow: 'none',
                   }}
-                  className={`-mt-6 flex flex-col items-center justify-center transition cursor-pointer relative ${
+                  className={`-mt-7 flex flex-col items-center justify-center transition cursor-pointer relative ${
                     isActive ? 'scale-105' : 'hover:scale-102'
                   }`}
                 >
@@ -229,19 +229,19 @@ export const CockpitNavigation: React.FC = () => {
                     src={currentMascotImageUrl}
                     alt={`Buddy ${buddyStatusConfig.statusShort}`}
                     style={{
-                      height: '62px',
-                      width: '62px',
+                      height: '68px',
+                      width: '68px',
                       objectFit: 'contain',
-                      filter: isActive
-                        ? 'drop-shadow(0 0 10px rgba(16, 185, 129, 0.7))'
-                        : 'drop-shadow(0 3px 8px rgba(0, 0, 0, 0.75))',
+                      filter: 'none',
+                      boxShadow: 'none',
+                      backgroundColor: 'transparent',
                     }}
-                    className="rounded-full select-none pointer-events-none"
+                    className="select-none pointer-events-none"
                   />
                   <span
                     className={`text-xs leading-none whitespace-nowrap font-extrabold tracking-tight mt-0.5 ${
                       isActive
-                        ? 'text-emerald-400'
+                        ? 'text-[#00B8D4]'
                         : isDaylight
                           ? 'text-slate-800'
                           : 'text-white'

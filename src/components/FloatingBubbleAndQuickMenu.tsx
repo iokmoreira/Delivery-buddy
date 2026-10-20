@@ -504,15 +504,15 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
 
     return (
       <>
-        {/* Foreground Buddy Floating Voice Bubble (Resting at Configured Spot, 1-Tap Triggers Voice Recognition) */}
+        {/* Foreground Buddy Floating Voice Bubble (74px x 74px, Transparent, Crisp Light Neon Blue Ring, Reactive 3-Pose Mascot) */}
         <button
           type="button"
           style={{
             left: `${bubblePositions.logo.x}px`,
             top: `${bubblePositions.logo.y}px`,
-            width: '68px',
-            height: '68px',
-            padding: '4px',
+            width: '74px',
+            height: '74px',
+            padding: '2px',
             pointerEvents: 'auto',
           }}
           onPointerDown={(e) => handleBubblePointerDown('logo', e)}
@@ -526,31 +526,27 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
           }
           title="Toque 1x na bolinha Buddy para Falar (Reconhecimento de Voz) • Arraste livremente"
           aria-label="Falar com Delivery Buddy (Bolinha de Voz)"
-          className={`fixed z-40 rounded-full flex flex-col items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing transition-all duration-200 ${
+          className={`fixed z-40 rounded-full flex flex-col items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing transition-all duration-200 bg-transparent ${
             isListeningSpeechRecognition
-              ? 'bg-[#090E13] text-slate-950 border-[3px] border-emerald-400 ring-4 ring-emerald-400/50 shadow-[0_0_28px_rgba(16,185,129,0.95)]'
+              ? 'border-[2.5px] border-[#00E5FF] ring-4 ring-[#00E5FF]/40 shadow-[0_0_20px_rgba(0,229,255,0.75)]'
               : currentMascotState === 'DELIVERY'
-                ? 'bg-[#090E13] text-white border-[3px] border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.85)]'
+                ? 'border-[2.5px] border-[#00E5FF] shadow-[0_0_16px_rgba(0,229,255,0.65)]'
                 : currentMascotState === 'INACTIVE'
-                  ? 'bg-[#090E13] text-white border-[3px] border-slate-500 shadow-[0_0_18px_rgba(15,23,42,0.85)]'
-                  : 'bg-[#090E13] text-white border-[3px] border-emerald-400 shadow-[0_0_22px_rgba(16,185,129,0.65)]'
+                  ? 'border-[2px] border-[#00E5FF]/60 shadow-none'
+                  : 'border-[2.5px] border-[#00E5FF] shadow-[0_0_12px_rgba(0,229,255,0.45)]'
           }`}
         >
           {(isListeningSpeechRecognition || currentMascotState === 'DELIVERY') && (
             <span
-              className={`absolute inset-0 rounded-full animate-ping pointer-events-none ${
-                isListeningSpeechRecognition
-                  ? 'bg-emerald-400/55'
-                  : 'bg-amber-400/40'
-              }`}
+              className="absolute inset-0 rounded-full animate-ping pointer-events-none bg-[#00E5FF]/35"
             />
           )}
-          <div className="h-full w-full rounded-full overflow-hidden pointer-events-none relative z-10 flex items-center justify-center">
+          <div className="h-full w-full pointer-events-none relative z-10 flex items-center justify-center">
             <img
               src={currentMascotImageUrl}
               alt="Buddy Mascote Voz"
               style={{ objectFit: 'contain' }}
-              className="h-full w-full object-contain rounded-full"
+              className="h-full w-full object-contain"
             />
           </div>
         </button>
@@ -1381,24 +1377,24 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
             }}
             role="status"
             aria-live="polite"
-            className="fixed z-50 max-w-[300px] rounded-full bg-emerald-950/95 border border-emerald-400 px-3 py-1.5 text-[11px] font-bold text-emerald-100 shadow-[0_0_22px_rgba(16,185,129,0.55)] flex items-center gap-1.5"
+            className="fixed z-50 max-w-[300px] rounded-full bg-emerald-950/95 border border-[#00E5FF] px-3 py-1.5 text-[11px] font-bold text-emerald-100 shadow-[0_0_22px_rgba(0,229,255,0.55)] flex items-center gap-1.5"
           >
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+            <span className="h-2 w-2 rounded-full bg-[#00E5FF] animate-ping shrink-0" />
             <span className="truncate">
               🎙️ Ouvido: &ldquo;{lastHeardLiveTranscript}&rdquo;
             </span>
           </div>
         )}
 
-        {/* Single Compact Draggable Circular DB Robot Mascot Bubble (68px x 68px, pointer-events: auto, position: fixed) */}
+        {/* Single Compact Draggable Circular DB Robot Mascot Bubble (74px x 74px, Transparent, Crisp Light Neon Blue Ring) */}
         <button
           type="button"
           style={{
             left: `${bubblePositions.logo.x}px`,
             top: `${bubblePositions.logo.y}px`,
-            width: '68px',
-            height: '68px',
-            padding: '4px',
+            width: '74px',
+            height: '74px',
+            padding: '2px',
             pointerEvents: 'auto',
           }}
           onPointerDown={(e) => handleBubblePointerDown('logo', e)}
@@ -1412,31 +1408,27 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
           }
           title="Toque 1x para Maximizar Delivery Buddy ou diga 'Buddy maximizar' • Arraste livremente (X, Y)"
           aria-label="Maximizar Delivery Buddy (Bolinha Flutuante DB)"
-          className={`fixed z-50 rounded-full flex flex-col items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing transition-all duration-200 ${
+          className={`fixed z-50 rounded-full flex flex-col items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing transition-all duration-200 bg-transparent ${
             isListeningSpeechRecognition
-              ? 'bg-[#090E13] text-slate-950 border-[3px] border-emerald-400 ring-4 ring-emerald-400/50 shadow-[0_0_28px_rgba(16,185,129,0.95)]'
+              ? 'border-[2.5px] border-[#00E5FF] ring-4 ring-[#00E5FF]/40 shadow-[0_0_20px_rgba(0,229,255,0.75)]'
               : currentMascotState === 'DELIVERY'
-                ? 'bg-[#090E13] text-white border-[3px] border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.85)]'
+                ? 'border-[2.5px] border-[#00E5FF] shadow-[0_0_16px_rgba(0,229,255,0.65)]'
                 : currentMascotState === 'INACTIVE'
-                  ? 'bg-[#090E13] text-white border-[3px] border-slate-500 shadow-[0_0_18px_rgba(15,23,42,0.85)]'
-                  : 'bg-[#090E13] text-white border-[3px] border-emerald-400 shadow-[0_0_22px_rgba(16,185,129,0.65)]'
+                  ? 'border-[2px] border-[#00E5FF]/60 shadow-none'
+                  : 'border-[2.5px] border-[#00E5FF] shadow-[0_0_12px_rgba(0,229,255,0.45)]'
           }`}
         >
           {(isListeningSpeechRecognition || currentMascotState === 'DELIVERY') && (
             <span
-              className={`absolute inset-0 rounded-full animate-ping pointer-events-none ${
-                isListeningSpeechRecognition
-                  ? 'bg-emerald-400/55'
-                  : 'bg-amber-400/40'
-              }`}
+              className="absolute inset-0 rounded-full animate-ping pointer-events-none bg-[#00E5FF]/35"
             />
           )}
-          <div className="h-full w-full rounded-full overflow-hidden pointer-events-none relative z-10 flex items-center justify-center">
+          <div className="h-full w-full pointer-events-none relative z-10 flex items-center justify-center">
             <img
               src={currentMascotImageUrl}
               alt="Buddy Mascote"
               style={{ objectFit: 'contain' }}
-              className="h-full w-full object-contain rounded-full"
+              className="h-full w-full object-contain"
             />
           </div>
         </button>
@@ -1818,7 +1810,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                   }}
                   className={`shrink-0 rounded-xl px-4 py-3 text-base font-extrabold transition cursor-pointer border ${
                     rainBonusFinanceActive
-                      ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                      ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-[0_0_15px_rgba(0,229,255,0.5)]'
                       : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                   }`}
                 >

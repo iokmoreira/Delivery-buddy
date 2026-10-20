@@ -256,7 +256,7 @@ public class BuddyOverlayService extends Service {
 
     private void snapBubbleToConfiguredRestingPosition() {
         if (layoutParams == null) return;
-        int sizePx = dpToPx(68f);
+        int sizePx = dpToPx(74f);
         int[] xy = computeRestingXY(sizePx);
         layoutParams.x = xy[0];
         layoutParams.y = xy[1];
@@ -279,7 +279,7 @@ public class BuddyOverlayService extends Service {
             return;
         }
 
-        int sizePx = dpToPx(68f);
+        int sizePx = dpToPx(74f);
         int overlayType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             : WindowManager.LayoutParams.TYPE_PHONE;
@@ -298,8 +298,9 @@ public class BuddyOverlayService extends Service {
         layoutParams.y = restingXY[1];
 
         final FrameLayout container = new FrameLayout(this);
+        container.setBackgroundColor(Color.TRANSPARENT);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            container.setElevation(dpToPx(12f));
+            container.setElevation(0f);
         }
 
         mascotImageView = new ImageView(this);
@@ -469,23 +470,23 @@ public class BuddyOverlayService extends Service {
         if (state == null) state = "ACTIVE";
 
         String b64 = "";
-        int ringColor = Color.parseColor("#10B981"); // Default Emerald for ACTIVE
+        int ringColor = Color.parseColor("#00E5FF"); // Light Neon Blue for all reactive states
         if ("INACTIVE".equals(state)) {
             b64 = prefs.getString(KEY_MASCOT_INACTIVE, "");
-            ringColor = Color.parseColor("#94A3B8");
+            ringColor = Color.parseColor("#00B8D4");
         } else if ("DELIVERY".equals(state)) {
             b64 = prefs.getString(KEY_MASCOT_DELIVERY, "");
-            ringColor = Color.parseColor("#F59E0B");
+            ringColor = Color.parseColor("#00E5FF");
         } else {
             b64 = prefs.getString(KEY_MASCOT_ACTIVE, "");
-            ringColor = Color.parseColor("#10B981");
+            ringColor = Color.parseColor("#00E5FF");
         }
 
         if (isListeningState) {
-            ringColor = Color.WHITE;
+            ringColor = Color.parseColor("#00E5FF");
         }
 
-        int sizePx = dpToPx(68f);
+        int sizePx = dpToPx(74f);
         Bitmap avatarBmp = decodeCustomOrDrawBuiltinMascot(b64, state, sizePx, ringColor);
         mascotImageView.setImageBitmap(avatarBmp);
 
@@ -493,7 +494,7 @@ public class BuddyOverlayService extends Service {
         pillBg.setCornerRadius(dpToPx(8f));
 
         if (isListeningState) {
-            pillBg.setColor(Color.parseColor("#059669"));
+            pillBg.setColor(Color.parseColor("#00B8D4"));
             pillBg.setStroke(dpToPx(1f), Color.WHITE);
             String shortCap = liveCaptionText != null ? liveCaptionText.trim() : "";
             if (shortCap.length() > 9) {
@@ -517,14 +518,17 @@ public class BuddyOverlayService extends Service {
     ) {
         Bitmap out = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(out);
+        canvas.drawColor(Color.TRANSPARENT);
         float half = sizePx / 2f;
-        float strokeW = dpToPx(3f);
+        float strokeW = dpToPx(2.5f);
         float radius = half - strokeW;
 
-        Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bgPaint.setStyle(Paint.Style.FILL);
-        bgPaint.setColor(isListeningState ? Color.parseColor("#065F46") : Color.parseColor("#090E13"));
-        canvas.drawCircle(half, half, radius, bgPaint);
+        if (isListeningState) {
+            Paint listenGlow = new Paint(Paint.ANTI_ALIAS_FLAG);
+            listenGlow.setStyle(Paint.Style.FILL);
+            listenGlow.setColor(Color.argb(45, 0, 229, 255));
+            canvas.drawCircle(half, half, radius, listenGlow);
+        }
 
         boolean drewCustom = false;
         if (dataUrlOrB64 != null && !dataUrlOrB64.trim().isEmpty()) {
@@ -537,18 +541,15 @@ public class BuddyOverlayService extends Service {
                 byte[] bytes = Base64.decode(cleanB64, Base64.DEFAULT);
                 Bitmap rawBmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                 if (rawBmp != null) {
-                    BitmapShader shader = new BitmapShader(rawBmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
-                    Matrix m = new Matrix();
-                    float scale = (float) sizePx / (float) Math.min(rawBmp.getWidth(), rawBmp.getHeight());
-                    m.setScale(scale, scale);
-                    m.postTranslate(
-                        (sizePx - rawBmp.getWidth() * scale) / 2f,
-                        (sizePx - rawBmp.getHeight() * scale) / 2f
-                    );
-                    shader.setLocalMatrix(m);
-                    Paint imgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                    imgPaint.setShader(shader);
-                    canvas.drawCircle(half, half, radius - 1f, imgPaint);
+                    canvas.save();
+                    Path clipPath = new Path();
+                    clipPath.addCircle(half, half, radius - 1f, Path.Direction.CW);
+                    canvas.clipPath(clipPath);
+                    float pad = dpToPx(2f);
+                    RectF dstRect = new RectF(pad, pad, sizePx - pad, sizePx - pad);
+                    Paint imgPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+                    canvas.drawBitmap(rawBmp, null, dstRect, imgPaint);
+                    canvas.restore();
                     drewCustom = true;
                 }
             } catch (Exception ignored) {
@@ -567,20 +568,15 @@ public class BuddyOverlayService extends Service {
                 if (resId != 0) {
                     Bitmap builtinBmp = BitmapFactory.decodeResource(getResources(), resId);
                     if (builtinBmp != null) {
-                        BitmapShader shader = new BitmapShader(builtinBmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
-                        Matrix m = new Matrix();
-                        float innerDiameter = (radius - dpToPx(2f)) * 2f;
-                        float scale = innerDiameter / (float) Math.max(builtinBmp.getWidth(), builtinBmp.getHeight());
-                        m.setScale(scale, scale);
-                        m.postTranslate(
-                            (sizePx - builtinBmp.getWidth() * scale) / 2f,
-                            (sizePx - builtinBmp.getHeight() * scale) / 2f
-                        );
-                        shader.setLocalMatrix(m);
-                        Paint imgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                        imgPaint.setFilterBitmap(true);
-                        imgPaint.setShader(shader);
-                        canvas.drawCircle(half, half, radius - 1f, imgPaint);
+                        canvas.save();
+                        Path clipPath = new Path();
+                        clipPath.addCircle(half, half, radius - 1f, Path.Direction.CW);
+                        canvas.clipPath(clipPath);
+                        float pad = dpToPx(2f);
+                        RectF dstRect = new RectF(pad, pad, sizePx - pad, sizePx - pad);
+                        Paint imgPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+                        canvas.drawBitmap(builtinBmp, null, dstRect, imgPaint);
+                        canvas.restore();
                         drewCustom = true;
                     }
                 }

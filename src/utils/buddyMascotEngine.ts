@@ -15,7 +15,7 @@ export interface BuddyMascotImagesSet {
 }
 
 export const BUDDY_MASCOT_IMAGES_STORAGE_KEY =
-  'delivery_buddy_mascot_3poses_v2';
+  'delivery_buddy_mascot_3poses_v4_neon_blue';
 
 export const BUBBLE_RESTING_PRESET_STORAGE_KEY =
   'delivery_buddy_bubble_resting_preset_v1';
@@ -257,9 +257,9 @@ const MASCOT_BASE_URL =
     : './';
 
 export const DEFAULT_BUILTIN_MASCOT_IMAGES: BuddyMascotImagesSet = {
-  mascotActive: `${MASCOT_BASE_URL}mascot/buddy-active.png`,
-  mascotInactive: `${MASCOT_BASE_URL}mascot/buddy-pause.png`,
-  mascotDelivery: `${MASCOT_BASE_URL}mascot/buddy-delivery.png`,
+  mascotActive: `${MASCOT_BASE_URL}mascot/buddy-active.png?v=neon4`,
+  mascotInactive: `${MASCOT_BASE_URL}mascot/buddy-pause.png?v=neon4`,
+  mascotDelivery: `${MASCOT_BASE_URL}mascot/buddy-delivery.png?v=neon4`,
   isCustomUploaded: false,
 };
 

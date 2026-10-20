@@ -980,14 +980,14 @@ export const ShiftRadarModule: React.FC = () => {
       subdomains: 'abc',
     }).addTo(map);
 
-    // Subtle emerald 35 km regional perimeter circle around Amarante Hub
+    // Subtle Light Neon Blue (#00E5FF) 35 km regional perimeter circle around Amarante Hub
     L.circle([AMARANTE_HUB_CENTER.lat, AMARANTE_HUB_CENTER.lng], {
       radius: AMARANTE_35KM_RADIUS_METERS,
-      color: '#10b981',
+      color: '#00E5FF',
       weight: 2,
       dashArray: '8 6',
-      fillColor: '#10b981',
-      fillOpacity: 0.03,
+      fillColor: '#00E5FF',
+      fillOpacity: 0.04,
       interactive: false,
     }).addTo(map);
 
@@ -1093,10 +1093,10 @@ export const ShiftRadarModule: React.FC = () => {
     const selfCallsign = (realCourierProfile?.name || 'Tu').trim();
     const dotColor =
       currentMascotState === 'DELIVERY'
-        ? '#f59e0b'
+        ? '#00E5FF'
         : currentMascotState === 'INACTIVE'
-          ? '#94a3b8'
-          : '#10b981';
+          ? '#00B8D4'
+          : '#00E5FF';
 
     // Update or create accuracy circle
     if (selfAccuracyCircleRef.current) {
@@ -1117,17 +1117,17 @@ export const ShiftRadarModule: React.FC = () => {
       }).addTo(map);
     }
 
-    // Dynamic 3-State Robot Mascot GPS Pin for logged-in user (clean full-body robot, no emoji badge)
+    // Dynamic 3-State Transparent Neon-Blue Robot Mascot GPS Pin for logged-in user
     const selfIcon = L.divIcon({
       className: 'buddy-clean-self-pin',
       html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);">
-        <div style="position:relative;width:48px;height:48px;display:flex;align-items:center;justify-content:center;">
-          <span style="position:absolute;inset:-4px;border-radius:9999px;background:${dotColor};opacity:0.32;animation:ping 1.8s cubic-bezier(0,0,0.2,1) infinite;"></span>
-          <div style="width:46px;height:46px;border-radius:9999px;background:#090e13;border:3px solid ${dotColor};overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:2px;">
-            <img src="${currentMascotImageUrl}" alt="Buddy" style="width:100%;height:100%;object-fit:contain;border-radius:9999px;" />
+        <div style="position:relative;width:54px;height:54px;display:flex;align-items:center;justify-content:center;">
+          <span style="position:absolute;inset:-3px;border-radius:9999px;background:${dotColor};opacity:0.28;animation:ping 1.8s cubic-bezier(0,0,0.2,1) infinite;"></span>
+          <div style="width:52px;height:52px;border-radius:9999px;background:transparent;border:2.5px solid ${dotColor};display:flex;align-items:center;justify-content:center;padding:1px;">
+            <img src="${currentMascotImageUrl}" alt="Buddy" style="width:100%;height:100%;object-fit:contain;" />
           </div>
         </div>
-        <span style="margin-top:3px;background:#09090b;color:#ffffff;font-size:11px;font-weight:900;padding:2px 8px;border-radius:9999px;border:1.5px solid ${dotColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.45);">
+        <span style="margin-top:2px;background:#09090b;color:#ffffff;font-size:11px;font-weight:900;padding:2px 8px;border-radius:9999px;border:1.5px solid ${dotColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.45);">
           ${selfCallsign}
         </span>
       </div>`,
@@ -1170,7 +1170,7 @@ export const ShiftRadarModule: React.FC = () => {
     activePeerCouriers.forEach((c) => {
       if (typeof c.lat !== 'number' || typeof c.lng !== 'number') return;
       const isFree = c.orderStatus === 'DISPONIVEL';
-      const ringColor = isFree ? '#10b981' : '#f59e0b';
+      const ringColor = isFree ? '#00E5FF' : '#f59e0b';
 
       const peerIcon = L.divIcon({
         className: 'buddy-clean-peer-pin',

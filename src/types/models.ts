@@ -1173,6 +1173,8 @@ export interface RealCourierMapProfile {
   gpsSource: 'LIVE_GPS' | 'AMARANTE_FALLBACK';
   avatar_url?: string;
   active_platforms?: PlatformName[];
+  device_model?: string;
+  screen_aspect_ratio?: string;
   lastSyncedSupabaseAt?: string;
   supabaseSyncStatusText?: string;
 }
@@ -1191,5 +1193,7 @@ export interface SupabaseCourierRow {
   updated_at: string;
   avatar_url?: string;
   active_platforms?: PlatformName[];
+  device_model?: string;
+  screen_aspect_ratio?: string;
 }
 

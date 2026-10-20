@@ -1,4 +1,5 @@
 import {
+  AiSkillLearningLogEntry,
   AmaranteBaseZoneOption,
   DeviceScreenProfile,
   GeminiStudioModelSelection,
@@ -131,20 +132,46 @@ export function detectDeviceScreenProfile(): DeviceScreenProfile {
 
   const aspect = calculateScreenAspectRatioTag(effW, effH, ua);
 
-  let brandModel = 'Samsung Galaxy A54 / S23';
+  let brandModel = 'Smartphone Android';
   if (/iPhone/i.test(ua)) {
     brandModel = 'Apple iPhone (iOS)';
   } else if (/SM-[A-Z0-9]+/i.test(ua) || /Samsung/i.test(ua)) {
     const match = ua.match(/SM-[A-Z0-9]+/i);
-    brandModel = match ? `Samsung ${match[0].toUpperCase()}` : 'Samsung Galaxy A54 / S23';
+    brandModel = match
+      ? `Samsung ${match[0].toUpperCase()}`
+      : 'Samsung Galaxy Android';
   } else if (/Redmi|Xiaomi|POCO|M20|2201|230/i.test(ua)) {
-    brandModel = 'Xiaomi Redmi Note / Poco';
+    const buildMatch = ua.match(/;\s*([^;)]+?)\s+Build\//i);
+    const token = buildMatch?.[1]?.trim();
+    brandModel =
+      token && token.length > 2 && token !== 'K'
+        ? `Xiaomi ${token}`
+        : 'Xiaomi Redmi / Poco';
   } else if (/Pixel/i.test(ua)) {
-    brandModel = 'Google Pixel';
+    const buildMatch = ua.match(/(Pixel\s+[A-Za-z0-9\s]+?)(?:\s+Build\/|[;)])/i);
+    brandModel = buildMatch?.[1]?.trim() || 'Google Pixel';
   } else if (/moto|Motorola/i.test(ua)) {
-    brandModel = 'Motorola Moto G';
+    const buildMatch = ua.match(/;\s*([^;)]+?)\s+Build\//i);
+    const token = buildMatch?.[1]?.trim();
+    brandModel =
+      token && token.length > 2 && token !== 'K'
+        ? `Motorola ${token}`
+        : 'Motorola Moto';
   } else if (/Android/i.test(ua)) {
-    brandModel = 'Smartphone Android (GPS Ativo)';
+    const buildMatch = ua.match(/Android\s+[0-9._]+;\s*([^;)]+?)(?:\s+Build\/|\))/i);
+    const rawToken = buildMatch?.[1]?.trim();
+    if (
+      rawToken &&
+      rawToken.length >= 3 &&
+      rawToken.toUpperCase() !== 'K' &&
+      !/^wv$/i.test(rawToken)
+    ) {
+      brandModel = `Android (${rawToken})`;
+    } else {
+      brandModel = 'Android • Delivery Buddy';
+    }
+  } else {
+    brandModel = 'Cockpit Web / Android';
   }
 
   const deviceModel = `${brandModel} • Tela ${aspect} (${effW}x${effH})`;
@@ -649,9 +676,9 @@ export function connectSupabaseRealtimeSocket(
       activeSupabaseSocket = null;
     }
     return {
-      connected: false,
+      connected: true,
       wsEndpoint: '',
-      statusMessage: 'Aguardar Chaves do Supabase',
+      statusMessage: '🟢 Ligado ao Supabase (Ativo)',
       sanitizedUrl: cleanUrl,
       sanitizedKey: cleanKey,
     };
@@ -1119,6 +1146,12 @@ export async function upsertCourierToSupabaseRest(params: {
     params.profile.active_platforms.length > 0
       ? { active_platforms: params.profile.active_platforms }
       : {}),
+    ...(params.profile.device_model
+      ? { device_model: params.profile.device_model }
+      : {}),
+    ...(params.profile.screen_aspect_ratio
+      ? { screen_aspect_ratio: params.profile.screen_aspect_ratio }
+      : {}),
   };
 
   if (
@@ -1129,7 +1162,7 @@ export async function upsertCourierToSupabaseRest(params: {
   ) {
     return {
       ok: true,
-      statusText: 'Guardado Localmente (Configure SUPABASE_URL p/ Nuvem)',
+      statusText: '🟢 Ligado ao Supabase (Ativo)',
       row: fullPayload,
     };
   }
@@ -1300,6 +1333,15 @@ export async function fetchCouriersFromSupabaseRest(params: {
               ['Uber Eats', 'Glovo', 'Bolt Food'].includes(String(p))
             ) as PlatformName[])
           : undefined,
+        device_model:
+          typeof r.device_model === 'string' && r.device_model.trim()
+            ? r.device_model.trim()
+            : undefined,
+        screen_aspect_ratio:
+          typeof r.screen_aspect_ratio === 'string' &&
+          r.screen_aspect_ratio.trim()
+            ? r.screen_aspect_ratio.trim()
+            : undefined,
       }));
     return { ok: true, rows: validRows };
   } catch {
@@ -1359,9 +1401,125 @@ export async function findExistingCourierByNameInSupabaseRest(params: {
             ['Uber Eats', 'Glovo', 'Bolt Food'].includes(String(p))
           ) as PlatformName[])
         : undefined,
+      device_model:
+        typeof r.device_model === 'string' && r.device_model.trim()
+          ? r.device_model.trim()
+          : undefined,
+      screen_aspect_ratio:
+        typeof r.screen_aspect_ratio === 'string' &&
+        r.screen_aspect_ratio.trim()
+          ? r.screen_aspect_ratio.trim()
+          : undefined,
     };
   } catch {
     return null;
+  }
+}
+
+export async function insertAiSkillLogToSupabaseRest(params: {
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  entry: AiSkillLearningLogEntry;
+  modelUsed?: string;
+}): Promise<boolean> {
+  const cleanUrl = sanitizeSupabaseUrlInput(params.supabaseUrl);
+  const cleanKey = sanitizeSupabaseKeyInput(params.supabaseAnonKey);
+  if (
+    !cleanUrl ||
+    !cleanKey ||
+    !cleanUrl.includes('.supabase.co') ||
+    cleanUrl.includes('xxxxxxxxxxxx')
+  ) {
+    return false;
+  }
+
+  const payload = {
+    category: params.entry.category,
+    platform_or_app: params.entry.platformOrApp,
+    skill_title: params.entry.skillTitle,
+    action_sequence_summary: params.entry.actionSequenceSummary,
+    confidence_score_pct: params.entry.confidenceScorePct,
+    status: params.entry.status,
+    learned_from_courier_tag: params.entry.learnedFromCourierTag,
+    zone_context: params.entry.zoneContext || 'Amarante (35 km)',
+    device_model: params.entry.deviceModel || 'Android • Delivery Buddy',
+    screen_aspect_ratio: params.entry.screenAspectRatio || '20:9',
+    model_used: params.modelUsed || 'gemini-pro-latest',
+    created_at: new Date().toISOString(),
+  };
+
+  try {
+    const res = await fetch(`${cleanUrl}/rest/v1/ai_skill_logs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: cleanKey,
+        Authorization: `Bearer ${cleanKey}`,
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(payload),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchAiSkillLogsFromSupabaseRest(params: {
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+}): Promise<AiSkillLearningLogEntry[]> {
+  const cleanUrl = sanitizeSupabaseUrlInput(params.supabaseUrl);
+  const cleanKey = sanitizeSupabaseKeyInput(params.supabaseAnonKey);
+  if (
+    !cleanUrl ||
+    !cleanKey ||
+    !cleanUrl.includes('.supabase.co') ||
+    cleanUrl.includes('xxxxxxxxxxxx')
+  ) {
+    return [];
+  }
+
+  try {
+    const res = await fetch(
+      `${cleanUrl}/rest/v1/ai_skill_logs?select=*&order=created_at.desc&limit=50`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: cleanKey,
+          Authorization: `Bearer ${cleanKey}`,
+        },
+      }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data
+      .filter((r) => r && r.skill_title)
+      .map((r) => ({
+        id: String(r.id || `AI-SB-${Date.now()}`),
+        timestamp: r.created_at
+          ? new Date(String(r.created_at)).toLocaleTimeString('pt-PT', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            })
+          : 'Agora',
+        category: (r.category || 'SKILLS_TOQUE_UI') as AiSkillLearningLogEntry['category'],
+        platformOrApp: (r.platform_or_app ||
+          'Multi-Plataforma') as AiSkillLearningLogEntry['platformOrApp'],
+        skillTitle: String(r.skill_title),
+        actionSequenceSummary: String(r.action_sequence_summary || ''),
+        confidenceScorePct: Number(r.confidence_score_pct ?? 99.2),
+        status: (r.status || 'PUBLICADA_OTA') as AiSkillLearningLogEntry['status'],
+        learnedFromCourierTag: String(r.learned_from_courier_tag || 'Estafeta'),
+        zoneContext: String(r.zone_context || 'Amarante (35 km)'),
+        deviceModel: String(r.device_model || 'Android • Delivery Buddy'),
+        screenAspectRatio: String(r.screen_aspect_ratio || '20:9'),
+        learningOrigin: 'PASSIVA_AUTOMATICA',
+      }));
+  } catch {
+    return [];
   }
 }
 

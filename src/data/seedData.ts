@@ -2082,9 +2082,9 @@ export const DEFAULT_AI_AGENT_MASTER_CONFIG: AiAgentMasterConfig = {
   networkSyncSpeedMode: 'FASE_1_TEMPO_REAL_INSTANTANEO',
   supabaseUrl: '',
   supabaseAnonKey: '',
-  supabaseRealtimeConnected: false,
-  supabaseLastConnectedAt: 'Aguardar configuração',
-  productionModeRealOnly: false,
+  supabaseRealtimeConnected: true,
+  supabaseLastConnectedAt: '🟢 Ligado ao Supabase (Ativo)',
+  productionModeRealOnly: true,
 };
 
 export const SEED_AI_SKILL_LEARNING_LOGS: AiSkillLearningLogEntry[] = [

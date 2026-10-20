@@ -796,10 +796,10 @@ export const AuthAndVerificationGate: React.FC = () => {
                   ? 'Toca para parar a apresentação de voz'
                   : 'Toca para ouvir a apresentação do Buddy'
               }
-              className={`relative h-[136px] w-[136px] rounded-full overflow-hidden border-[3px] bg-[#090e13] flex items-center justify-center p-2 cursor-pointer transition-transform duration-300 ${
+              className={`relative h-[138px] w-[138px] rounded-full border-[3px] bg-transparent flex items-center justify-center p-1 cursor-pointer transition-transform duration-300 ${
                 isIntroSpeaking
-                  ? 'border-emerald-400 shadow-[0_0_36px_rgba(16,185,129,0.85)] scale-[1.03]'
-                  : 'border-emerald-500/80 shadow-[0_0_24px_rgba(16,185,129,0.45)] hover:scale-[1.02]'
+                  ? 'border-[#00E5FF] shadow-[0_0_36px_rgba(0,229,255,0.85)] scale-[1.04]'
+                  : 'border-[#00E5FF]/80 shadow-[0_0_22px_rgba(0,229,255,0.45)] hover:scale-[1.02]'
               }`}
             >
               <img
@@ -857,7 +857,7 @@ export const AuthAndVerificationGate: React.FC = () => {
               className={`w-full rounded-2xl border px-3.5 py-2.5 text-left transition-all cursor-pointer ${
                 isDay
                   ? 'bg-emerald-50/90 border-emerald-400 text-slate-900 shadow-sm'
-                  : 'bg-emerald-950/40 border-emerald-500/50 text-emerald-100 shadow-[0_0_20px_rgba(16,185,129,0.18)]'
+                  : 'bg-emerald-950/40 border-emerald-500/50 text-emerald-100 shadow-[0_0_20px_rgba(0,229,255,0.22)]'
               }`}
             >
               <div className="flex items-center justify-between gap-2 mb-1">

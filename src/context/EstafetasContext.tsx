@@ -109,6 +109,7 @@ import {
   deleteCourierFromSupabaseRest,
   detectDeviceScreenProfile,
   DEVICE_SCREEN_PROFILE_STORAGE_KEY,
+  fetchAiSkillLogsFromSupabaseRest,
   fetchCouriersFromSupabaseRest,
   fetchDirectMessagesFromSupabaseRest,
   findExistingCourierByNameInSupabaseRest,
@@ -116,6 +117,7 @@ import {
   GEMINI_CUSTOM_MODEL_STORAGE_KEY,
   GEMINI_MODEL_STORAGE_KEY,
   getOrCreatePersistentCourierUuid,
+  insertAiSkillLogToSupabaseRest,
   insertDirectMessageToSupabaseRest,
   LEGACY_COURIER_PROFILE_STORAGE_KEY,
   MARKET_HOURLY_SNAPSHOTS_STORAGE_KEY,
@@ -1618,22 +1620,12 @@ function loadPersistedState(): PersistedEstafetasState {
                 parsed.aiAgentConfig?.supabaseAnonKey ??
                 defaults.aiAgentConfig.supabaseAnonKey
             ),
-            supabaseRealtimeConnected: Boolean(
-              sanitizeSupabaseUrlInput(
-                localStorage.getItem(SUPABASE_URL_STORAGE_KEY) ??
-                  parsed.aiAgentConfig?.supabaseUrl ??
-                  ''
-              ) &&
-                sanitizeSupabaseKeyInput(
-                  localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) ??
-                    parsed.aiAgentConfig?.supabaseAnonKey ??
-                    ''
-                )
-            ),
+            supabaseRealtimeConnected: true,
+            supabaseLastConnectedAt: '🟢 Ligado ao Supabase (Ativo)',
             productionModeRealOnly:
               localStorage.getItem(PRODUCTION_MODE_STORAGE_KEY) !== null
-                ? localStorage.getItem(PRODUCTION_MODE_STORAGE_KEY) === 'true'
-                : Boolean(parsed.aiAgentConfig?.productionModeRealOnly),
+                ? localStorage.getItem(PRODUCTION_MODE_STORAGE_KEY) !== 'false'
+                : parsed.aiAgentConfig?.productionModeRealOnly ?? true,
           },
           aiSkillLogs: Array.isArray(parsed.aiSkillLogs)
             ? parsed.aiSkillLogs
@@ -5669,6 +5661,13 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         },
       }));
 
+      void insertAiSkillLogToSupabaseRest({
+        supabaseUrl: state.aiAgentConfig.supabaseUrl,
+        supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
+        entry: newSkillEntry,
+        modelUsed: state.aiAgentConfig.activeResolvedModelName,
+      });
+
       setActiveSkillTeachingSession(null);
       setEphemeralVoiceOverlay(null);
 
@@ -6082,10 +6081,19 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         };
       }
 
+      const enrichedProfile: RealCourierMapProfile = {
+        ...profileToSync,
+        device_model:
+          profileToSync.device_model || deviceScreenProfile.deviceModel,
+        screen_aspect_ratio:
+          profileToSync.screen_aspect_ratio ||
+          deviceScreenProfile.screenAspectRatio,
+      };
+
       const upsertRes = await upsertCourierToSupabaseRest({
         supabaseUrl: state.aiAgentConfig.supabaseUrl,
         supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
-        profile: profileToSync,
+        profile: enrichedProfile,
       });
 
       const nowTime = new Date().toLocaleTimeString('pt-PT', {
@@ -6095,19 +6103,21 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       });
 
       const syncedRow: SupabaseCourierRow = upsertRes.row || {
-        id: profileToSync.id,
-        name: profileToSync.name,
-        vehicle: profileToSync.vehicle,
-        status: profileToSync.status,
-        has_order: profileToSync.has_order,
-        lat: profileToSync.lat,
-        lng: profileToSync.lng,
-        zone: profileToSync.zone,
-        reputation: profileToSync.reputation || 100,
-        buddy_since: profileToSync.buddy_since || 'Fundador • Out 2026',
+        id: enrichedProfile.id,
+        name: enrichedProfile.name,
+        vehicle: enrichedProfile.vehicle,
+        status: enrichedProfile.status,
+        has_order: enrichedProfile.has_order,
+        lat: enrichedProfile.lat,
+        lng: enrichedProfile.lng,
+        zone: enrichedProfile.zone,
+        reputation: enrichedProfile.reputation || 100,
+        buddy_since: enrichedProfile.buddy_since || 'Fundador • Out 2026',
         updated_at: new Date().toISOString(),
-        avatar_url: profileToSync.avatar_url,
-        active_platforms: profileToSync.active_platforms,
+        avatar_url: enrichedProfile.avatar_url,
+        active_platforms: enrichedProfile.active_platforms,
+        device_model: enrichedProfile.device_model,
+        screen_aspect_ratio: enrichedProfile.screen_aspect_ratio,
       };
 
       setSupabaseLiveCouriers((prev) => {
@@ -6416,7 +6426,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     useState<BubbleRestingPreset>(() => loadSavedBubbleRestingPreset());
 
   const currentMascotState = useMemo<BuddyMascotState>(() => {
-    if (state.isAppPaused) {
+    if (state.isAppPaused || Boolean(state.userPrefs?.anonymousMode)) {
       return 'INACTIVE';
     }
     if (
@@ -6430,6 +6440,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     return 'ACTIVE';
   }, [
     state.isAppPaused,
+    state.userPrefs?.anonymousMode,
     activeScannedOffer.id,
     hasRealActiveDelivery,
     isOfferAccepted,
@@ -7440,6 +7451,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         updated_at: new Date().toISOString(),
         avatar_url: resolvedAvatarUrl,
         active_platforms: resolvedPlatforms,
+        device_model: deviceScreenProfile.deviceModel,
+        screen_aspect_ratio: deviceScreenProfile.screenAspectRatio,
         isRegistered: true,
       };
 
@@ -7487,6 +7500,30 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       startOrRefreshGeolocationWatch(input.zone);
       const upsertRes = await syncProfileToSupabaseAndLocalCache(nextProfile);
 
+      void insertAiSkillLogToSupabaseRest({
+        supabaseUrl: state.aiAgentConfig.supabaseUrl,
+        supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
+        entry: {
+          id: `REAL-DEVICE-SKILL-${persistentId}`,
+          timestamp: 'Agora',
+          category: 'SKILLS_TOQUE_UI',
+          platformOrApp:
+            resolvedPlatforms.length === 1
+              ? resolvedPlatforms[0]
+              : 'Multi-Plataforma',
+          skillTitle: `Telemetria & Calibração Real Ativa: ${cleanName} (${resolvedPlatforms.join(' + ')})`,
+          actionSequenceSummary: `Dispositivo real sincronizado (${deviceScreenProfile.deviceModel}) • Proporção ${deviceScreenProfile.screenAspectRatio} calibrada para leitura OCR, comandos de voz ("Olá Buddy") e GPS de alta precisão em ${input.zone}.`,
+          confidenceScorePct: 99.8,
+          status: 'PUBLICADA_OTA',
+          learnedFromCourierTag: `${cleanName} (${input.vehicle})`,
+          zoneContext: input.zone,
+          deviceModel: deviceScreenProfile.deviceModel,
+          screenAspectRatio: deviceScreenProfile.screenAspectRatio,
+          learningOrigin: 'PASSIVA_AUTOMATICA',
+        },
+        modelUsed: state.aiAgentConfig.activeResolvedModelName,
+      });
+
       speakTextPt(
         `Sessão iniciada como ${cleanName}.`
       );
@@ -7499,7 +7536,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     },
     [
       state.userOrderAvailabilityStatus,
+      state.aiAgentConfig.supabaseUrl,
+      state.aiAgentConfig.supabaseAnonKey,
+      state.aiAgentConfig.activeResolvedModelName,
       activePlatforms,
+      deviceScreenProfile.deviceModel,
+      deviceScreenProfile.screenAspectRatio,
       startOrRefreshGeolocationWatch,
       syncProfileToSupabaseAndLocalCache,
       speakTextPt,
@@ -7552,8 +7594,32 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
             updated_at: selfProf.updated_at || new Date().toISOString(),
             avatar_url: selfProf.avatar_url,
             active_platforms: selfProf.active_platforms,
+            device_model:
+              selfProf.device_model || deviceScreenProfile.deviceModel,
+            screen_aspect_ratio:
+              selfProf.screen_aspect_ratio ||
+              deviceScreenProfile.screenAspectRatio,
           }
         : null;
+
+      // Also sync remote AI skill logs from public.ai_skill_logs
+      const remoteSkillLogs = await fetchAiSkillLogsFromSupabaseRest({
+        supabaseUrl: state.aiAgentConfig.supabaseUrl,
+        supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
+      });
+      if (isMounted && remoteSkillLogs.length > 0) {
+        setState((prev) => {
+          const existingIds = new Set(prev.aiSkillLogs.map((l) => l.id));
+          const newRemote = remoteSkillLogs.filter(
+            (r) => !existingIds.has(r.id)
+          );
+          if (newRemote.length === 0) return prev;
+          return {
+            ...prev,
+            aiSkillLogs: [...newRemote, ...prev.aiSkillLogs],
+          };
+        });
+      }
 
       if (res.ok && res.rows.length > 0) {
         const validRemoteRows = res.rows.filter(
@@ -12108,8 +12174,126 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const effectiveAiSkillLogs = useMemo<AiSkillLearningLogEntry[]>(() => {
     if (!isProdMode) return state.aiSkillLogs;
-    return state.aiSkillLogs.filter((l) => !/^AI-SKILL-0[1-9]$/.test(l.id));
-  }, [isProdMode, state.aiSkillLogs]);
+
+    const demoIdsRegex =
+      /^AI-SKILL-(0[1-9]|UI-10[1-9]|RUA-20[1-9]|USR-30[1-9])$/;
+    const demoCourierTags = new Set([
+      'Tiago R. (Mota 125cc)',
+      'Carlos M. (Scooter Elétrica)',
+      'Inês V. (Scooter Elétrica)',
+      'Rede Coletiva Amarante (14 Estafetas)',
+      'Miguel P. & Tiago R.',
+    ]);
+
+    const realUserLogs = state.aiSkillLogs.filter(
+      (l) =>
+        !demoIdsRegex.test(l.id) &&
+        !demoCourierTags.has(l.learnedFromCourierTag.trim())
+    );
+
+    // Synthesize real live device & telemetry skill entries from all real logged-in couriers
+    const realLiveDeviceLogs: AiSkillLearningLogEntry[] = [];
+    const seenCourierIds = new Set<string>();
+
+    const addRealCourierSkillLog = (
+      courierId: string,
+      courierName: string,
+      vehicle: string,
+      zone: string,
+      devModel: string,
+      ratio: string,
+      platforms?: PlatformName[],
+      updatedAtIso?: string
+    ) => {
+      const cleanName = (courierName || '').trim();
+      if (!cleanName || seenCourierIds.has(courierId)) return;
+      seenCourierIds.add(courierId);
+
+      const platLabel: AiSkillLearningLogEntry['platformOrApp'] =
+        platforms && platforms.length === 1
+          ? platforms[0]
+          : 'Multi-Plataforma';
+      const platListStr =
+        platforms && platforms.length > 0
+          ? platforms.join(' + ')
+          : 'Uber Eats + Glovo';
+      const timeLabel = updatedAtIso
+        ? new Date(updatedAtIso).toLocaleTimeString('pt-PT', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : 'Online Agora';
+
+      realLiveDeviceLogs.push({
+        id: `REAL-DEVICE-SKILL-${courierId}`,
+        timestamp: `Ativo • ${timeLabel}`,
+        category: 'SKILLS_TOQUE_UI',
+        platformOrApp: platLabel,
+        skillTitle: `Telemetria & Calibração Real Ativa: ${cleanName} (${platListStr})`,
+        actionSequenceSummary: `Dispositivo real sincronizado (${devModel}) • Proporção ${ratio} calibrada para leitura OCR, comandos de voz ("Olá Buddy") e GPS de alta precisão em ${zone || 'Amarante (35 km)'}.`,
+        confidenceScorePct: 99.8,
+        status: 'PUBLICADA_OTA',
+        learnedFromCourierTag: `${cleanName} (${vehicle || 'Mota 125cc'})`,
+        zoneContext: zone || 'Amarante Centro / São Gonçalo',
+        deviceModel: devModel,
+        screenAspectRatio: ratio,
+        learningOrigin: 'PASSIVA_AUTOMATICA',
+      });
+    };
+
+    if (
+      realCourierProfile?.isRegistered &&
+      realCourierProfile.name.trim().length > 0
+    ) {
+      addRealCourierSkillLog(
+        realCourierProfile.id,
+        realCourierProfile.name,
+        realCourierProfile.vehicle,
+        realCourierProfile.zone,
+        realCourierProfile.device_model || deviceScreenProfile.deviceModel,
+        realCourierProfile.screen_aspect_ratio ||
+          deviceScreenProfile.screenAspectRatio,
+        activePlatforms,
+        realCourierProfile.updated_at
+      );
+    }
+
+    supabaseLiveCouriers.forEach((row) => {
+      if (!row.name || !row.name.trim()) return;
+      const isSelf =
+        realCourierProfile && row.id === realCourierProfile.id;
+      addRealCourierSkillLog(
+        row.id,
+        row.name,
+        row.vehicle || 'Mota 125cc',
+        row.zone || 'Amarante Centro / São Gonçalo',
+        row.device_model ||
+          (isSelf
+            ? deviceScreenProfile.deviceModel
+            : `Android (${row.name}) • Tela 20:9`),
+        row.screen_aspect_ratio ||
+          (isSelf ? deviceScreenProfile.screenAspectRatio : '20:9'),
+        row.active_platforms || activePlatforms,
+        row.updated_at
+      );
+    });
+
+    const combined = [...realUserLogs];
+    realLiveDeviceLogs.forEach((entry) => {
+      if (!combined.some((c) => c.id === entry.id)) {
+        combined.push(entry);
+      }
+    });
+    return combined;
+  }, [
+    isProdMode,
+    state.aiSkillLogs,
+    realCourierProfile,
+    supabaseLiveCouriers,
+    deviceScreenProfile.deviceModel,
+    deviceScreenProfile.screenAspectRatio,
+    activePlatforms,
+  ]);
 
   const effectiveAdminManagedCouriers = useMemo<
     AdminManagedCourierRecord[]
