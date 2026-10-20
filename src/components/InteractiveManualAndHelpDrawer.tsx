@@ -1688,57 +1688,79 @@ export const MenuMaisHubView: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {/* Top Executive Action Bar: 👑 Painel Admin (CEO) + 📲 Partilhar APK (QR Code) + 💬 Suporte */}
-      <div className="rounded-2xl bg-zinc-900/95 border border-emerald-500/45 p-3.5 space-y-2.5 shadow-lg">
-        <button
-          type="button"
-          onClick={() => {
-            setViewMode('PAINEL_ADMIN');
-            setActiveTab('admin_backoffice');
-          }}
-          style={{
-            background: 'linear-gradient(135deg, #065f46 0%, #b45309 100%)',
-            borderColor: '#fbbf24',
-            color: '#ffffff',
-          }}
-          className="w-full rounded-xl border-2 py-3 px-4 text-base font-extrabold flex items-center justify-between gap-2 cursor-pointer shadow-[0_0_20px_rgba(245,158,11,0.3)] transition hover:opacity-95 active:scale-98"
-        >
-          <span className="flex items-center gap-2">
-            <span>👑</span>
-            <span>Abrir Painel de Administrador (CEO)</span>
-          </span>
-          <span className="rounded-lg bg-black/35 border border-amber-300/50 px-2 py-0.5 text-xs font-extrabold text-amber-200">
-            Online • Suporte • KYC
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setIsDirectApkShareModalOpen(true)}
-          style={{ backgroundColor: '#059669', color: '#ffffff' }}
-          className="w-full rounded-xl border border-emerald-300/60 py-3 px-4 text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-lg transition hover:opacity-95"
-        >
-          <Download className="h-5 w-5 shrink-0" />
-          <span>📲 Enviar App a um Colega / Baixar APK Direto (QR Code)</span>
-        </button>
-
+      {/* Unified Monochromatic Slate & Light Neon Blue Quick Actions Grid */}
+      <div
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderColor: '#E2E8F0',
+        }}
+        className="rounded-2xl border p-3 shadow-xs space-y-2"
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => setIsLiveSupportModalOpen(true)}
-            className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 border border-sky-400 text-white py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
+            onClick={() => setIsDirectApkShareModalOpen(true)}
+            style={{
+              backgroundColor: '#F8FAFC',
+              borderColor: '#E2E8F0',
+              color: '#0F172A',
+            }}
+            className="w-full rounded-xl border py-2.5 px-3 text-left flex items-center justify-between gap-2.5 cursor-pointer transition hover:border-[#00E5FF]"
           >
-            <span>💬 Acessar Suporte em Tempo Real</span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span
+                style={{
+                  backgroundColor: 'rgba(0, 229, 255, 0.14)',
+                  borderColor: 'rgba(0, 184, 212, 0.35)',
+                  color: '#00838F',
+                }}
+                className="h-9 w-9 rounded-xl border flex items-center justify-center shrink-0"
+              >
+                <Download className="h-4 w-4 text-[#00B8D4]" />
+              </span>
+              <div className="min-w-0">
+                <span className="block text-sm font-extrabold text-[#0F172A] truncate">
+                  Enviar App / QR Code APK
+                </span>
+                <span className="block text-xs text-slate-500 truncate">
+                  Partilhar instalação direta com colegas
+                </span>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
           </button>
 
           <button
             type="button"
-            onClick={logoutSession}
-            style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
-            className="w-full rounded-xl bg-rose-600 hover:bg-rose-500 border border-rose-400 text-white py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
+            onClick={() => setIsLiveSupportModalOpen(true)}
+            style={{
+              backgroundColor: '#F8FAFC',
+              borderColor: '#E2E8F0',
+              color: '#0F172A',
+            }}
+            className="w-full rounded-xl border py-2.5 px-3 text-left flex items-center justify-between gap-2.5 cursor-pointer transition hover:border-[#00E5FF]"
           >
-            <LogOut className="h-4 w-4" />
-            <span>Terminar Sessão / Trocar Conta</span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span
+                style={{
+                  backgroundColor: 'rgba(0, 229, 255, 0.14)',
+                  borderColor: 'rgba(0, 184, 212, 0.35)',
+                  color: '#00838F',
+                }}
+                className="h-9 w-9 rounded-xl border flex items-center justify-center shrink-0 text-base"
+              >
+                💬
+              </span>
+              <div className="min-w-0">
+                <span className="block text-sm font-extrabold text-[#0F172A] truncate">
+                  Suporte em Tempo Real
+                </span>
+                <span className="block text-xs text-slate-500 truncate">
+                  Linha direta com a coordenação
+                </span>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
           </button>
         </div>
       </div>
@@ -1864,7 +1886,14 @@ export const MenuMaisHubView: React.FC = () => {
             <span>🎙️ Voz &amp; Posição da Bolinha</span>
           </span>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="rounded-lg bg-indigo-500/15 border border-indigo-500/35 px-2.5 py-0.5 text-xs font-extrabold text-indigo-300">
+            <span
+              style={{
+                backgroundColor: '#F0F9FF',
+                borderColor: '#7DD3FC',
+                color: '#0369A1',
+              }}
+              className="rounded-lg border px-2.5 py-0.5 text-xs font-extrabold"
+            >
               {buddyVoiceRate.toFixed(2)}x • pt-BR
             </span>
             <ChevronRight
@@ -1878,19 +1907,25 @@ export const MenuMaisHubView: React.FC = () => {
         {openAccordion === 'VOZ_BOLINHA' && (
           <div className="p-3.5 pt-2 border-t border-zinc-800 space-y-3 bg-zinc-950/60">
             {/* Natural Male pt-BR Voice Engine Tuning Card */}
-            <div className="rounded-xl bg-zinc-900 border border-indigo-500/35 p-3 space-y-2.5">
+            <div
+              style={{
+                backgroundColor: '#F8FAFC',
+                borderColor: '#E2E8F0',
+              }}
+              className="rounded-xl border p-3 space-y-2.5"
+            >
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
-                    <Volume2 className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span className="text-sm font-extrabold text-[#0F172A] flex items-center gap-1.5">
+                    <Volume2 className="h-4 w-4 text-[#00B8D4] shrink-0" />
                     <span>
                       Velocidade da Voz (pt-BR Masculina):{' '}
                       {buddyVoiceRate.toFixed(2)}x
                     </span>
                   </span>
-                  <span className="block text-xs text-zinc-400">
+                  <span className="block text-xs text-slate-600">
                     Voz Ativa:{' '}
-                    <strong className="text-indigo-300">
+                    <strong className="text-[#0284C7]">
                       {resolvedPtBrVoiceName}
                     </strong>{' '}
                     • Pitch 0.95 • Sem Eco
@@ -1902,7 +1937,12 @@ export const MenuMaisHubView: React.FC = () => {
                   onClick={() =>
                     speakTextPt('Uber: 6,20 limpos, 1,55 por km. Vale a pena.')
                   }
-                  className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow shrink-0"
+                  style={{
+                    backgroundColor: '#0F172A',
+                    borderColor: '#00E5FF',
+                    color: '#00E5FF',
+                  }}
+                  className="rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:opacity-95 shadow-xs shrink-0"
                 >
                   <Volume2 className="h-3.5 w-3.5" />
                   <span>🔊 Ouvir Voz ({buddyVoiceRate.toFixed(2)}x)</span>
@@ -1910,7 +1950,7 @@ export const MenuMaisHubView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="text-xs text-zinc-400">1.00x</span>
+                <span className="text-xs font-bold text-slate-600">1.00x</span>
                 <input
                   type="range"
                   min="1.0"
@@ -1919,14 +1959,19 @@ export const MenuMaisHubView: React.FC = () => {
                   value={buddyVoiceRate}
                   onChange={(e) => setBuddyVoiceRate(Number(e.target.value))}
                   aria-label="Velocidade da Voz do Buddy"
-                  className="flex-1 accent-indigo-500 cursor-pointer"
+                  className="flex-1 accent-[#00B8D4] cursor-pointer"
                 />
-                <span className="text-xs text-zinc-400">1.50x</span>
+                <span className="text-xs font-bold text-slate-600">1.50x</span>
                 {Math.abs(buddyVoiceRate - 1.15) >= 0.01 && (
                   <button
                     type="button"
                     onClick={() => setBuddyVoiceRate(1.15)}
-                    className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 px-2 py-0.5 text-xs font-bold cursor-pointer"
+                    style={{
+                      backgroundColor: '#E0F2FE',
+                      borderColor: '#7DD3FC',
+                      color: '#0369A1',
+                    }}
+                    className="rounded-lg border px-2 py-0.5 text-xs font-bold cursor-pointer"
                   >
                     Repor 1.15x
                   </button>
@@ -1934,73 +1979,86 @@ export const MenuMaisHubView: React.FC = () => {
               </div>
             </div>
 
-            {/* 3 Bundled 3D Poses Status Preview */}
+            {/* 3 Bundled 3D Poses Status Preview (Clean Light-Slate Cards + #00E5FF Active Border) */}
             <div className="grid grid-cols-3 gap-2">
               <div
-                className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
-                  currentMascotState === 'ACTIVE'
-                    ? 'bg-emerald-950/60 border-[#00E5FF]'
-                    : 'bg-zinc-900 border-zinc-800'
-                }`}
+                style={{
+                  backgroundColor:
+                    currentMascotState === 'ACTIVE' ? '#ECFEFF' : '#F8FAFC',
+                  borderColor:
+                    currentMascotState === 'ACTIVE' ? '#00E5FF' : '#E2E8F0',
+                }}
+                className="rounded-xl p-2.5 flex flex-col items-center text-center border-2 transition"
               >
-                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF] bg-transparent p-0.5 mb-1">
+                <div className="h-12 w-12 flex items-center justify-center bg-transparent mb-1">
                   <img
                     src={buddyMascotImages.mascotActive}
                     alt="Pose 1 Ativo"
                     className="h-full w-full object-contain"
                   />
                 </div>
-                <span className="text-xs font-extrabold text-[#00E5FF]">
+                <span className="text-xs font-extrabold text-[#0F172A]">
                   1. Online
                 </span>
               </div>
 
               <div
-                className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
-                  currentMascotState === 'INACTIVE'
-                    ? 'bg-slate-900 border-[#00E5FF]/80'
-                    : 'bg-zinc-900 border-zinc-800'
-                }`}
+                style={{
+                  backgroundColor:
+                    currentMascotState === 'INACTIVE' ? '#ECFEFF' : '#F8FAFC',
+                  borderColor:
+                    currentMascotState === 'INACTIVE' ? '#00E5FF' : '#E2E8F0',
+                }}
+                className="rounded-xl p-2.5 flex flex-col items-center text-center border-2 transition"
               >
-                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF]/70 bg-transparent p-0.5 mb-1">
+                <div className="h-12 w-12 flex items-center justify-center bg-transparent mb-1">
                   <img
                     src={buddyMascotImages.mascotInactive}
                     alt="Pose 2 Pausa"
                     className="h-full w-full object-contain"
                   />
                 </div>
-                <span className="text-xs font-extrabold text-slate-200">
+                <span className="text-xs font-extrabold text-[#0F172A]">
                   2. Pausa
                 </span>
               </div>
 
               <div
-                className={`rounded-xl p-2 flex flex-col items-center text-center border transition ${
-                  currentMascotState === 'DELIVERY'
-                    ? 'bg-emerald-950/60 border-[#00E5FF]'
-                    : 'bg-zinc-900 border-zinc-800'
-                }`}
+                style={{
+                  backgroundColor:
+                    currentMascotState === 'DELIVERY' ? '#ECFEFF' : '#F8FAFC',
+                  borderColor:
+                    currentMascotState === 'DELIVERY' ? '#00E5FF' : '#E2E8F0',
+                }}
+                className="rounded-xl p-2.5 flex flex-col items-center text-center border-2 transition"
               >
-                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF] bg-transparent p-0.5 mb-1">
+                <div className="h-12 w-12 flex items-center justify-center bg-transparent mb-1">
                   <img
                     src={buddyMascotImages.mascotDelivery}
                     alt="Pose 3 Entrega"
                     className="h-full w-full object-contain"
                   />
                 </div>
-                <span className="text-xs font-extrabold text-[#00E5FF]">
+                <span className="text-xs font-extrabold text-[#0F172A]">
                   3. Entrega 🚀
                 </span>
               </div>
             </div>
 
-            {/* Configurable Floating Bubble Resting Position Selector */}
+            {/* Configurable Floating Bubble Resting Position Selector (Clean Light-Slate Cards) */}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-sm font-extrabold text-zinc-100">
                   📍 Posição de Repouso da Bolinha Flutuante
                 </span>
-                <span className="rounded-full bg-emerald-950 border border-emerald-500 px-2.5 py-0.5 text-xs font-extrabold text-emerald-300">
+                <span
+                  style={{
+                    backgroundColor: '#ECFEFF',
+                    borderColor: '#00E5FF',
+                    color: '#0E7490',
+                  }}
+                  className="rounded-full border px-2.5 py-0.5 text-xs font-extrabold"
+                >
                   {BUBBLE_RESTING_PRESET_OPTIONS.find(
                     (o) => o.id === bubbleRestingPreset
                   )?.label || 'Canto Inferior Direito'}
@@ -2016,22 +2074,35 @@ export const MenuMaisHubView: React.FC = () => {
                       aria-pressed={isSelected}
                       onClick={() => setBubbleRestingPreset(opt.id)}
                       style={{
-                        backgroundColor: isSelected ? '#064e3b' : '#09090b',
-                        borderColor: isSelected ? '#10b981' : '#3f3f46',
-                        color: '#ffffff',
+                        backgroundColor: isSelected ? '#ECFEFF' : '#F8FAFC',
+                        borderColor: isSelected ? '#00E5FF' : '#E2E8F0',
+                        color: '#0F172A',
                       }}
                       className="rounded-xl px-3 py-2.5 text-left border-2 transition cursor-pointer flex items-center justify-between gap-2"
                     >
                       <div className="min-w-0">
-                        <span className="block text-sm font-extrabold truncate text-white">
+                        <span
+                          style={{ color: '#0F172A' }}
+                          className="block text-sm font-extrabold truncate"
+                        >
                           {opt.label}
                         </span>
-                        <span className="block text-xs truncate text-zinc-300">
+                        <span
+                          style={{ color: '#475569' }}
+                          className="block text-xs truncate"
+                        >
                           {opt.shortDesc}
                         </span>
                       </div>
-                      <span className="h-5 w-5 rounded-full border border-emerald-400 flex items-center justify-center text-xs font-black shrink-0">
-                        {isSelected ? '✓' : '○'}
+                      <span
+                        style={{
+                          backgroundColor: isSelected ? '#0F172A' : '#FFFFFF',
+                          borderColor: isSelected ? '#00E5FF' : '#CBD5E1',
+                          color: isSelected ? '#00E5FF' : '#64748B',
+                        }}
+                        className="h-5 w-5 rounded-full border flex items-center justify-center text-xs font-black shrink-0"
+                      >
+                        {isSelected ? '✓' : ''}
                       </span>
                     </button>
                   );
@@ -2276,28 +2347,34 @@ export const MenuMaisHubView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsOfficialManualModalOpen(true)}
-                className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow"
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderColor: '#E2E8F0',
+                  color: '#0F172A',
+                }}
+                className="rounded-xl border py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition hover:border-[#00E5FF]"
               >
-                <BookOpen className="h-4 w-4 shrink-0" />
-                <span>📘 Manual de Uso &amp; Comandos</span>
+                <BookOpen className="h-4 w-4 text-[#00B8D4] shrink-0" />
+                <span>Manual de Uso &amp; Comandos</span>
               </button>
 
               <button
                 type="button"
                 onClick={toggleWakeLock}
-                className={`rounded-xl py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
-                  wakeLockEnabled
-                    ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                }`}
+                style={{
+                  backgroundColor: wakeLockEnabled ? '#ECFEFF' : '#F8FAFC',
+                  borderColor: wakeLockEnabled ? '#00E5FF' : '#E2E8F0',
+                  color: '#0F172A',
+                }}
+                className="rounded-xl py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border"
               >
                 {wakeLockEnabled ? (
-                  <Lock className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <Lock className="h-4 w-4 text-[#00B8D4] shrink-0" />
                 ) : (
-                  <Unlock className="h-4 w-4 text-zinc-500 shrink-0" />
+                  <Unlock className="h-4 w-4 text-slate-400 shrink-0" />
                 )}
                 <span>
-                  🔒 Ecrã Sempre Ligado: {wakeLockEnabled ? 'ON' : 'OFF'}
+                  Ecrã Sempre Ligado: {wakeLockEnabled ? 'ON' : 'OFF'}
                 </span>
               </button>
             </div>
@@ -2497,6 +2574,23 @@ export const MenuMaisHubView: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Bottom Secondary Outlined Button: Terminar Sessão / Trocar Conta */}
+      <div className="pt-1">
+        <button
+          type="button"
+          onClick={logoutSession}
+          style={{
+            backgroundColor: '#F8FAFC',
+            borderColor: '#CBD5E1',
+            color: '#334155',
+          }}
+          className="w-full rounded-xl border py-2.5 px-4 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition hover:bg-slate-100"
+        >
+          <LogOut className="h-4 w-4 text-rose-500 shrink-0" />
+          <span>Terminar Sessão / Trocar Conta</span>
+        </button>
       </div>
 
       <DirectApkShareModal

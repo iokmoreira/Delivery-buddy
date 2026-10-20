@@ -76,7 +76,7 @@ export const CockpitHeader: React.FC = () => {
           </div>
         </button>
 
-        {/* Right: Compact Executive Admin Button */}
+        {/* Right: Sleek Dark Slate & Light Neon Blue Admin Capsule (No Crown, Tech Buddy HUD Icon) */}
         <button
           type="button"
           onClick={() => {
@@ -84,14 +84,72 @@ export const CockpitHeader: React.FC = () => {
             setActiveTab('admin_backoffice');
           }}
           style={{
-            backgroundColor: 'rgba(0, 229, 255, 0.14)',
-            borderColor: 'rgba(251, 191, 36, 0.55)',
-            color: '#fde68a',
+            backgroundColor: '#0F172A',
+            border: '1.5px solid #00E5FF',
+            color: '#00E5FF',
+            boxShadow: '0 2px 10px rgba(0, 229, 255, 0.2)',
           }}
-          className="rounded-xl border px-3 py-1.5 text-sm font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:opacity-95 shrink-0 shadow-sm"
+          className="rounded-full px-3 py-1.5 text-sm font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:brightness-110 active:scale-95 shrink-0"
           title="Abrir Painel de Administrador (CEO Dashboard)"
         >
-          <span>👑 Admin</span>
+          {/* Mini Buddy Admin Avatar Icon (Robot Head/Visor + Glowing #00E5FF Tech HUD Badge) */}
+          <span
+            style={{
+              backgroundColor: 'rgba(0, 229, 255, 0.14)',
+              border: '1px solid rgba(0, 229, 255, 0.45)',
+            }}
+            className="h-5 w-5 rounded-full flex items-center justify-center shrink-0"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              {/* Antenna */}
+              <line
+                x1="12"
+                y1="2"
+                x2="12"
+                y2="5"
+                stroke="#00E5FF"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <circle cx="12" cy="1.8" r="1.4" fill="#00E5FF" />
+              {/* Buddy Helmet Shell */}
+              <rect
+                x="4"
+                y="5"
+                width="16"
+                height="13"
+                rx="6.5"
+                fill="#F8FAFC"
+                stroke="#00E5FF"
+                strokeWidth="1.6"
+              />
+              {/* Dark Visor */}
+              <rect
+                x="6.5"
+                y="8"
+                width="11"
+                height="6.5"
+                rx="3.2"
+                fill="#0F172A"
+              />
+              {/* Glowing Neon Blue Eyes + HUD */}
+              <circle cx="9.6" cy="11.2" r="1.3" fill="#00E5FF" />
+              <circle cx="14.4" cy="11.2" r="1.3" fill="#00E5FF" />
+              <path
+                d="M10.5 13.2H13.5"
+                stroke="#00E5FF"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
+          <span className="tracking-tight text-[#00E5FF]">Admin</span>
         </button>
       </div>
     </header>

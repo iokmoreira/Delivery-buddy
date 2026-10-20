@@ -76,8 +76,8 @@ export const AdminBackofficeModule: React.FC = () => {
     setIsCourierRegistrationModalOpen,
     onlineDirectoryCouriers,
     complaints,
-    evidentiaryVaultRecords,
     roadHazards,
+    addRoadHazardPin,
     buddyMascotImages,
     uploadThreePoseMascotSheet,
     resetMascotImagesToBuiltin,
@@ -86,6 +86,13 @@ export const AdminBackofficeModule: React.FC = () => {
   const [subTab, setSubTab] = useState<
     'IA_SKILLS' | 'KYC' | 'RECLAMACOES_ALERTAS' | 'SUPORTE_ATIVO'
   >('IA_SKILLS');
+
+  const [archivedComplaintIds, setArchivedComplaintIds] = useState<string[]>(
+    []
+  );
+  const [publishedComplaintIds, setPublishedComplaintIds] = useState<string[]>(
+    []
+  );
 
   const mascotAdminInputRef = useRef<HTMLInputElement | null>(null);
   const [mascotAdminMsg, setMascotAdminMsg] = useState<string>('');
@@ -162,14 +169,35 @@ export const AdminBackofficeModule: React.FC = () => {
     }
   };
 
+  const normalizeCourierNameKey = (rawName: string): string =>
+    rawName.replace(/\s*\(Tu\)\s*$/i, '').trim().toLowerCase();
+
+  const localAccountKeySet = new Set(
+    localAccounts.map((acc) => normalizeCourierNameKey(acc.username))
+  );
+
+  const seenRealtimeNames = new Set<string>();
+  const deduplicatedAdminCouriers = adminManagedCouriers.filter((c) => {
+    const cleanKey = normalizeCourierNameKey(c.fullName);
+    if (!cleanKey || localAccountKeySet.has(cleanKey) || seenRealtimeNames.has(cleanKey)) {
+      return false;
+    }
+    seenRealtimeNames.add(cleanKey);
+    return true;
+  });
+
   const liveOnlineCount = Math.max(
     1,
     onlineDirectoryCouriers.length,
-    adminManagedCouriers.length
+    localAccounts.length + deduplicatedAdminCouriers.length
   );
   const totalRegisteredCount = Math.max(
-    liveOnlineCount,
-    adminManagedCouriers.length + localAccounts.length
+    1,
+    localAccounts.length + deduplicatedAdminCouriers.length
+  );
+
+  const visibleComplaints = complaints.filter(
+    (rc) => !archivedComplaintIds.includes(rc.id)
   );
 
   const [skillFilter, setSkillFilter] = useState<'TODAS' | AiSkillLogCategory>(
@@ -352,7 +380,9 @@ export const AdminBackofficeModule: React.FC = () => {
         >
           <span>
             ⚠️ Reclamações &amp; Alertas (
-            {complaints.length + roadHazards.filter((h) => !h.resolved).length})
+            {visibleComplaints.length +
+              roadHazards.filter((h) => !h.resolved).length}
+            )
           </span>
         </button>
         <button
@@ -394,84 +424,159 @@ export const AdminBackofficeModule: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-3 gap-2.5">
-              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3">
-                <span className="block text-xs font-bold text-zinc-400">
+              <div
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderColor: '#CBD5E1',
+                }}
+                className="rounded-xl border p-3"
+              >
+                <span className="block text-xs font-bold text-slate-600">
                   Online Agora
                 </span>
-                <span className="block text-2xl font-extrabold text-emerald-400 mt-0.5">
+                <span
+                  style={{ color: '#0284C7' }}
+                  className="block text-2xl font-extrabold mt-0.5"
+                >
                   {liveOnlineCount}
                 </span>
-                <span className="block text-[11px] text-zinc-400">
+                <span className="block text-[11px] font-semibold text-slate-500">
                   No Mapa (Amarante)
                 </span>
               </div>
-              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3">
-                <span className="block text-xs font-bold text-zinc-400">
+              <div
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderColor: '#CBD5E1',
+                }}
+                className="rounded-xl border p-3"
+              >
+                <span className="block text-xs font-bold text-slate-600">
                   Contas Registadas
                 </span>
-                <span className="block text-2xl font-extrabold text-white mt-0.5">
+                <span
+                  style={{ color: '#0F172A' }}
+                  className="block text-2xl font-extrabold mt-0.5"
+                >
                   {totalRegisteredCount}
                 </span>
-                <span className="block text-[11px] text-zinc-400">
+                <span className="block text-[11px] font-semibold text-slate-500">
                   Estafetas Verificados
                 </span>
               </div>
-              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3">
-                <span className="block text-xs font-bold text-zinc-400">
+              <div
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderColor: '#CBD5E1',
+                }}
+                className="rounded-xl border p-3"
+              >
+                <span className="block text-xs font-bold text-slate-600">
                   Hub Regional
                 </span>
-                <span className="block text-base sm:text-lg font-extrabold text-amber-300 mt-0.5 leading-tight">
+                <span
+                  style={{ color: '#0F172A' }}
+                  className="block text-base sm:text-lg font-extrabold mt-0.5 leading-tight"
+                >
                   Amarante
                 </span>
-                <span className="block text-[11px] text-emerald-400 font-bold">
+                <span
+                  style={{ color: '#0284C7' }}
+                  className="block text-[11px] font-extrabold"
+                >
                   Raio 35 km • 100% Ativo
                 </span>
               </div>
             </div>
 
-            {/* 30-Day / 90-Day / 1-Year Growth Projections */}
+            {/* 30-Day / 90-Day / 1-Year Growth Projections (High-Contrast Dark Slate & Deep Cyan on Clean Light-Slate Cards) */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-              <div className="rounded-xl bg-emerald-950/35 border border-emerald-500/35 p-3 space-y-1">
-                <span className="text-xs font-extrabold text-emerald-300 block">
+              <div
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderColor: '#CBD5E1',
+                }}
+                className="rounded-xl border p-3 space-y-1"
+              >
+                <span
+                  style={{ color: '#0F172A' }}
+                  className="text-xs font-extrabold block"
+                >
                   📈 Projeção 30 Dias
                 </span>
-                <span className="text-xl font-extrabold text-white block">
+                <span
+                  style={{ color: '#0F172A' }}
+                  className="text-xl font-extrabold block"
+                >
                   28 Estafetas Ativos
                 </span>
-                <span className="text-xs font-bold text-emerald-400 block">
+                <span
+                  style={{ color: '#0284C7' }}
+                  className="text-xs font-extrabold block"
+                >
                   Receita B2B Est.: € 420 / mês
                 </span>
-                <span className="text-[11px] text-zinc-400 block">
+                <span className="text-[11px] font-semibold text-slate-600 block">
                   Consolidação Amarante, Vila Meã e Lixa
                 </span>
               </div>
 
-              <div className="rounded-xl bg-indigo-950/35 border border-indigo-500/35 p-3 space-y-1">
-                <span className="text-xs font-extrabold text-indigo-300 block">
+              <div
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderColor: '#CBD5E1',
+                }}
+                className="rounded-xl border p-3 space-y-1"
+              >
+                <span
+                  style={{ color: '#0F172A' }}
+                  className="text-xs font-extrabold block"
+                >
                   🚀 Projeção 90 Dias
                 </span>
-                <span className="text-xl font-extrabold text-white block">
+                <span
+                  style={{ color: '#0F172A' }}
+                  className="text-xl font-extrabold block"
+                >
                   85 Estafetas Ativos
                 </span>
-                <span className="text-xs font-bold text-indigo-300 block">
+                <span
+                  style={{ color: '#0284C7' }}
+                  className="text-xs font-extrabold block"
+                >
                   Receita B2B Est.: € 1.450 / mês
                 </span>
-                <span className="text-[11px] text-zinc-400 block">
+                <span className="text-[11px] font-semibold text-slate-600 block">
                   Expansão Tâmega e Sousa (Felgueiras / Marco)
                 </span>
               </div>
 
-              <div className="rounded-xl bg-amber-950/35 border border-amber-500/40 p-3 space-y-1">
-                <span className="text-xs font-extrabold text-amber-300 block">
-                  👑 Projeção 1 Ano (12 Meses)
+              <div
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderColor: '#CBD5E1',
+                }}
+                className="rounded-xl border p-3 space-y-1"
+              >
+                <span
+                  style={{ color: '#0F172A' }}
+                  className="text-xs font-extrabold block"
+                >
+                  📊 Projeção 1 Ano (12 Meses)
                 </span>
-                <span className="text-xl font-extrabold text-white block">
+                <span
+                  style={{ color: '#0F172A' }}
+                  className="text-xl font-extrabold block"
+                >
                   340 Estafetas Ativos
                 </span>
-                <span className="text-xs font-bold text-amber-300 block">
+                <span
+                  style={{ color: '#0284C7' }}
+                  className="text-xs font-extrabold block"
+                >
                   Receita B2B Est.: € 5.800 / mês
                 </span>
-                <span className="text-[11px] text-zinc-400 block">
+                <span className="text-[11px] font-semibold text-slate-600 block">
                   Rede Regional Norte + Seguros &amp; Oficinas B2B
                 </span>
               </div>
@@ -1307,69 +1412,72 @@ export const AdminBackofficeModule: React.FC = () => {
             </div>
           )}
 
-          {/* Supabase Realtime Couriers */}
-          <div className="space-y-2">
-            {adminManagedCouriers.map((c) => {
-              const isSelf =
-                Boolean(c.isSelfRegistered) ||
-                Boolean(realCourierProfile && c.id === realCourierProfile.id);
-              return (
-                <div
-                  key={c.id}
-                  className={`rounded-xl bg-zinc-950 p-3 space-y-2 border ${
-                    isSelf ? 'border-emerald-500/50' : 'border-zinc-800/80'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-extrabold text-zinc-100">
-                          {c.fullName}
-                        </span>
-                        <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                          ● ONLINE NO MAPA ({c.lastActiveText})
-                        </span>
-                        <span className="rounded bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-bold text-zinc-300">
-                          Estado: {c.kycStatus}
+          {/* Supabase Realtime Couriers (Deduplicated against Local Registered Accounts) */}
+          {deduplicatedAdminCouriers.length > 0 && (
+            <div className="space-y-2">
+              {deduplicatedAdminCouriers.map((c) => {
+                const isSelf =
+                  Boolean(c.isSelfRegistered) ||
+                  Boolean(realCourierProfile && c.id === realCourierProfile.id);
+                const cleanFullName = c.fullName.replace(/\s*\(Tu\)\s*$/i, '');
+                return (
+                  <div
+                    key={c.id}
+                    className={`rounded-xl bg-zinc-950 p-3 space-y-2 border ${
+                      isSelf ? 'border-emerald-500/50' : 'border-zinc-800/80'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-extrabold text-zinc-100">
+                            {cleanFullName}
+                          </span>
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                            ● ONLINE NO MAPA ({c.lastActiveText})
+                          </span>
+                          <span className="rounded bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-bold text-zinc-300">
+                            Estado: {c.kycStatus}
+                          </span>
+                        </div>
+                        <span className="text-xs font-semibold text-[#0284C7] block mt-0.5">
+                          {c.vehicle || 'Mota 125cc'} • Zona:{' '}
+                          {c.activeAmaranteZone || c.cityZone}
                         </span>
                       </div>
-                      <span className="text-xs font-semibold text-emerald-400 block mt-0.5">
-                        {c.vehicle || 'Mota 125cc'} • Zona:{' '}
-                        {c.activeAmaranteZone || c.cityZone}
-                      </span>
-                    </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => updateAdminCourierKycStatus(c.id, 'Ativo')}
-                        className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
-                          c.kycStatus === 'Ativo'
-                            ? 'bg-emerald-500 text-slate-950'
-                            : 'bg-zinc-900 border border-zinc-800 text-zinc-300'
-                        }`}
-                      >
-                        ✓ Aprovar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateAdminCourierKycStatus(c.id, 'Suspenso')
-                        }
-                        className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
-                          c.kycStatus === 'Suspenso'
-                            ? 'bg-rose-600 text-white'
-                            : 'bg-zinc-900 border border-zinc-800 text-rose-300'
-                        }`}
-                      >
-                        🚫 Bloquear
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => updateAdminCourierKycStatus(c.id, 'Ativo')}
+                          className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                            c.kycStatus === 'Ativo'
+                              ? 'bg-emerald-500 text-slate-950'
+                              : 'bg-zinc-900 border border-zinc-800 text-zinc-300'
+                          }`}
+                        >
+                          ✓ Aprovar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateAdminCourierKycStatus(c.id, 'Suspenso')
+                          }
+                          className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                            c.kycStatus === 'Suspenso'
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-zinc-900 border border-zinc-800 text-rose-300'
+                          }`}
+                        >
+                          🚫 Bloquear
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
@@ -1378,49 +1486,165 @@ export const AdminBackofficeModule: React.FC = () => {
           ===================================================================== */}
       {subTab === 'RECLAMACOES_ALERTAS' && (
         <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800/80 p-3.5 space-y-3.5 shadow-lg">
-          {/* Feed of Courier Complaints & Forbidden Routes */}
-          <div className="rounded-xl bg-zinc-950 border border-amber-500/40 p-3.5 space-y-2.5">
+          {/* Feed of Courier Complaints & Forbidden Routes (No Yellow Pill, Executive Layout) */}
+          <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-extrabold text-amber-300 flex items-center gap-1.5">
-                <AlertTriangle className="h-4 w-4 text-amber-400" />
+              <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4 text-[#0284C7] shrink-0" />
                 <span>
-                  ⚠️ Reclamações de Rotas, Pilaretes &amp; Desvios ({complaints.length})
+                  ⚠️ Reclamações de Rotas, Pilaretes &amp; Desvios (
+                  {visibleComplaints.length})
                 </span>
               </span>
-              <span className="rounded-full bg-amber-500/20 border border-amber-500/40 px-2.5 py-0.5 text-xs font-bold text-amber-200">
-                Provas Arquivadas: {evidentiaryVaultRecords.length}
-              </span>
             </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-              {complaints.map((rc) => (
-                <div
-                  key={rc.id}
-                  className="rounded-xl bg-zinc-900 border border-zinc-800 p-3 space-y-1"
-                >
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-xs font-extrabold text-white">
-                      {rc.platform} • {rc.title}
-                    </span>
-                    <span className="rounded bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 text-[10px] font-extrabold text-rose-300">
-                      {rc.category} ({rc.confirmationsCount} conf.)
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-300">{rc.description}</p>
-                  {typeof rc.appAnnouncedKm === 'number' &&
-                    typeof rc.realLegalKm === 'number' && (
-                      <span className="block text-[10px] text-zinc-400">
-                        Anunciado: {rc.appAnnouncedKm.toFixed(1)} km → Real:{' '}
-                        {rc.realLegalKm.toFixed(1)} km
-                      </span>
-                    )}
-                </div>
-              ))}
-            </div>
+
+            {visibleComplaints.length === 0 ? (
+              <div
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderColor: '#E2E8F0',
+                  color: '#475569',
+                }}
+                className="rounded-xl border p-4 text-center text-xs font-bold"
+              >
+                Todas as reclamações foram processadas ou arquivadas.
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-96 overflow-y-auto pr-0.5">
+                {visibleComplaints.map((rc) => {
+                  const isPublished = publishedComplaintIds.includes(rc.id);
+                  return (
+                    <div
+                      key={rc.id}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderColor: '#E2E8F0',
+                      }}
+                      className="rounded-xl border p-3 space-y-2 shadow-2xs"
+                    >
+                      <div className="flex items-start justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <span
+                            style={{
+                              backgroundColor: '#0F172A',
+                              borderColor: '#00E5FF',
+                              color: '#00E5FF',
+                            }}
+                            className="rounded-lg border px-2 py-0.5 text-[11px] font-extrabold shrink-0"
+                          >
+                            {rc.platform}
+                          </span>
+                          <span
+                            style={{ color: '#0F172A' }}
+                            className="text-xs font-extrabold leading-snug"
+                          >
+                            {rc.title}
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            backgroundColor: '#F1F5F9',
+                            borderColor: '#CBD5E1',
+                            color: '#334155',
+                          }}
+                          className="rounded-md border px-2 py-0.5 text-[10px] font-extrabold shrink-0"
+                        >
+                          {rc.category} • {rc.confirmationsCount} conf.
+                        </span>
+                      </div>
+
+                      <p
+                        style={{ color: '#334155' }}
+                        className="text-xs leading-relaxed font-medium"
+                      >
+                        {rc.description}
+                      </p>
+
+                      {typeof rc.appAnnouncedKm === 'number' &&
+                        typeof rc.realLegalKm === 'number' && (
+                          <div
+                            style={{
+                              backgroundColor: '#F8FAFC',
+                              borderColor: '#CBD5E1',
+                            }}
+                            className="rounded-lg border px-2.5 py-1.5 flex items-center justify-between gap-2 flex-wrap text-xs"
+                          >
+                            <span
+                              style={{ color: '#475569' }}
+                              className="font-bold"
+                            >
+                              Discrepância de Rota (Anunciado vs. Real):
+                            </span>
+                            <span
+                              style={{ color: '#0F172A' }}
+                              className="font-extrabold"
+                            >
+                              {rc.appAnnouncedKm.toFixed(1)} km →{' '}
+                              <strong style={{ color: '#0284C7' }}>
+                                {rc.realLegalKm.toFixed(1)} km reais
+                              </strong>
+                            </span>
+                          </div>
+                        )}
+
+                      {/* 2 Actionable Admin Buttons: ✅ Publicar Alerta no Mapa & 🗑️ Arquivar */}
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isPublished) {
+                              setPublishedComplaintIds((prev) => [
+                                ...prev,
+                                rc.id,
+                              ]);
+                              addRoadHazardPin(
+                                'Obras na Via / Desvio',
+                                `${rc.title} (${rc.platform})`,
+                                'Amarante'
+                              );
+                            }
+                          }}
+                          style={{
+                            backgroundColor: isPublished
+                              ? '#E0F2FE'
+                              : '#0F172A',
+                            borderColor: isPublished ? '#0284C7' : '#00E5FF',
+                            color: isPublished ? '#0369A1' : '#00E5FF',
+                          }}
+                          className="rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:opacity-95"
+                        >
+                          <span>
+                            {isPublished
+                              ? '✅ Alerta Publicado no Mapa'
+                              : '✅ Publicar Alerta no Mapa'}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setArchivedComplaintIds((prev) => [...prev, rc.id])
+                          }
+                          style={{
+                            backgroundColor: '#F8FAFC',
+                            borderColor: '#CBD5E1',
+                            color: '#475569',
+                          }}
+                          className="rounded-xl border px-3 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer transition hover:bg-slate-100"
+                        >
+                          <span>🗑️ Arquivar</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Active Road Hazards in Amarante */}
           <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-2.5">
-            <span className="text-sm font-extrabold text-white block">
+            <span className="text-sm font-extrabold text-zinc-100 block">
               🚧 Perigos na Via Ativos em Amarante (
               {roadHazards.filter((h) => !h.resolved).length})
             </span>
@@ -1430,13 +1654,23 @@ export const AdminBackofficeModule: React.FC = () => {
                 .map((haz) => (
                   <div
                     key={haz.id}
-                    className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2"
+                    style={{
+                      backgroundColor: '#F8FAFC',
+                      borderColor: '#E2E8F0',
+                    }}
+                    className="rounded-xl border p-2.5 flex items-center justify-between gap-2"
                   >
                     <div>
-                      <span className="text-xs font-extrabold text-amber-300 block">
+                      <span
+                        style={{ color: '#0F172A' }}
+                        className="text-xs font-extrabold block"
+                      >
                         {haz.hazardType} — {haz.streetLocation}
                       </span>
-                      <span className="text-[11px] text-zinc-400 block">
+                      <span
+                        style={{ color: '#475569' }}
+                        className="text-[11px] font-medium block"
+                      >
                         Reportado por {haz.reporterName} • {haz.reportedAt} (
                         {haz.confirmations} confirmações)
                       </span>
@@ -1446,10 +1680,10 @@ export const AdminBackofficeModule: React.FC = () => {
             </div>
           </div>
 
-          {/* Send Official Admin Broadcast */}
+          {/* Streamlined Send Official Admin Broadcast Card */}
           <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-3">
             <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
-              <Megaphone className="h-4 w-4 text-emerald-400" />
+              <Megaphone className="h-4 w-4 text-[#0284C7]" />
               <span>Enviar Comunicado Oficial à Frota</span>
             </span>
 
@@ -1459,7 +1693,12 @@ export const AdminBackofficeModule: React.FC = () => {
                 onChange={(e) =>
                   setTargetType(e.target.value as AdminBroadcastTargetType)
                 }
-                className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderColor: '#CBD5E1',
+                  color: '#0F172A',
+                }}
+                className="w-full rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#0284C7]"
               >
                 <option value="TODOS_ESTAFETAS">Todos os Estafetas</option>
                 <option value="ZONA_ESPECIFICA">
@@ -1472,7 +1711,12 @@ export const AdminBackofficeModule: React.FC = () => {
                 value={msgTitle}
                 onChange={(e) => setMsgTitle(e.target.value)}
                 placeholder="Título do comunicado..."
-                className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderColor: '#CBD5E1',
+                  color: '#0F172A',
+                }}
+                className="w-full rounded-xl border px-3 py-2 text-xs font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#0284C7]"
               />
               <input
                 type="text"
@@ -1480,162 +1724,55 @@ export const AdminBackofficeModule: React.FC = () => {
                 value={msgBody}
                 onChange={(e) => setMsgBody(e.target.value)}
                 placeholder="Mensagem curta para os estafetas..."
-                className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderColor: '#CBD5E1',
+                  color: '#0F172A',
+                }}
+                className="w-full rounded-xl border px-3 py-2 text-xs font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#0284C7]"
               />
               <button
                 type="submit"
-                className="w-full rounded-xl py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                style={{
+                  backgroundColor: '#0F172A',
+                  borderColor: '#00E5FF',
+                  color: '#00E5FF',
+                }}
+                className="w-full rounded-xl border py-2.5 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95 shadow-xs"
               >
                 <Send className="h-3.5 w-3.5" />
                 <span>Publicar Comunicado Oficial</span>
               </button>
             </form>
 
-            <div className="space-y-1.5 pt-1">
-              {adminBroadcasts.slice(0, 3).map((b) => (
-                <div
-                  key={b.id}
-                  className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 text-xs"
-                >
-                  <span className="font-bold text-zinc-100 block">
-                    {b.title}
-                  </span>
-                  <span className="text-[11px] text-zinc-400">{b.body}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* B2B Sponsored Campaigns */}
-          <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
-                <Briefcase className="h-4 w-4 text-zinc-300" />
-                <span>Campanhas Patrocinadas B2B ({adminSponsoredCampaigns.length})</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsCampaignModalOpen(true)}
-                className="rounded-lg bg-white text-zinc-950 px-2.5 py-1 text-xs font-extrabold flex items-center gap-1 cursor-pointer"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Nova Campanha</span>
-              </button>
-            </div>
-            <div className="space-y-2">
-              {adminSponsoredCampaigns.map((camp) => (
-                <div
-                  key={camp.id}
-                  className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2"
-                >
-                  <div className="min-w-0">
-                    <span className="text-xs font-bold text-zinc-100 block truncate">
-                      {camp.sponsorName} — {camp.offerHeadline}
+            {adminBroadcasts.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                {adminBroadcasts.slice(0, 3).map((b) => (
+                  <div
+                    key={b.id}
+                    style={{
+                      backgroundColor: '#F8FAFC',
+                      borderColor: '#E2E8F0',
+                    }}
+                    className="rounded-xl border p-2.5 text-xs"
+                  >
+                    <span
+                      style={{ color: '#0F172A' }}
+                      className="font-extrabold block"
+                    >
+                      {b.title}
                     </span>
-                    <span className="text-[11px] text-zinc-400 block">
-                      {camp.discountOrBonusValue} • {camp.viewsCount} vistas
+                    <span
+                      style={{ color: '#475569' }}
+                      className="text-[11px] font-medium"
+                    >
+                      {b.body}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleAdminSponsoredCampaignActive(camp.id)}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-extrabold shrink-0 cursor-pointer ${
-                      camp.isActive
-                        ? 'bg-emerald-500 text-slate-950'
-                        : 'bg-zinc-800 text-zinc-400'
-                    }`}
-                  >
-                    {camp.isActive ? 'Ativa' : 'Pausada'}
-                  </button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
-
-          {isCampaignModalOpen && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-              <form
-                onSubmit={handleCreateCampaign}
-                className="w-full max-w-[380px] rounded-xl bg-zinc-900 border border-zinc-800 p-4 space-y-3"
-              >
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                  <h3 className="text-sm font-semibold text-zinc-100">
-                    Publicar Patrocínio B2B
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setIsCampaignModalOpen(false)}
-                    className="p-1 rounded bg-zinc-950 text-zinc-400 cursor-pointer"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    required
-                    value={sponsorName}
-                    onChange={(e) => setSponsorName(e.target.value)}
-                    placeholder="Marca / Parceiro (ex: Fidelidade Mota)"
-                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
-                  />
-                  <select
-                    value={category}
-                    onChange={(e) =>
-                      setCategory(e.target.value as AdminSponsorCategory)
-                    }
-                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
-                  >
-                    <option value="Seguros (Destaque Especial)">
-                      Seguros (Destaque Especial)
-                    </option>
-                    <option value="Pneus & Travões">Pneus &amp; Travões</option>
-                    <option value="Óleo & Manutenção Mecânica">
-                      Óleo &amp; Manutenção Mecânica
-                    </option>
-                    <option value="Combustível & Carregamento Elétrico">
-                      Combustível &amp; Elétrico
-                    </option>
-                  </select>
-                  <select
-                    value={placement}
-                    onChange={(e) =>
-                      setPlacement(e.target.value as AdminBannerPlacement)
-                    }
-                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
-                  >
-                    <option value="Destaque no Painel">
-                      Destaque no Painel
-                    </option>
-                    <option value="Catálogo de Prêmios">
-                      Catálogo de Prêmios
-                    </option>
-                  </select>
-                  <input
-                    type="text"
-                    required
-                    value={offerHeadline}
-                    onChange={(e) => setOfferHeadline(e.target.value)}
-                    placeholder="Oferta (ex: Seguro Acidentes Trabalho)"
-                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
-                  />
-                  <input
-                    type="text"
-                    value={discountOrBonusValue}
-                    onChange={(e) => setDiscountOrBonusValue(e.target.value)}
-                    placeholder="Valor (ex: -20% Mensalidade)"
-                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-100"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full rounded-lg py-2 bg-white text-zinc-950 font-semibold text-xs cursor-pointer"
-                >
-                  Publicar Campanha
-                </button>
-              </form>
-            </div>
-          )}
         </section>
       )}
 
@@ -1643,18 +1780,25 @@ export const AdminBackofficeModule: React.FC = () => {
           VIEW 3: [💬 CENTRAL DE SUPORTE ATIVO (TEMPO REAL)] — LIVE ADMIN INBOX
           ===================================================================== */}
       {subTab === 'SUPORTE_ATIVO' && (
-        <section className="rounded-2xl bg-zinc-900/95 border border-sky-500/40 p-4 space-y-3.5 shadow-lg">
+        <section className="rounded-2xl bg-zinc-900/95 border border-sky-500/40 p-3.5 space-y-3.5 shadow-lg">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
               <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-sky-400" />
+                <MessageSquare className="h-4 w-4 text-[#0284C7]" />
                 <span>💬 Central de Suporte Ativo (Tempo Real)</span>
               </h3>
               <p className="text-xs text-zinc-400">
                 Receba e responda em tempo real às mensagens de suporte enviadas pelos estafetas na App e no Login.
               </p>
             </div>
-            <span className="rounded-full bg-emerald-500/20 border border-emerald-400/50 px-3 py-1 text-xs font-extrabold text-emerald-300">
+            <span
+              style={{
+                backgroundColor: '#ECFEFF',
+                borderColor: '#00E5FF',
+                color: '#0E7490',
+              }}
+              className="rounded-full border px-3 py-1 text-xs font-extrabold"
+            >
               ● Canal Direto Ativo
             </span>
           </div>
@@ -1679,7 +1823,7 @@ export const AdminBackofficeModule: React.FC = () => {
                     <div className="flex items-center justify-between gap-3 mb-1 text-[11px] opacity-85">
                       <span className="font-extrabold">
                         {msg.topicBadge ||
-                          (isAdmin ? '👑 Suporte Admin (CEO)' : '👤 Estafeta')}
+                          (isAdmin ? 'Suporte Admin' : '👤 Estafeta')}
                       </span>
                       <span>{msg.timestamp}</span>
                     </div>
@@ -1692,20 +1836,25 @@ export const AdminBackofficeModule: React.FC = () => {
 
           <form
             onSubmit={(e) => void handleSendAdminSupportReply(e)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 w-full"
           >
             <input
               type="text"
               value={adminReplyText}
               onChange={(e) => setAdminReplyText(e.target.value)}
-              placeholder="Escrever resposta oficial como Administrador (CEO)..."
-              className="flex-1 rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-3 text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
+              placeholder="Escrever resposta de suporte..."
+              className="min-w-0 flex-1 rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-[#00E5FF]"
             />
             <button
               type="submit"
-              className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-3 text-sm font-extrabold flex items-center gap-1.5 cursor-pointer shrink-0 shadow-md"
+              style={{
+                backgroundColor: '#0F172A',
+                borderColor: '#00E5FF',
+                color: '#00E5FF',
+              }}
+              className="rounded-xl border px-3.5 py-2.5 text-xs sm:text-sm font-extrabold flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap shadow-xs transition hover:opacity-95"
             >
-              <Send className="h-4 w-4" />
+              <Send className="h-3.5 w-3.5 shrink-0" />
               <span>Responder</span>
             </button>
           </form>

@@ -190,6 +190,30 @@
   color: #64748b !important;
 }
 
+/* High-contrast accent text in Daylight mode so pale cyan/amber/indigo never wash out on white cards */
+#app-audit-root.theme-daylight .text-emerald-200,
+#app-audit-root.theme-daylight .text-emerald-300,
+#app-audit-root.theme-daylight .text-emerald-400,
+#app-audit-root.theme-daylight .text-sky-300,
+#app-audit-root.theme-daylight .text-sky-400 {
+  color: #0284c7 !important;
+}
+
+#app-audit-root.theme-daylight .text-amber-200,
+#app-audit-root.theme-daylight .text-amber-300,
+#app-audit-root.theme-daylight .text-amber-400 {
+  color: #0f172a !important;
+}
+
+#app-audit-root.theme-daylight .text-indigo-300,
+#app-audit-root.theme-daylight .text-indigo-400 {
+  color: #0369a1 !important;
+}
+
+#app-audit-root.theme-daylight .text-rose-300 {
+  color: #be123c !important;
+}
+
 /* Active buttons & active segmented pills in Daylight mode: Deep Charcoal with White Text */
 #app-audit-root.theme-daylight button.bg-white.text-zinc-950,
 #app-audit-root.theme-daylight span.bg-white.text-zinc-950 {

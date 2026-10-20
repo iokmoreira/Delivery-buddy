@@ -343,18 +343,71 @@ const AppCockpitShell: React.FC = () => {
         {!isBubbleMinimized && (
           <>
             {isAdminView ? (
-              <header className="sticky top-0 z-40 min-h-14 py-2.5 bg-zinc-950/95 border-b border-amber-500/40 px-4 flex items-center justify-between gap-2 flex-wrap shadow-md">
+              <header className="sticky top-0 z-40 min-h-14 py-2.5 bg-zinc-950/95 border-b border-slate-200 px-4 flex items-center justify-between gap-2 flex-wrap shadow-xs">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">👑</span>
-                  <span className="text-base font-extrabold text-amber-300">
-                    Painel de Administrador (CEO)
+                  <span
+                    style={{
+                      backgroundColor: '#0F172A',
+                      border: '1.5px solid #00E5FF',
+                    }}
+                    className="h-7 w-7 rounded-full flex items-center justify-center shrink-0 shadow-[0_2px_8px_rgba(0,229,255,0.2)]"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
+                    >
+                      <line
+                        x1="12"
+                        y1="2"
+                        x2="12"
+                        y2="5"
+                        stroke="#00E5FF"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
+                      <circle cx="12" cy="1.8" r="1.4" fill="#00E5FF" />
+                      <rect
+                        x="4"
+                        y="5"
+                        width="16"
+                        height="13"
+                        rx="6.5"
+                        fill="#F8FAFC"
+                        stroke="#00E5FF"
+                        strokeWidth="1.6"
+                      />
+                      <rect
+                        x="6.5"
+                        y="8"
+                        width="11"
+                        height="6.5"
+                        rx="3.2"
+                        fill="#0F172A"
+                      />
+                      <circle cx="9.6" cy="11.2" r="1.3" fill="#00E5FF" />
+                      <circle cx="14.4" cy="11.2" r="1.3" fill="#00E5FF" />
+                    </svg>
+                  </span>
+                  <span
+                    style={{ color: '#0F172A' }}
+                    className="text-base font-extrabold tracking-tight"
+                  >
+                    Painel de Administrador
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setIsOfficialManualModalOpen(true)}
-                    className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition"
+                    style={{
+                      backgroundColor: '#F8FAFC',
+                      borderColor: '#CBD5E1',
+                      color: '#0F172A',
+                    }}
+                    className="rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:border-[#00E5FF]"
                   >
                     <span>📘 Manual</span>
                   </button>
@@ -364,10 +417,15 @@ const AppCockpitShell: React.FC = () => {
                       setViewMode('MODO_ESTAFETA');
                       setActiveTab('scanner');
                     }}
-                    className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    style={{
+                      backgroundColor: '#0F172A',
+                      borderColor: '#00E5FF',
+                      color: '#00E5FF',
+                    }}
+                    className="rounded-xl border px-3.5 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-xs transition hover:opacity-95"
                   >
                     <ArrowLeft className="h-4 w-4" />
-                    <span>Voltar à App do Estafeta</span>
+                    <span>Voltar à App</span>
                   </button>
                 </div>
               </header>

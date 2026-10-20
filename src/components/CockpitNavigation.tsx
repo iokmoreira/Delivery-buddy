@@ -9,7 +9,7 @@ import { AppTabId } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
 import { playBuddyOpenChime } from '../services/voiceEngine';
 
-const CURRENT_OTA_BUILD_VERSION = 'v3.2.0-voice-105-115-login-hero';
+const CURRENT_OTA_BUILD_VERSION = 'v3.3.0-neon-ui-admin-clean';
 const LAST_SEEN_OTA_BUILD_KEY = 'buddy_last_seen_ota_build_v1';
 const PENDING_OTA_TOAST_KEY = 'buddy_pending_ota_toast_v1';
 
@@ -221,7 +221,7 @@ export const CockpitNavigation: React.FC = () => {
                     border: 'none',
                     boxShadow: 'none',
                   }}
-                  className={`-mt-7 flex flex-col items-center justify-center transition cursor-pointer relative ${
+                  className={`-mt-4 flex flex-col items-center justify-center transition cursor-pointer relative ${
                     isActive ? 'scale-105' : 'hover:scale-102'
                   }`}
                 >
@@ -229,17 +229,17 @@ export const CockpitNavigation: React.FC = () => {
                     src={currentMascotImageUrl}
                     alt={`Buddy ${buddyStatusConfig.statusShort}`}
                     style={{
-                      height: '68px',
-                      width: '68px',
+                      height: '52px',
+                      width: '52px',
                       objectFit: 'contain',
                       filter: 'none',
                       boxShadow: 'none',
                       backgroundColor: 'transparent',
                     }}
-                    className="select-none pointer-events-none"
+                    className="select-none pointer-events-none block mx-auto"
                   />
                   <span
-                    className={`text-xs leading-none whitespace-nowrap font-extrabold tracking-tight mt-0.5 ${
+                    className={`text-xs leading-none whitespace-nowrap font-extrabold tracking-tight mt-1 ${
                       isActive
                         ? 'text-[#00B8D4]'
                         : isDaylight
