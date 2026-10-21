@@ -582,6 +582,32 @@ export async function publishAccountRegistrationToCloud(
     isFounderAdmin ? 'approved' : account.approvalStatus || 'pending'
   );
 
+  const existingLat =
+    existingCourierMatch &&
+    typeof existingCourierMatch.lat === 'number' &&
+    Number.isFinite(existingCourierMatch.lat) &&
+    existingCourierMatch.lat !== 0
+      ? existingCourierMatch.lat
+      : existingReqMatch &&
+          typeof existingReqMatch.lat === 'number' &&
+          Number.isFinite(existingReqMatch.lat) &&
+          existingReqMatch.lat !== 0
+        ? existingReqMatch.lat
+        : null;
+
+  const existingLng =
+    existingCourierMatch &&
+    typeof existingCourierMatch.lng === 'number' &&
+    Number.isFinite(existingCourierMatch.lng) &&
+    existingCourierMatch.lng !== 0
+      ? existingCourierMatch.lng
+      : existingReqMatch &&
+          typeof existingReqMatch.lng === 'number' &&
+          Number.isFinite(existingReqMatch.lng) &&
+          existingReqMatch.lng !== 0
+        ? existingReqMatch.lng
+        : null;
+
   const cleanReq: CloudApprovalRequest = {
     ...account,
     id,
@@ -589,13 +615,21 @@ export async function publishAccountRegistrationToCloud(
     role: isFounderAdmin ? 'admin' : 'courier',
     approvalStatus: resolvedApproval,
     lat:
-      typeof account.lat === 'number' && Number.isFinite(account.lat) && account.lat !== 0
-        ? Number(account.lat.toFixed(6))
-        : DEFAULT_AMARANTE_LAT,
+      existingLat !== null
+        ? existingLat
+        : typeof account.lat === 'number' &&
+            Number.isFinite(account.lat) &&
+            account.lat !== 0
+          ? Number(account.lat.toFixed(6))
+          : DEFAULT_AMARANTE_LAT,
     lng:
-      typeof account.lng === 'number' && Number.isFinite(account.lng) && account.lng !== 0
-        ? Number(account.lng.toFixed(6))
-        : DEFAULT_AMARANTE_LNG,
+      existingLng !== null
+        ? existingLng
+        : typeof account.lng === 'number' &&
+            Number.isFinite(account.lng) &&
+            account.lng !== 0
+          ? Number(account.lng.toFixed(6))
+          : DEFAULT_AMARANTE_LNG,
     createdAt: account.createdAt || new Date().toISOString(),
     updatedAt: account.updatedAt || new Date().toISOString(),
   };
@@ -789,6 +823,14 @@ export async function publishTaughtCrosswalkToCloud(
     timestamp: Date.now(),
     payload: crosswalk,
   });
+}
+
+export function removeCrosswalkFromCloud(crosswalkId: string): void {
+  if (!crosswalkId) return;
+  if (inMemoryCloudState.crosswalks[crosswalkId]) {
+    delete inMemoryCloudState.crosswalks[crosswalkId];
+    persistAndNotifyCloudState();
+  }
 }
 
 export async function publishWalkieMessageToCloud(
@@ -1588,8 +1630,6 @@ export async function saveCourierContactAndOptInPreferences(params: {
 
 export function broadcastLocalStorageAccountsAndProfileNow(): void {
   if (typeof window === 'undefined') return;
-  let activeProfileId: string | null = null;
-  let activeProfileNameKey: string | null = null;
 
   try {
     const rawProfile =
@@ -1610,8 +1650,6 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
         const resolvedId = isFounder
           ? FOUNDER_ADMIN_COURIER_ID
           : parsedProfile.id;
-        activeProfileId = resolvedId;
-        activeProfileNameKey = normalizeAccountKey(cleanName);
         const contactPrefs = getCourierContactAndOptInPreferences(cleanName);
 
         void publishCourierPresenceToCloud({
@@ -1635,69 +1673,6 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
           inMemoryCloudState.couriers[resolvedId].optInEmail =
             contactPrefs.optInEmail;
         }
-      }
-    }
-  } catch {
-    // ignore storage errors
-  }
-
-  try {
-    const rawAccounts = window.localStorage.getItem('buddy_saved_accounts_v1');
-    if (rawAccounts) {
-      const parsedAccounts = JSON.parse(rawAccounts) as Array<{
-        courierId?: string;
-        username?: string;
-        emailOrPhone?: string;
-        whatsapp?: string;
-        email?: string;
-        optInWhatsapp?: boolean;
-        optInEmail?: boolean;
-        vehicle?: CourierRegistrationVehicle;
-        platforms?: PlatformName[];
-        zone?: AmaranteBaseZoneOption;
-        status?: 'APROVADO' | 'PENDENTE' | 'BLOQUEADO';
-      }>;
-      if (Array.isArray(parsedAccounts)) {
-        parsedAccounts.forEach((acc) => {
-          if (!acc || !acc.username || !acc.username.trim()) return;
-          const cleanName = acc.username.trim();
-          const nameKey = normalizeAccountKey(cleanName);
-          // Skip if we already published the active profile above
-          if (activeProfileNameKey && nameKey === activeProfileNameKey) {
-            return;
-          }
-          const isFounder = isCourierAdminByName(cleanName);
-          const accId = isFounder
-            ? FOUNDER_ADMIN_COURIER_ID
-            : acc.courierId ||
-              (activeProfileId && nameKey === activeProfileNameKey
-                ? activeProfileId
-                : `courier_acc_${nameKey.replace(/[^a-z0-9]/g, '') || 'user'}`);
-          void publishAccountRegistrationToCloud({
-            id: accId,
-            username: cleanName,
-            emailOrPhone: acc.emailOrPhone || acc.whatsapp || acc.email || cleanName,
-            whatsapp: acc.whatsapp,
-            email: acc.email,
-            optInWhatsapp: acc.optInWhatsapp,
-            optInEmail: acc.optInEmail,
-            vehicle: acc.vehicle || 'Mota 125cc',
-            platforms:
-              Array.isArray(acc.platforms) && acc.platforms.length > 0
-                ? acc.platforms
-                : ['Uber Eats', 'Glovo'],
-            zone: acc.zone || 'Amarante Centro / São Gonçalo',
-            approvalStatus: isFounder
-              ? 'approved'
-              : acc.status === 'BLOQUEADO'
-                ? 'blocked'
-                : acc.status === 'APROVADO'
-                  ? 'approved'
-                  : 'pending',
-            lat: DEFAULT_AMARANTE_LAT,
-            lng: DEFAULT_AMARANTE_LNG,
-          });
-        });
       }
     }
   } catch {
@@ -1953,9 +1928,10 @@ export function getActiveCloudCourierRows(
 }
 
 /**
- * Computes a deterministic visual offset (±0.00022 lat/lng) when two or more couriers
- * are within < 25 meters of each other (e.g., two phones inside the same house or on Amarante fallback)
- * so both 3D Buddy pins and name badges sit clearly side-by-side on the map.
+ * Computes a deterministic visual offset (±0.00012 lat/lng) ONLY when two or more couriers
+ * are physically within < 12 meters of each other (e.g., two phones inside the same house at the same time)
+ * so both 3D Buddy pins and name badges sit clearly side-by-side on the map without overlapping.
+ * Once a courier moves >= 12m away, both pins render at their exact respective real locations.
  */
 export function computeSameLocationPinOffset(
   targetId: string,
@@ -1982,7 +1958,7 @@ export function computeSameLocationPinOffset(
       const dLng =
         (pLng - safeLng) * 111320 * Math.cos((safeLat * Math.PI) / 180);
       const distMeters = Math.sqrt(dLat * dLat + dLng * dLng);
-      return distMeters < 25;
+      return distMeters < 12;
     })
     .sort((a, b) => a.id.localeCompare(b.id));
 
@@ -1994,12 +1970,12 @@ export function computeSameLocationPinOffset(
   const resolvedIdx = idx >= 0 ? idx : 0;
   const count = nearbyCluster.length;
 
-  // Deterministic side-by-side spread (±0.00022 deg ≈ 22 meters)
-  const radius = 0.00022;
+  // Deterministic side-by-side spread (±0.00012 deg ≈ 12 meters)
+  const radius = 0.00012;
   if (count === 2) {
     const sign = resolvedIdx === 0 ? -1 : 1;
     return {
-      lat: Number((safeLat + sign * 0.00009).toFixed(6)),
+      lat: Number((safeLat + sign * 0.00006).toFixed(6)),
       lng: Number((safeLng + sign * radius).toFixed(6)),
       isOffsetApplied: true,
     };

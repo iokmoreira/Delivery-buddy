@@ -20,6 +20,8 @@ import {
   AmaranteCrosswalkPoint,
   computeBearingDegrees,
   computeHaversineMeters,
+  deleteCrosswalkById,
+  deleteLatestCrosswalk,
   fetchAmaranteCrosswalksFromOverpass,
   getAllAmaranteCrosswalks,
   getAngleDifferenceDeg,
@@ -33,6 +35,7 @@ import {
   computeSameLocationPinOffset,
   loadCloudSharedState,
   publishTaughtCrosswalkToCloud,
+  removeCrosswalkFromCloud,
   subscribeToCloudSharedState,
 } from '../services/cloudSync';
 
@@ -739,6 +742,10 @@ export const ShiftRadarModule: React.FC = () => {
   const [crosswalkFeedbackBanner, setCrosswalkFeedbackBanner] = useState<
     string | null
   >(null);
+  const [mapZoom, setMapZoom] = useState<number>(localLiveCoords ? 16 : 14);
+  const [isMarkMapModalOpen, setIsMarkMapModalOpen] = useState<boolean>(false);
+  const [selectedCrosswalkForInspect, setSelectedCrosswalkForInspect] =
+    useState<AmaranteCrosswalkPoint | null>(null);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
@@ -746,6 +753,9 @@ export const ShiftRadarModule: React.FC = () => {
   const selfMarkerRef = useRef<L.Marker | null>(null);
   const selfAccuracyCircleRef = useRef<L.Circle | null>(null);
   const peerMarkersLayerRef = useRef<L.LayerGroup | null>(null);
+  const courierMarkersRef = useRef<
+    Map<string, { marker: L.Marker; signature: string }>
+  >(new Map());
   const crosswalksLayerRef = useRef<L.LayerGroup | null>(null);
   const isAutoFollowRef = useRef<boolean>(true);
   const hasCenteredOnFirstFixRef = useRef<boolean>(false);
@@ -1031,8 +1041,8 @@ export const ShiftRadarModule: React.FC = () => {
     };
   }, []);
 
-  // 1-Tap & Voice Command Handler: Teach / Mark New Pedestrian Crosswalk at Current Location
-  const handleTeachCrosswalkHere = useCallback(() => {
+  // Confirmed Handler: Teach / Mark New Pedestrian Crosswalk at Current Location
+  const handleConfirmTeachCrosswalkHere = useCallback(() => {
     const targetCoords =
       lastAcceptedCoordsRef.current ||
       localLiveCoords || {
@@ -1057,13 +1067,14 @@ export const ShiftRadarModule: React.FC = () => {
     setAmaranteCrosswalks(getAllAmaranteCrosswalks());
     addRoadHazardPin(
       'Obras na Via / Desvio',
-      `🚸 Passadeira Ensinada: ${label}`,
+      `Passadeira Ensinada: ${label}`,
       'Amarante — Centro / São Gonçalo'
     );
     awardBuddyRewardTask('ALERTAR_ANOMALIA_MAPA_15');
+    setIsMarkMapModalOpen(false);
 
     setCrosswalkFeedbackBanner(
-      `🚸 Passadeira marcada em ${roadNameLabel} (+15 Coins • Sincronizada com Buddys)`
+      `Passadeira confirmada em ${roadNameLabel} (+15 Coins • Sincronizada com Buddys)`
     );
     window.setTimeout(() => {
       setCrosswalkFeedbackBanner(null);
@@ -1081,9 +1092,81 @@ export const ShiftRadarModule: React.FC = () => {
     speakTextPt,
   ]);
 
+  const handleReportRoadHazardHere = useCallback(() => {
+    const courierName = (realCourierProfile?.name || 'Buddy Amarante').trim();
+    const label = `${roadNameLabel} (Reportado por ${courierName})`;
+    addRoadHazardPin(
+      'Obras na Via / Desvio',
+      `Perigo na Via (Obras / Buraco / Acidente): ${label}`,
+      'Amarante — Centro / São Gonçalo'
+    );
+    awardBuddyRewardTask('ALERTAR_ANOMALIA_MAPA_15');
+    setIsMarkMapModalOpen(false);
+
+    setCrosswalkFeedbackBanner(
+      `⚠️ Perigo na via reportado em ${roadNameLabel} (+15 Coins)`
+    );
+    window.setTimeout(() => {
+      setCrosswalkFeedbackBanner(null);
+    }, 4500);
+
+    speakTextPt('Alerta de perigo na via registado no mapa de Amarante.');
+  }, [
+    addRoadHazardPin,
+    awardBuddyRewardTask,
+    realCourierProfile?.name,
+    roadNameLabel,
+    speakTextPt,
+  ]);
+
+  const handleDeleteLatestCrosswalk = useCallback(() => {
+    const removed = deleteLatestCrosswalk();
+    if (removed) {
+      removeCrosswalkFromCloud(removed.id);
+      setAmaranteCrosswalks(getAllAmaranteCrosswalks());
+      setIsMarkMapModalOpen(false);
+      setCrosswalkFeedbackBanner(
+        `🗑️ Passadeira removida: ${removed.streetLabel}`
+      );
+      window.setTimeout(() => {
+        setCrosswalkFeedbackBanner(null);
+      }, 4500);
+      speakTextPt('Última passadeira apagada com sucesso.');
+    } else {
+      setIsMarkMapModalOpen(false);
+    }
+  }, [speakTextPt]);
+
+  const handleRemoveCrosswalkById = useCallback(
+    (cwId: string, streetLabel?: string) => {
+      deleteCrosswalkById(cwId);
+      removeCrosswalkFromCloud(cwId);
+      setAmaranteCrosswalks(getAllAmaranteCrosswalks());
+      setSelectedCrosswalkForInspect(null);
+      setCrosswalkFeedbackBanner(
+        `🗑️ Passadeira removida${streetLabel ? `: ${streetLabel}` : ''}`
+      );
+      window.setTimeout(() => {
+        setCrosswalkFeedbackBanner(null);
+      }, 4500);
+      speakTextPt('Passadeira removida do mapa.');
+    },
+    [speakTextPt]
+  );
+
+  const handleCycleMapLayer = useCallback(() => {
+    setMapStyleMode((prev) =>
+      prev === 'MAPA_NEON'
+        ? 'TRANSITO_GOOGLE'
+        : prev === 'TRANSITO_GOOGLE'
+          ? 'SATELITE'
+          : 'MAPA_NEON'
+    );
+  }, []);
+
   useEffect(() => {
     const onVoiceMarkCrosswalk = () => {
-      handleTeachCrosswalkHere();
+      setIsMarkMapModalOpen(true);
     };
     window.addEventListener(
       'buddy-voice-mark-crosswalk',
@@ -1095,7 +1178,7 @@ export const ShiftRadarModule: React.FC = () => {
         onVoiceMarkCrosswalk
       );
     };
-  }, [handleTeachCrosswalkHere]);
+  }, []);
 
   // Strict 20-Second Continuous Over-Speed Monitor (> roadLimit + 10 km/h)
   // Resets immediately to 0s if speed drops below roadLimit + 10 km/h (freedom for overtakes)
@@ -1423,11 +1506,11 @@ export const ShiftRadarModule: React.FC = () => {
       attributionControl: false,
     });
 
-    const initialTileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    const initialTileUrl =
+      'https://mt1.google.com/vt/lyrs=m&hl=pt-PT&x={x}&y={y}&z={z}';
     const tileLayer = L.tileLayer(initialTileUrl, {
       minZoom: 10,
       maxZoom: 19,
-      subdomains: 'abc',
     }).addTo(map);
 
     // Subtle Light Neon Blue (#00E5FF) 35 km regional perimeter circle around Amarante Hub
@@ -1452,8 +1535,13 @@ export const ShiftRadarModule: React.FC = () => {
       }
     };
 
+    const handleZoomChanged = () => {
+      setMapZoom(map.getZoom());
+    };
+
     map.on('dragstart', disableAutoFollowOnUserGesture);
     map.on('mousedown', disableAutoFollowOnUserGesture);
+    map.on('zoomend', handleZoomChanged);
     const containerEl = mapContainerRef.current;
     if (containerEl) {
       containerEl.addEventListener(
@@ -1472,6 +1560,7 @@ export const ShiftRadarModule: React.FC = () => {
     tileLayerRef.current = tileLayer;
     crosswalksLayerRef.current = crosswalksLayer;
     peerMarkersLayerRef.current = peerLayer;
+    setMapZoom(map.getZoom());
 
     const timer = window.setTimeout(() => {
       map.invalidateSize();
@@ -1492,6 +1581,7 @@ export const ShiftRadarModule: React.FC = () => {
           disableAutoFollowOnUserGesture
         );
       }
+      courierMarkersRef.current.clear();
       map.remove();
       leafletMapRef.current = null;
       tileLayerRef.current = null;
@@ -1503,7 +1593,7 @@ export const ShiftRadarModule: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switch between High-Contrast Neon Map ("MAPA_NEON"), Google Live Traffic ("TRANSITO_GOOGLE"), and Satellite ("SATELITE")
+  // Switch between High-Contrast Clean Road Map ("MAPA_NEON"), Google Live Traffic ("TRANSITO_GOOGLE"), and Satellite ("SATELITE")
   useEffect(() => {
     const tileLayer = tileLayerRef.current;
     const containerEl = mapContainerRef.current;
@@ -1519,35 +1609,73 @@ export const ShiftRadarModule: React.FC = () => {
     if (mapStyleMode === 'TRANSITO_GOOGLE') {
       containerEl.classList.add('buddy-map-google-traffic');
       tileLayer.setUrl(
-        'https://mt1.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}'
+        'https://mt1.google.com/vt/lyrs=m,traffic&hl=pt-PT&x={x}&y={y}&z={z}'
       );
     } else if (mapStyleMode === 'SATELITE') {
       containerEl.classList.add('buddy-map-satellite');
       tileLayer.setUrl(
-        'https://mt1.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}'
+        'https://mt1.google.com/vt/lyrs=s,h&hl=pt-PT&x={x}&y={y}&z={z}'
       );
     } else {
       containerEl.classList.add(
         isDaylight ? 'buddy-map-neon-light' : 'buddy-map-neon-dark'
       );
-      tileLayer.setUrl('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+      tileLayer.setUrl(
+        'https://mt1.google.com/vt/lyrs=m&hl=pt-PT&x={x}&y={y}&z={z}'
+      );
     }
   }, [mapStyleMode, isDaylight]);
 
-  // Render Amarante Pedestrian Crosswalks (Seed + Overpass + Courier-Taught) on Map
+  // Render Amarante Pedestrian Crosswalks with Buddy-Styled Circular Badges + Smart Zoom Clustering (zoom >= 15 vs < 15)
   useEffect(() => {
     const cwLayer = crosswalksLayerRef.current;
+    const map = leafletMapRef.current;
     if (!cwLayer) return;
     cwLayer.clearLayers();
 
+    if (amaranteCrosswalks.length === 0) return;
+
+    // When zoomed out (zoom < 15), show a single clean Buddy regional cluster badge instead of 52+ pins covering streets
+    if (mapZoom < 15) {
+      const clusterIcon = L.divIcon({
+        className: 'buddy-crosswalk-cluster-pin',
+        html: `<div style="display:flex;align-items:center;gap:5px;transform:translate(-50%,-50%);background:#090D16;color:#FFFFFF;border:1.5px solid #00E5FF;border-radius:9999px;padding:3px 9px;font-size:11px;font-weight:900;white-space:nowrap;box-shadow:0 0 12px rgba(0,229,255,0.45);cursor:pointer;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:9999px;background:#00E5FF;color:#090D16;font-size:10px;font-weight:900;">P</span>
+          <span>${amaranteCrosswalks.length} Passadeiras (Zoom +)</span>
+        </div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+      const clusterMarker = L.marker(
+        [AMARANTE_INITIAL_VIEW_CENTER.lat, AMARANTE_INITIAL_VIEW_CENTER.lng],
+        { icon: clusterIcon, zIndexOffset: 400 }
+      );
+      clusterMarker.on('click', () => {
+        map?.setView(
+          [AMARANTE_INITIAL_VIEW_CENTER.lat, AMARANTE_INITIAL_VIEW_CENTER.lng],
+          16,
+          { animate: true }
+        );
+      });
+      clusterMarker.addTo(cwLayer);
+      return;
+    }
+
+    // When zoomed in (zoom >= 15), render sleek circular Buddy-styled neon-blue & white crosswalk icons (24x24px)
     amaranteCrosswalks.forEach((cw) => {
       const isTaught = cw.source === 'COURIER_TAUGHT';
       const borderCol = isTaught ? '#00E5FF' : '#00B8D4';
       const cwIcon = L.divIcon({
         className: 'buddy-crosswalk-pin',
         html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);cursor:pointer;">
-          <div style="width:24px;height:24px;border-radius:8px;background:#0B0F17;border:2px solid ${borderCol};display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 8px rgba(0,229,255,0.35);">
-            🚸
+          <div style="width:24px;height:24px;border-radius:9999px;background:#090D16;border:2px solid ${borderCol};display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px rgba(0,229,255,0.5);">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="4.5" r="2" fill="#FFFFFF" />
+              <path d="M9.5 13.5L11 9.5H13.5L15 13.5M10.5 13.5L9 17.5M13.5 13.5L15 17.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <line x1="4" y1="20.5" x2="8" y2="20.5" stroke="#00E5FF" stroke-width="2.2" stroke-linecap="round" />
+              <line x1="10.2" y1="20.5" x2="13.8" y2="20.5" stroke="#00E5FF" stroke-width="2.2" stroke-linecap="round" />
+              <line x1="16" y1="20.5" x2="20" y2="20.5" stroke="#00E5FF" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
           </div>
         </div>`,
         iconSize: [0, 0],
@@ -1555,20 +1683,12 @@ export const ShiftRadarModule: React.FC = () => {
       });
 
       const marker = L.marker([cw.lat, cw.lng], { icon: cwIcon });
-      marker.bindPopup(
-        `<div style="font-family:Nunito,sans-serif;padding:2px;">
-          <strong style="color:#00838F;font-size:13px;">🚸 Passadeira de Peões</strong><br/>
-          <span style="font-size:12px;font-weight:700;">${cw.streetLabel}</span><br/>
-          <span style="font-size:11px;color:#64748B;">${
-            isTaught
-              ? `Ensinada por ${cw.taughtByCallsign || 'Buddy'}`
-              : 'Mapeada em Amarante (Alerta <45m)'
-          }</span>
-        </div>`
-      );
+      marker.on('click', () => {
+        setSelectedCrosswalkForInspect(cw);
+      });
       marker.addTo(cwLayer);
     });
-  }, [amaranteCrosswalks]);
+  }, [amaranteCrosswalks, mapZoom]);
 
   // Update logged-in user's real GPS marker with the Dynamic 3-State Robot Mascot, Heading Cone & Gliding
   useEffect(() => {
@@ -1684,14 +1804,17 @@ export const ShiftRadarModule: React.FC = () => {
     allMapPinPointsForOffset,
   ]);
 
-  // Render active peer couriers with 3D Buddy pin + smart side-by-side offset when at the same location (<15m)
+  // Render active peer couriers with persistent Map<string, L.Marker> (ZERO blinking/flickering on sync polls)
   useEffect(() => {
     const peerLayer = peerMarkersLayerRef.current;
     if (!peerLayer) return;
-    peerLayer.clearLayers();
+
+    const activeIds = new Set<string>();
 
     activePeerCouriers.forEach((c) => {
       if (typeof c.lat !== 'number' || typeof c.lng !== 'number') return;
+      activeIds.add(c.id);
+
       const offsetPeerPos = computeSameLocationPinOffset(
         c.id,
         c.lat,
@@ -1718,35 +1841,61 @@ export const ShiftRadarModule: React.FC = () => {
           ? 'Online'
           : 'Em Entrega';
 
+      const avatarSource = c.avatarPhotoUrl || currentMascotImageUrl;
+      const signature = `${c.callsign}|${statusBadgeLabel}|${ringColor}|${avatarSource}`;
+
       const avatarInnerHtml = c.avatarPhotoUrl
         ? `<img src="${c.avatarPhotoUrl}" alt="${c.callsign}" style="width:100%;height:100%;object-fit:cover;border-radius:9999px;" />`
         : `<img src="${currentMascotImageUrl}" alt="${c.callsign}" style="width:100%;height:100%;object-fit:contain;" />`;
 
-      const peerIcon = L.divIcon({
-        className: 'buddy-clean-peer-pin',
-        html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);cursor:pointer;">
-          <div style="position:relative;width:46px;height:46px;display:flex;align-items:center;justify-content:center;">
-            <span style="position:absolute;inset:-2px;border-radius:9999px;background:${ringColor};opacity:0.22;animation:ping 2s cubic-bezier(0,0,0.2,1) infinite;"></span>
-            <div style="width:44px;height:44px;border-radius:9999px;background:#090D16;border:2px solid ${ringColor};display:flex;align-items:center;justify-content:center;padding:1px;box-shadow:0 2px 8px rgba(0,0,0,0.55);">
-              ${avatarInnerHtml}
+      const buildPeerIcon = () =>
+        L.divIcon({
+          className: 'buddy-clean-peer-pin',
+          html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);cursor:pointer;">
+            <div style="position:relative;width:46px;height:46px;display:flex;align-items:center;justify-content:center;">
+              <span style="position:absolute;inset:-2px;border-radius:9999px;background:${ringColor};opacity:0.22;box-shadow:0 0 12px ${ringColor};"></span>
+              <div style="width:44px;height:44px;border-radius:9999px;background:#090D16;border:2px solid ${ringColor};display:flex;align-items:center;justify-content:center;padding:1px;box-shadow:0 2px 8px rgba(0,0,0,0.55);">
+                ${avatarInnerHtml}
+              </div>
             </div>
-          </div>
-          <span style="margin-top:2px;background:rgba(9,13,22,0.95);color:#ffffff;font-size:10px;font-weight:900;padding:1.5px 7px;border-radius:9999px;border:1.5px solid ${ringColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.5);">
-            ${c.callsign} • <span style="color:${ringColor};font-size:9px;">${statusBadgeLabel}</span>
-          </span>
-        </div>`,
-        iconSize: [0, 0],
-        iconAnchor: [0, 0],
-      });
+            <span style="margin-top:2px;background:rgba(9,13,22,0.95);color:#ffffff;font-size:10px;font-weight:900;padding:1.5px 7px;border-radius:9999px;border:1.5px solid ${ringColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.5);">
+              ${c.callsign} • <span style="color:${ringColor};font-size:9px;">${statusBadgeLabel}</span>
+            </span>
+          </div>`,
+          iconSize: [0, 0],
+          iconAnchor: [0, 0],
+        });
 
-      const marker = L.marker([offsetPeerPos.lat, offsetPeerPos.lng], {
-        icon: peerIcon,
-        zIndexOffset: 900,
-      });
-      marker.on('click', () => {
-        handleOpenBuddyProfilePopup(c);
-      });
-      marker.addTo(peerLayer);
+      const existingEntry = courierMarkersRef.current.get(c.id);
+      if (existingEntry) {
+        existingEntry.marker.setLatLng([offsetPeerPos.lat, offsetPeerPos.lng]);
+        if (existingEntry.signature !== signature) {
+          existingEntry.marker.setIcon(buildPeerIcon());
+          existingEntry.signature = signature;
+        }
+        existingEntry.marker.off('click');
+        existingEntry.marker.on('click', () => {
+          handleOpenBuddyProfilePopup(c);
+        });
+      } else {
+        const marker = L.marker([offsetPeerPos.lat, offsetPeerPos.lng], {
+          icon: buildPeerIcon(),
+          zIndexOffset: 900,
+        });
+        marker.on('click', () => {
+          handleOpenBuddyProfilePopup(c);
+        });
+        marker.addTo(peerLayer);
+        courierMarkersRef.current.set(c.id, { marker, signature });
+      }
+    });
+
+    // Remove markers for couriers no longer active
+    Array.from(courierMarkersRef.current.entries()).forEach(([id, entry]) => {
+      if (!activeIds.has(id)) {
+        peerLayer.removeLayer(entry.marker);
+        courierMarkersRef.current.delete(id);
+      }
     });
   }, [
     activePeerCouriers,
@@ -1981,12 +2130,22 @@ export const ShiftRadarModule: React.FC = () => {
           </button>
         </div>
 
-        {/* TOP-RIGHT FLOATING ICON DOCK (40x40px Crisp Custom SVG Icon Buttons, Zero Long Text Labels) */}
+        {/* TOP-RIGHT COMPACT 3-ICON MAP VIEW PILL (🎯 Centrar • 🗺️ Camada • ⛶ Ecrã) */}
         <div
-          style={{ top: '12px', right: '12px' }}
-          className="absolute z-[430] flex flex-col items-center gap-2"
+          style={{
+            top: '12px',
+            right: '12px',
+            backgroundColor: isDaylight
+              ? 'rgba(255, 255, 255, 0.96)'
+              : 'rgba(11, 15, 23, 0.94)',
+            borderColor: '#00E5FF',
+            boxShadow: isDaylight
+              ? '0 4px 14px rgba(9, 13, 22, 0.14)'
+              : '0 4px 16px rgba(0, 0, 0, 0.65)',
+          }}
+          className="absolute z-[430] rounded-2xl border-1.5 p-1 flex flex-col items-center gap-1.5 backdrop-blur-md"
         >
-          {/* 1. 🎯 Center on Courier Icon (Centrar) */}
+          {/* 1. 🎯 Centrar */}
           <button
             type="button"
             onClick={handleRecenterAndFollowGps}
@@ -1995,11 +2154,11 @@ export const ShiftRadarModule: React.FC = () => {
             style={getDockIconButtonStyle(
               Boolean(isAutoFollowActive && localLiveCoords)
             )}
-            className="h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
+            className="h-9 w-11 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition active:scale-95"
           >
             <svg
               viewBox="0 0 24 24"
-              className="h-5 w-5"
+              className="h-4 w-4"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
               aria-hidden="true"
@@ -2051,81 +2210,18 @@ export const ShiftRadarModule: React.FC = () => {
             </svg>
           </button>
 
-          {/* 2. 🚸+ Mark Crosswalk Icon (Marcar Passadeira em 1 Toque) */}
+          {/* 2. 🗺️ Camada (Cycles: Mapa Limpo -> 🚦 Trânsito -> 🛰️ Satélite with tiny active label) */}
           <button
             type="button"
-            onClick={handleTeachCrosswalkHere}
-            title="Marcar Passadeira de Peões na posição GPS atual"
-            aria-label="Marcar Passadeira de Peões"
-            style={getDockIconButtonStyle(false)}
-            className="relative h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
+            onClick={handleCycleMapLayer}
+            title="Alternar Camada do Mapa (Mapa Limpo / Trânsito / Satélite)"
+            aria-label="Alternar Camada do Mapa"
+            style={getDockIconButtonStyle(mapStyleMode !== 'MAPA_NEON')}
+            className="h-11 w-11 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition active:scale-95 px-0.5"
           >
             <svg
               viewBox="0 0 24 24"
-              className="h-5 w-5"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="4.5" r="1.8" fill="currentColor" />
-              <path
-                d="M9.5 14L11 9.5L13.5 9.5L15 14M10.5 14L9 18M13.5 14L15 18"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <line
-                x1="4"
-                y1="20.5"
-                x2="7.5"
-                y2="20.5"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-              <line
-                x1="10.2"
-                y1="20.5"
-                x2="13.8"
-                y2="20.5"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-              <line
-                x1="16.5"
-                y1="20.5"
-                x2="20"
-                y2="20.5"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-            </svg>
-            <span
-              style={{
-                backgroundColor: '#00E5FF',
-                color: '#090D16',
-              }}
-              className="absolute -top-1 -right-1 h-4 w-4 rounded-full text-[11px] font-black leading-none flex items-center justify-center shadow-xs"
-            >
-              +
-            </span>
-          </button>
-
-          {/* 3A. Map Layer 1: Neon Map Icon (Mapa Neon) */}
-          <button
-            type="button"
-            onClick={() => setMapStyleMode('MAPA_NEON')}
-            title="Camada: Mapa Neon"
-            aria-label="Camada Mapa Neon"
-            style={getDockIconButtonStyle(mapStyleMode === 'MAPA_NEON')}
-            className="h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-5 w-5"
+              className="h-4 w-4 shrink-0"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
               aria-hidden="true"
@@ -2153,82 +2249,19 @@ export const ShiftRadarModule: React.FC = () => {
                 strokeWidth="1.6"
               />
             </svg>
-          </button>
-
-          {/* 3B. Map Layer 2: Google Traffic Icon (Trânsito Google) */}
-          <button
-            type="button"
-            onClick={() => setMapStyleMode('TRANSITO_GOOGLE')}
-            title="Camada: Trânsito Google em Tempo Real"
-            aria-label="Camada Trânsito Google"
-            style={getDockIconButtonStyle(mapStyleMode === 'TRANSITO_GOOGLE')}
-            className="h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-5 w-5"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
+            <span
+              style={{ fontSize: '9px', lineHeight: 1.05 }}
+              className="font-black tracking-tight mt-0.5 truncate max-w-full"
             >
-              <rect
-                x="7.5"
-                y="2.5"
-                width="9"
-                height="19"
-                rx="4.5"
-                stroke="currentColor"
-                strokeWidth="1.9"
-              />
-              <circle cx="12" cy="7" r="1.7" fill="currentColor" />
-              <circle cx="12" cy="12" r="1.7" fill="currentColor" />
-              <circle cx="12" cy="17" r="1.7" fill="currentColor" />
-            </svg>
+              {mapStyleMode === 'MAPA_NEON'
+                ? 'Limpo'
+                : mapStyleMode === 'TRANSITO_GOOGLE'
+                  ? 'Trânsito'
+                  : 'Satélite'}
+            </span>
           </button>
 
-          {/* 3C. Map Layer 3: Satellite Icon (Satélite) */}
-          <button
-            type="button"
-            onClick={() => setMapStyleMode('SATELITE')}
-            title="Camada: Vista Satélite"
-            aria-label="Camada Vista Satélite"
-            style={getDockIconButtonStyle(mapStyleMode === 'SATELITE')}
-            className="h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-5 w-5"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <circle
-                cx="12"
-                cy="12"
-                r="8.5"
-                stroke="currentColor"
-                strokeWidth="1.9"
-              />
-              <ellipse
-                cx="12"
-                cy="12"
-                rx="4"
-                ry="8.5"
-                stroke="currentColor"
-                strokeWidth="1.6"
-              />
-              <line
-                x1="3.8"
-                y1="12"
-                x2="20.2"
-                y2="12"
-                stroke="currentColor"
-                strokeWidth="1.6"
-              />
-            </svg>
-          </button>
-
-          {/* 4. ⛶ Fullscreen Toggle Icon (Ampliar / Reduzir Mapa 100%) */}
+          {/* 3. ⛶ Ecrã (Fullscreen Toggle) */}
           <button
             type="button"
             onClick={handleToggleFullRoadView}
@@ -2239,12 +2272,12 @@ export const ShiftRadarModule: React.FC = () => {
             }
             aria-label="Alternar Mapa em Ecrã Inteiro"
             style={getDockIconButtonStyle(isFullRoadView)}
-            className="h-10 w-10 rounded-xl border-1.5 flex items-center justify-center cursor-pointer transition active:scale-95"
+            className="h-9 w-11 rounded-xl border flex items-center justify-center cursor-pointer transition active:scale-95"
           >
             {isFullRoadView ? (
               <svg
                 viewBox="0 0 24 24"
-                className="h-5 w-5"
+                className="h-4 w-4"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
                 aria-hidden="true"
@@ -2260,7 +2293,7 @@ export const ShiftRadarModule: React.FC = () => {
             ) : (
               <svg
                 viewBox="0 0 24 24"
-                className="h-5 w-5"
+                className="h-4 w-4"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
                 aria-hidden="true"
@@ -2277,9 +2310,35 @@ export const ShiftRadarModule: React.FC = () => {
           </button>
         </div>
 
+        {/* BOTTOM-RIGHT DISTINCT "➕ Marcar" ACTION BUTTON (Separated safely away from map view controls) */}
+        <div
+          style={{
+            bottom: hasRealActiveDelivery ? '68px' : '20px',
+            right: '12px',
+          }}
+          className="absolute z-[430]"
+        >
+          <button
+            type="button"
+            onClick={() => setIsMarkMapModalOpen(true)}
+            title="Ensinar Passadeira ou Reportar Perigo na Via"
+            aria-label="Marcar no Mapa"
+            style={{
+              backgroundColor: '#090D16',
+              borderColor: '#00E5FF',
+              color: '#00E5FF',
+              boxShadow: '0 4px 16px rgba(0, 229, 255, 0.38)',
+            }}
+            className="rounded-2xl border-2 px-3.5 py-2.5 flex items-center gap-1.5 font-black text-xs cursor-pointer transition active:scale-95"
+          >
+            <Plus className="h-4 w-4 text-[#00E5FF] stroke-[3]" />
+            <span>Marcar</span>
+          </button>
+        </div>
+
         {/* TOP HUD ALERTS: Crosswalk Proximity Heads-Up (<= 45m & > 28 km/h) or Taught Confirmation */}
         {(approachingCrosswalkAlert || crosswalkFeedbackBanner) && (
-          <div className="absolute top-14 left-3 right-14 z-[450] flex flex-col items-start gap-1.5 pointer-events-none">
+          <div className="absolute top-14 left-3 right-16 z-[450] flex flex-col items-start gap-1.5 pointer-events-none">
             {approachingCrosswalkAlert && (
               <div
                 style={{
@@ -2289,7 +2348,9 @@ export const ShiftRadarModule: React.FC = () => {
                 }}
                 className="pointer-events-auto rounded-2xl border-2 px-3.5 py-2 shadow-[0_0_20px_rgba(0,229,255,0.55)] flex items-center gap-2.5 animate-pulse"
               >
-                <span className="text-lg">🚸</span>
+                <div className="h-6 w-6 rounded-full bg-[#090D16] border border-[#00E5FF] flex items-center justify-center shrink-0">
+                  <span className="text-xs font-black text-[#00E5FF]">P</span>
+                </div>
                 <div>
                   <span className="text-xs font-black text-[#00E5FF] block leading-tight">
                     Passadeira à frente ({approachingCrosswalkAlert.distanceMeters}m)
@@ -2398,7 +2459,7 @@ export const ShiftRadarModule: React.FC = () => {
                   style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
                   className="text-[10px] font-bold block leading-tight mt-0.5"
                 >
-                  🚸 {amaranteCrosswalks.length} passadeiras
+                  {amaranteCrosswalks.length} passadeiras
                 </span>
               )}
             </div>
@@ -2437,6 +2498,178 @@ export const ShiftRadarModule: React.FC = () => {
               <Navigation className="h-3.5 w-3.5 text-[#00E5FF]" />
               <span>Maps</span>
             </button>
+          </div>
+        )}
+
+        {/* MANDATORY CONFIRMATION MODAL BEFORE ADDING CROSSWALKS / ALERTS + 1-TAP UNDO/DELETE */}
+        {isMarkMapModalOpen && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs"
+            onClick={() => setIsMarkMapModalOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
+                borderColor: '#00E5FF',
+                color: isDaylight ? '#090D16' : '#FFFFFF',
+              }}
+              className="w-full max-w-sm rounded-3xl border-2 p-5 shadow-2xl space-y-3.5"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-base font-black tracking-tight"
+                  >
+                    ➕ Ensinar / Marcar no Mapa
+                  </h3>
+                  <p
+                    style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
+                    className="text-xs font-bold mt-0.5"
+                  >
+                    Via atual: <strong className="text-[#00B8D4]">{roadNameLabel}</strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMarkMapModalOpen(false)}
+                  className="h-8 w-8 rounded-full border border-[#00E5FF]/40 flex items-center justify-center cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2.5 pt-1">
+                {/* Option 1: Confirm New Crosswalk Here */}
+                <button
+                  type="button"
+                  onClick={handleConfirmTeachCrosswalkHere}
+                  style={{
+                    backgroundColor: '#090D16',
+                    borderColor: '#00E5FF',
+                    color: '#00E5FF',
+                  }}
+                  className="w-full rounded-2xl border-2 px-4 py-3 text-left font-black text-xs flex items-center justify-between cursor-pointer transition active:scale-98"
+                >
+                  <span>🚸 Confirmar Nova Passadeira Aqui</span>
+                  <span className="text-[11px] font-extrabold bg-[#00E5FF]/15 px-2 py-0.5 rounded-full">
+                    +15 Coins
+                  </span>
+                </button>
+
+                {/* Option 2: Report Road Hazard */}
+                <button
+                  type="button"
+                  onClick={handleReportRoadHazardHere}
+                  style={{
+                    backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
+                    borderColor: '#00B8D4',
+                    color: isDaylight ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="w-full rounded-2xl border px-4 py-3 text-left font-extrabold text-xs flex items-center justify-between cursor-pointer transition active:scale-98"
+                >
+                  <span>⚠️ Reportar Perigo na Via (Obras / Buraco / Acidente)</span>
+                </button>
+
+                {/* Option 3: Delete Last Crosswalk Marked by Mistake */}
+                <button
+                  type="button"
+                  onClick={handleDeleteLatestCrosswalk}
+                  style={{
+                    backgroundColor: isDaylight ? '#FFF1F2' : '#1F1218',
+                    borderColor: '#F43F5E',
+                    color: isDaylight ? '#BE123C' : '#FDA4AF',
+                  }}
+                  className="w-full rounded-2xl border px-4 py-3 text-left font-extrabold text-xs flex items-center justify-between cursor-pointer transition active:scale-98"
+                >
+                  <span>🗑️ Apagar Última Passadeira Marcada por Engano</span>
+                </button>
+
+                {/* Option 4: Cancel */}
+                <button
+                  type="button"
+                  onClick={() => setIsMarkMapModalOpen(false)}
+                  style={{
+                    backgroundColor: isDaylight ? '#F1F5F9' : '#1E293B',
+                    color: isDaylight ? '#334155' : '#CBD5E1',
+                  }}
+                  className="w-full rounded-2xl py-2.5 text-center font-black text-xs cursor-pointer"
+                >
+                  ✕ Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CROSSWALK INSPECTION & 1-TAP REMOVAL MODAL (When tapping any crosswalk badge on the map) */}
+        {selectedCrosswalkForInspect && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs"
+            onClick={() => setSelectedCrosswalkForInspect(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
+                borderColor: '#00E5FF',
+                color: isDaylight ? '#090D16' : '#FFFFFF',
+              }}
+              className="w-full max-w-xs rounded-3xl border-2 p-4 shadow-2xl space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span className="text-xs font-black uppercase tracking-wider text-[#00B8D4] block">
+                    Passadeira Mapeada (Alerta &lt;45m)
+                  </span>
+                  <h4
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-sm font-black mt-0.5"
+                  >
+                    {selectedCrosswalkForInspect.streetLabel}
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCrosswalkForInspect(null)}
+                  className="h-7 w-7 rounded-full border border-[#00E5FF]/40 flex items-center justify-center cursor-pointer shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleRemoveCrosswalkById(
+                      selectedCrosswalkForInspect.id,
+                      selectedCrosswalkForInspect.streetLabel
+                    )
+                  }
+                  style={{
+                    backgroundColor: isDaylight ? '#FFF1F2' : '#1F1218',
+                    borderColor: '#F43F5E',
+                    color: isDaylight ? '#BE123C' : '#FDA4AF',
+                  }}
+                  className="w-full rounded-xl border px-3 py-2.5 text-xs font-extrabold cursor-pointer text-center"
+                >
+                  🗑️ Remover se marcada por engano
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCrosswalkForInspect(null)}
+                  style={{
+                    backgroundColor: isDaylight ? '#F1F5F9' : '#1E293B',
+                    color: isDaylight ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="w-full rounded-xl py-2 text-xs font-bold cursor-pointer text-center"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

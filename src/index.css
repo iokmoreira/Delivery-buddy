@@ -357,7 +357,7 @@
    & SMOOTH WAZE-STYLE GPS MARKER GLIDING
    ============================================================================ */
 .leaflet-container.buddy-map-neon-light .leaflet-tile-pane {
-  filter: hue-rotate(165deg) saturate(1.85) brightness(1.03) contrast(1.08);
+  filter: contrast(1.06) saturate(1.08) brightness(1.01);
 }
 
 .leaflet-container.buddy-map-neon-dark {
@@ -365,7 +365,7 @@
 }
 
 .leaflet-container.buddy-map-neon-dark .leaflet-tile-pane {
-  filter: invert(100%) hue-rotate(175deg) saturate(2.4) brightness(0.88) contrast(1.28);
+  filter: invert(100%) hue-rotate(185deg) saturate(1.6) brightness(0.92) contrast(1.22);
 }
 
 .leaflet-container.buddy-map-google-traffic .leaflet-tile-pane,
@@ -374,7 +374,8 @@
 }
 
 /* Smooth Waze-style gliding transition for Leaflet markers */
-.leaflet-marker-icon.buddy-clean-self-pin {
+.leaflet-marker-icon.buddy-clean-self-pin,
+.leaflet-marker-icon.buddy-clean-peer-pin {
   transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }

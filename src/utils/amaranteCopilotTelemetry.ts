@@ -42,6 +42,7 @@ export interface LiveCopilotSpeedState {
 
 const CUSTOM_CROSSWALKS_STORAGE_KEY = 'buddy_amarante_custom_crosswalks_v1';
 const OVERPASS_CROSSWALKS_CACHE_KEY = 'buddy_amarante_overpass_crosswalks_v1';
+const DELETED_CROSSWALKS_STORAGE_KEY = 'buddy_amarante_deleted_crosswalk_ids_v1';
 const LAST_DELIVERY_REALITY_SUMMARY_KEY = 'buddy_last_delivery_reality_summary_v1';
 
 // Built-in seed list of key Amarante pedestrian crosswalks (Av. General Silveira, São Gonçalo, Santa Luzia, Freixo de Cima, EN15)
@@ -172,12 +173,26 @@ export const getAngleDifferenceDeg = (a: number, b: number): number => {
   return diff > 180 ? 360 - diff : diff;
 };
 
+export const loadDeletedCrosswalkIds = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(DELETED_CROSSWALKS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set(parsed.map(String)) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
 export const loadCustomTaughtCrosswalks = (): AmaranteCrosswalkPoint[] => {
   try {
     const raw = localStorage.getItem(CUSTOM_CROSSWALKS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const deleted = loadDeletedCrosswalkIds();
+    return Array.isArray(parsed)
+      ? parsed.filter((c) => c && c.id && !deleted.has(c.id))
+      : [];
   } catch {
     return [];
   }
@@ -186,6 +201,10 @@ export const loadCustomTaughtCrosswalks = (): AmaranteCrosswalkPoint[] => {
 export const saveCustomTaughtCrosswalk = (
   point: AmaranteCrosswalkPoint
 ): AmaranteCrosswalkPoint[] => {
+  const deleted = loadDeletedCrosswalkIds();
+  if (deleted.has(point.id)) {
+    return loadCustomTaughtCrosswalks();
+  }
   const existing = loadCustomTaughtCrosswalks();
   // Avoid duplicate within 12 meters
   const isDuplicate = existing.some(
@@ -203,6 +222,52 @@ export const saveCustomTaughtCrosswalk = (
   return next;
 };
 
+export const deleteCrosswalkById = (
+  crosswalkId: string
+): AmaranteCrosswalkPoint[] => {
+  if (!crosswalkId) return getAllAmaranteCrosswalks();
+  const deleted = loadDeletedCrosswalkIds();
+  deleted.add(crosswalkId);
+  try {
+    localStorage.setItem(
+      DELETED_CROSSWALKS_STORAGE_KEY,
+      JSON.stringify(Array.from(deleted))
+    );
+  } catch {
+    // ignore
+  }
+  const existingCustom = loadCustomTaughtCrosswalks();
+  const filteredCustom = existingCustom.filter((c) => c.id !== crosswalkId);
+  try {
+    localStorage.setItem(
+      CUSTOM_CROSSWALKS_STORAGE_KEY,
+      JSON.stringify(filteredCustom)
+    );
+  } catch {
+    // ignore
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('buddy-crosswalks-updated'));
+  }
+  return getAllAmaranteCrosswalks();
+};
+
+export const deleteLatestCrosswalk = (): AmaranteCrosswalkPoint | null => {
+  const custom = loadCustomTaughtCrosswalks();
+  if (custom.length > 0) {
+    const latest = custom[0];
+    deleteCrosswalkById(latest.id);
+    return latest;
+  }
+  const all = getAllAmaranteCrosswalks();
+  if (all.length > 0) {
+    const last = all[all.length - 1];
+    deleteCrosswalkById(last.id);
+    return last;
+  }
+  return null;
+};
+
 export const loadCachedOverpassCrosswalks = (): AmaranteCrosswalkPoint[] => {
   try {
     const raw = localStorage.getItem(OVERPASS_CROSSWALKS_CACHE_KEY);
@@ -215,11 +280,16 @@ export const loadCachedOverpassCrosswalks = (): AmaranteCrosswalkPoint[] => {
 };
 
 export const getAllAmaranteCrosswalks = (): AmaranteCrosswalkPoint[] => {
+  const deleted = loadDeletedCrosswalkIds();
   const custom = loadCustomTaughtCrosswalks();
   const overpass = loadCachedOverpassCrosswalks();
-  const combined: AmaranteCrosswalkPoint[] = [...custom, ...SEED_AMARANTE_CROSSWALKS];
+  const combined: AmaranteCrosswalkPoint[] = [
+    ...custom,
+    ...SEED_AMARANTE_CROSSWALKS,
+  ].filter((cw) => cw && cw.id && !deleted.has(cw.id));
 
   overpass.forEach((osmCw) => {
+    if (!osmCw || !osmCw.id || deleted.has(osmCw.id)) return;
     const tooClose = combined.some(
       (existing) =>
         computeHaversineMeters(existing.lat, existing.lng, osmCw.lat, osmCw.lng) <

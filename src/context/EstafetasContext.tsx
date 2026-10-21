@@ -7929,63 +7929,6 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         deviceModel: prof.device_model || deviceScreenProfile.deviceModel,
       });
     }
-
-    // Also broadcast any existing local accounts saved on this phone (buddy_saved_accounts_v1)
-    // so Admin immediately sees them in Requisições de Aceitação & Controlo de Contas
-    try {
-      const savedRaw = localStorage.getItem('buddy_saved_accounts_v1');
-      if (savedRaw) {
-        const savedList = JSON.parse(savedRaw);
-        if (Array.isArray(savedList)) {
-          savedList.forEach((acc) => {
-            if (!acc || typeof acc.username !== 'string' || !acc.username.trim()) {
-              return;
-            }
-            const uname = acc.username.trim();
-            if (
-              prof.isRegistered &&
-              prof.name &&
-              uname.toLowerCase() === prof.name.trim().toLowerCase()
-            ) {
-              return;
-            }
-            const accIsFounder = isCourierAdminByName(uname);
-            const accId = accIsFounder
-              ? FOUNDER_ADMIN_COURIER_ID
-              : acc.courierId ||
-                `courier_acc_${uname
-                  .toLowerCase()
-                  .replace(/[^a-z0-9]/g, '')
-                  .slice(0, 8)}`;
-            void publishAccountRegistrationToCloud({
-              id: accId,
-              username: uname,
-              emailOrPhone: acc.emailOrPhone || uname,
-              vehicle: acc.vehicle || prof.vehicle || 'Mota 125cc',
-              platforms:
-                Array.isArray(acc.platforms) && acc.platforms.length > 0
-                  ? acc.platforms
-                  : activePlatforms,
-              zone:
-                acc.zone || prof.zone || 'Amarante Centro / São Gonçalo',
-              role: accIsFounder ? 'admin' : 'courier',
-              approvalStatus: accIsFounder
-                ? 'approved'
-                : acc.status === 'BLOQUEADO'
-                  ? 'blocked'
-                  : acc.status === 'APROVADO'
-                    ? 'approved'
-                    : 'pending',
-              lat: prof.lat || AMARANTE_DEFAULT_COORDS.lat,
-              lng: prof.lng || AMARANTE_DEFAULT_COORDS.lng,
-              deviceModel: deviceScreenProfile.deviceModel,
-            });
-          });
-        }
-      }
-    } catch {
-      // ignore
-    }
   }, [activePlatforms, deviceScreenProfile.deviceModel, state.isAppPaused]);
 
   // Start Zero-Config Automatic Cloud Sync Engine on mount & subscribe to incoming real-time updates
