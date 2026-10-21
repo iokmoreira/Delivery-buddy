@@ -2103,6 +2103,8 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
   } | null>(null);
   const keepVoiceListeningRef = useRef<boolean>(false);
   const isSpeakingTtsRef = useRef<boolean>(false);
+  const lastTtsEndedAtRef = useRef<number>(0);
+  const nativePartialDebounceTimerRef = useRef<number | null>(null);
   const watchdogRestartTimerRef = useRef<number | null>(null);
   const hasUnlockedMicOnFirstTouchRef = useRef<boolean>(false);
   const lastExecutedVoicePhraseRef = useRef<{ phrase: string; ts: number }>({
@@ -2351,6 +2353,11 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
   const cancelSpeechNow = useCallback(() => {
+    if (nativePartialDebounceTimerRef.current !== null) {
+      window.clearTimeout(nativePartialDebounceTimerRef.current);
+      nativePartialDebounceTimerRef.current = null;
+    }
+    lastTtsEndedAtRef.current = Date.now();
     cancelBuddySpeechNow();
     isSpeakingTtsRef.current = false;
     setIsSpeakingTts(false);
@@ -3513,6 +3520,11 @@ Solicita-se a revisão imediata do cálculo cartográfico deste trecho e o créd
     (text: string) => {
       setLastSpokenTranscript(text);
       isSpeakingTtsRef.current = true;
+      lastTtsEndedAtRef.current = Date.now();
+      if (nativePartialDebounceTimerRef.current !== null) {
+        window.clearTimeout(nativePartialDebounceTimerRef.current);
+        nativePartialDebounceTimerRef.current = null;
+      }
       if (watchdogRestartTimerRef.current !== null) {
         window.clearTimeout(watchdogRestartTimerRef.current);
         watchdogRestartTimerRef.current = null;
@@ -3535,14 +3547,17 @@ Solicita-se a revisão imediata do cálculo cartográfico deste trecho e o créd
         isPaused: state.isAppPaused,
         onStart: () => {
           isSpeakingTtsRef.current = true;
+          lastTtsEndedAtRef.current = Date.now();
           setIsSpeakingTts(true);
         },
         onEnd: () => {
           isSpeakingTtsRef.current = false;
+          lastTtsEndedAtRef.current = Date.now();
           setIsSpeakingTts(false);
         },
         onError: () => {
           isSpeakingTtsRef.current = false;
+          lastTtsEndedAtRef.current = Date.now();
           setIsSpeakingTts(false);
         },
         onVoiceResolved: (voiceLabel) => setResolvedPtBrVoiceName(voiceLabel),
@@ -7736,9 +7751,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   // =========================================================================
   const [isAmaranteWeatherModalOpen, setIsAmaranteWeatherModalOpenState] =
     useState<boolean>(false);
+  const isAmaranteWeatherModalOpenRef = useRef<boolean>(false);
 
   const setIsAmaranteWeatherModalOpen = useCallback(
     (open: boolean) => {
+      isAmaranteWeatherModalOpenRef.current = open;
       if (!open) {
         cancelSpeechNow();
       }
@@ -7796,7 +7813,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   }, [speakTextPt]);
 
   const openAndFetchAmaranteWeather = useCallback(
-    async (speakNow = true) => {
+    async (speakNow = false) => {
+      isAmaranteWeatherModalOpenRef.current = true;
       setIsAmaranteWeatherModalOpenState(true);
       setIsLoadingAmaranteWeather(true);
       try {
@@ -7855,7 +7873,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         setAmaranteLiveWeather(nextWeather);
         setIsLoadingAmaranteWeather(false);
 
-        if (speakNow) {
+        if (speakNow && isAmaranteWeatherModalOpenRef.current) {
           const tempSpoken = String(Math.round(temp));
           const rainNote = rain > 0 ? ', com chuva' : ', sem chuva';
           speakTextPt(
@@ -7864,7 +7882,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         }
       } catch {
         setIsLoadingAmaranteWeather(false);
-        if (speakNow) {
+        if (speakNow && isAmaranteWeatherModalOpenRef.current) {
           const rainNote =
             amaranteLiveWeather.rainMm > 0 ? ', com chuva' : ', sem chuva';
           speakTextPt(
@@ -10645,7 +10663,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const processIncomingVoiceTranscript = useCallback(
     (rawTranscript: string, isFinal: boolean): boolean => {
-      if (isInputOrModalPausedRef.current || isSpeakingTtsRef.current) {
+      if (
+        isInputOrModalPausedRef.current ||
+        isSpeakingTtsRef.current ||
+        isAmaranteWeatherModalOpenRef.current ||
+        Date.now() - lastTtsEndedAtRef.current < 1600
+      ) {
         return false;
       }
       const latestRaw = (rawTranscript || '').trim();
@@ -10765,7 +10788,6 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   );
 
   // Register global window.onBuddyNativeTranscript callback for Native Android SpeechRecognizer
-  const nativePartialDebounceTimerRef = useRef<number | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const winAny = window as unknown as {
@@ -10776,6 +10798,15 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         window.clearTimeout(nativePartialDebounceTimerRef.current);
         nativePartialDebounceTimerRef.current = null;
       }
+      // Never process or schedule debounce timers while TTS is speaking or within 1600ms of TTS ending/cancelling
+      if (
+        isInputOrModalPausedRef.current ||
+        isSpeakingTtsRef.current ||
+        isAmaranteWeatherModalOpenRef.current ||
+        Date.now() - lastTtsEndedAtRef.current < 1600
+      ) {
+        return;
+      }
       const executedImmediately = processIncomingVoiceTranscript(
         text,
         Boolean(isFinal)
@@ -10783,6 +10814,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       if (!isFinal && !executedImmediately && text && text.trim().length >= 2) {
         nativePartialDebounceTimerRef.current = window.setTimeout(() => {
           nativePartialDebounceTimerRef.current = null;
+          if (
+            isInputOrModalPausedRef.current ||
+            isSpeakingTtsRef.current ||
+            isAmaranteWeatherModalOpenRef.current ||
+            Date.now() - lastTtsEndedAtRef.current < 1600
+          ) {
+            return;
+          }
           processIncomingVoiceTranscript(text, true);
         }, 900);
       }

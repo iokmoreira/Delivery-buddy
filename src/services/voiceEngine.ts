@@ -1,30 +1,76 @@
 import { PlatformName } from '../types/models';
 
-export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate_v5_105';
-export const BUDDY_VOICE_RATE_MIGRATED_KEY = 'buddyVoiceRate_migrated_v5_105';
+export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate_v6_106';
+export const BUDDY_VOICE_RATE_MIGRATED_KEY = 'buddyVoiceRate_migrated_v6_106';
 export const BUDDY_PREFERRED_VOICE_INDEX_KEY = 'buddy_preferred_voice_idx_v1';
-export const DEFAULT_BUDDY_VOICE_RATE = 1.05;
-export const DEFAULT_BUDDY_VOICE_PITCH = 0.92;
+export const DEFAULT_BUDDY_VOICE_RATE = 1.06;
+export const DEFAULT_BUDDY_VOICE_PITCH = 0.78;
+export const CLOUD_NEURAL_MALE_PLAYBACK_RATE = 1.08;
 export const PRIMARY_NEURAL_MALE_VOICES = [
+  'Ricardo',
   'pt-PT-DuarteNeural',
   'pt-BR-AntonioNeural',
   'br_005',
 ] as const;
 
-// Single Global activeAudioRef + Monotonic Generation Token so two voices NEVER overlap
+// Single Global activeAudioRef + Singleton HTMLAudioElement + Monotonic Generation Token so two voices NEVER overlap
 export const activeAudioRef: { current: HTMLAudioElement | null } = {
   current: null,
 };
+let singletonAudioElement: HTMLAudioElement | null = null;
+let isSingletonAudioUnlocked = false;
 let activeHtml5TtsAudio: HTMLAudioElement | null = null;
 let activeHtml5ObjectUrl: string | null = null;
 let activeNativeSpeechEndTimer: number | null = null;
 let activeOnEndCallback: (() => void) | null = null;
 let activeSpeechGenerationId = 0;
 
-// Strict Global Debounce & Cancellation Lock to eliminate double-trigger / echo
+// Strict Global Debounce & Cancellation Lock to eliminate double-trigger / echo (1200ms hard lock)
 let lastSpokenText = '';
 let lastSpokenAt = 0;
-export const DUPLICATE_SPEECH_DEBOUNCE_MS = 1500;
+export const DUPLICATE_SPEECH_DEBOUNCE_MS = 1200;
+
+function getOrCreateSingletonAudioElement(): HTMLAudioElement | null {
+  if (typeof window === 'undefined' || typeof Audio === 'undefined') {
+    return null;
+  }
+  if (!singletonAudioElement) {
+    singletonAudioElement = new Audio();
+    singletonAudioElement.preload = 'auto';
+  }
+  return singletonAudioElement;
+}
+
+// Unlock singleton HTMLAudioElement on first user interaction so Android WebView allows async play()
+if (typeof window !== 'undefined') {
+  const unlockAudioOnGesture = () => {
+    if (isSingletonAudioUnlocked) return;
+    try {
+      const el = getOrCreateSingletonAudioElement();
+      if (el && el.paused && !activeAudioRef.current) {
+        // Silent tiny WAV data URI to unlock WebView media element on user tap
+        el.src =
+          'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        el.volume = 0.01;
+        const p = el.play();
+        if (p && typeof p.then === 'function') {
+          p.then(() => {
+            el.pause();
+            el.currentTime = 0;
+            el.volume = 1.0;
+            isSingletonAudioUnlocked = true;
+          }).catch(() => {
+            // ignore
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+  window.addEventListener('pointerdown', unlockAudioOnGesture, { passive: true });
+  window.addEventListener('touchstart', unlockAudioOnGesture, { passive: true });
+}
 
 // In-Memory + IndexedDB Blob Cache for zero-latency Neural Male TTS playback
 const neuralTtsMemoryCache = new Map<string, Blob>();
@@ -210,7 +256,7 @@ export function selectBestGeminiLikePtVoice(
     }
   }
 
-  // Gather all Portuguese voices (both pt-BR and pt-PT so genuine male voices like jfb/duarte are never skipped)
+  // Gather all Portuguese voices (both pt-BR and pt-PT so genuine male voices like pte/bmf/jfb/duarte are never skipped)
   const ptVoices = voices.filter((v) => {
     const l = v.lang.toLowerCase();
     const n = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
@@ -226,96 +272,102 @@ export function selectBestGeminiLikePtVoice(
 
   if (ptVoices.length === 0) return undefined;
 
-  // Strictly exclude all known female identifiers on Android Google TTS, Samsung & Microsoft
-  // Note: 'ptd', 'ptc', 'bmg', 'bfs' (pt-BR) and 'sfs', 'gfs' (pt-PT) are female in Google TTS!
+  // Known Android Google/Samsung/Microsoft MALE voice identifiers
+  const knownMaleTokens = [
+    'pte',
+    'bmf',
+    'jfb',
+    'pmj',
+    'daniel',
+    'ricardo',
+    'antonio',
+    'antônio',
+    'duarte',
+    'fabio',
+    'fábio',
+    'nicolau',
+    'male',
+    'masc',
+    'homem',
+  ];
+
+  // Strictly EXCLUDE all known female identifiers on Android Google TTS, Samsung & Microsoft
+  // IMPORTANT: 'afs' (pt-br-x-afs-local / pt-br-x-afs-network) and 'sfs' are FEMALE in Google TTS on Android!
   const knownFemaleTokens = [
-    'francisca',
+    'afs',
+    'sfs',
+    'fem',
     'luciana',
+    'francisca',
+    'maria',
+    'heloisa',
+    'heloísa',
+    'raquel',
     'thalita',
     'vitoria',
     'vitória',
     'camila',
-    'maria',
     'fernanda',
     'joana',
     'catarina',
-    'raquel',
     'ines',
     'inês',
     'cristiano_female',
-    'female',
-    'femin',
     'mulher',
     'ptc',
     'ptd',
     'bmg',
     'bfs',
-    'sfs',
     'gfs',
   ];
 
-  const nonFemalePool = ptVoices.filter((v) => {
+  // Exclude known female tokens AND exclude index 0 if multiple pt voices exist (unless index 0 explicitly has a male token)
+  const nonFemalePool = ptVoices.filter((v, idx) => {
     const descriptor = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
-    return !knownFemaleTokens.some((tok) => descriptor.includes(tok));
+    if (knownFemaleTokens.some((tok) => descriptor.includes(tok))) {
+      return false;
+    }
+    if (
+      idx === 0 &&
+      ptVoices.length > 1 &&
+      !knownMaleTokens.some((m) => descriptor.includes(m))
+    ) {
+      return false;
+    }
+    return true;
   });
 
-  const searchPool = nonFemalePool.length > 0 ? nonFemalePool : ptVoices;
+  const searchPool =
+    nonFemalePool.length > 0
+      ? nonFemalePool
+      : ptVoices.length > 1
+        ? ptVoices.slice(1)
+        : ptVoices;
 
-  // Tier 0: Prefer Neural / Network Male Voices first (AntonioNeural, DuarteNeural, Google Neural network afs/pte/jfb/pmj)
-  const neuralMaleKeywords = [
+  // Tier 1: Explicit Android/Google/Samsung/Microsoft Male Identifiers (pte, bmf, jfb, daniel, ricardo, antonio, duarte, male, masc)
+  const priorityMaleKeywords = [
+    'pte-network',
+    'bmf-network',
+    'jfb-network',
     'antonioneural',
     'duarteneural',
-    'afs-network',
-    'pte-network',
-    'jfb-network',
-    'pmj-network',
-    'antonio',
-    'antônio',
-    'duarte',
-  ];
-
-  for (const kw of neuralMaleKeywords) {
-    const match = searchPool.find((v) =>
-      `${v.name} ${v.voiceURI || ''}`.toLowerCase().includes(kw)
-    );
-    if (match) return match;
-  }
-
-  // Tier 1: Explicit Android/Google/Microsoft Genuine Male Identifiers (afs, pte, jfb, daniel, antonio, etc.)
-  const maleKeywords = [
-    'afs',
     'pte',
+    'bmf',
     'jfb',
     'pmj',
     'daniel',
+    'ricardo',
     'antonio',
     'antônio',
     'duarte',
-    'ricardo',
-    'fabio',
-    'fábio',
-    'nicolau',
     'male',
-    'masculin',
-    'homem',
+    'masc',
   ];
 
-  for (const kw of maleKeywords) {
+  for (const kw of priorityMaleKeywords) {
     const match = searchPool.find((v) =>
       `${v.name} ${v.voiceURI || ''}`.toLowerCase().includes(kw)
     );
-    if (match) return match;
-  }
-
-  // Tier 2: On Samsung/Android Chrome, Google's voice array has the female voice at [0]
-  // and the male voice at [1]. Prefer the second non-female voice when available!
-  if (nonFemalePool.length >= 2) {
-    return nonFemalePool[1];
-  }
-
-  const tier3Keywords = ['natural', 'neural', 'google', 'microsoft'];
-  for (const kw of tier3Keywords) {
-    const match = searchPool.find((v) => v.name.toLowerCase().includes(kw));
     if (match) return match;
   }
 
@@ -564,7 +616,7 @@ async function synthesizeNeuralMaleAudioBlob(
 ): Promise<Blob | null> {
   const cleanText = text.trim().replace(/\s+/g, ' ');
   if (!cleanText) return null;
-  const cacheKey = `neural_male_v2:${cleanText}`;
+  const cacheKey = `neural_male_v3:${cleanText}`;
 
   const cached = await getCachedNeuralTtsBlob(cacheKey);
   if (cached) return cached;
@@ -576,8 +628,9 @@ async function synthesizeNeuralMaleAudioBlob(
     const chunkBuffers = await Promise.all(
       clauses.map(async (clause, idx) => {
         const controller = new AbortController();
-        const timer = window.setTimeout(() => controller.abort(), 3200);
+        const timer = window.setTimeout(() => controller.abort(), 2800);
         try {
+          // Primary Cloud Male Neural Stream (br_005 Male Baritone)
           const res = await fetch(
             'https://tiktok-tts.weilnet.workers.dev/api/generation',
             {
@@ -585,18 +638,38 @@ async function synthesizeNeuralMaleAudioBlob(
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 text: clause,
-                voice: 'br_005', // Warm Natural Neural Male Baritone Voice
+                voice: 'br_005',
               }),
               signal: controller.signal,
             }
           );
-          if (!res.ok) return null;
-          const json = (await res.json()) as {
-            success?: boolean;
-            data?: string;
-          };
-          if (!json?.data || typeof json.data !== 'string') return null;
-          return decodeBase64ToUint8Array(json.data, idx > 0);
+          if (res.ok) {
+            const json = (await res.json()) as {
+              success?: boolean;
+              data?: string;
+            };
+            if (json?.data && typeof json.data === 'string') {
+              const decoded = decodeBase64ToUint8Array(json.data, idx > 0);
+              if (decoded && decoded.byteLength > 64) {
+                return decoded;
+              }
+            }
+          }
+
+          // Secondary Cloud Male Stream (StreamElements Ricardo Male)
+          const seRes = await fetch(
+            `https://api.streamelements.com/kappa/v2/speech?voice=Ricardo&text=${encodeURIComponent(
+              clause
+            )}`,
+            { signal: controller.signal }
+          );
+          if (seRes.ok) {
+            const buf = await seRes.arrayBuffer();
+            if (buf && buf.byteLength > 64) {
+              return new Uint8Array(buf);
+            }
+          }
+          return null;
         } catch {
           return null;
         } finally {
@@ -629,13 +702,13 @@ async function synthesizeNeuralMaleAudioBlob(
   return null;
 }
 
-function playAudioBlobImmediate(
+async function playAudioBlobImmediate(
   blob: Blob,
   rate: number,
   generationId: number,
   onStart?: () => void,
   onEnd?: () => void
-): boolean {
+): Promise<boolean> {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return false;
   if (generationId !== activeSpeechGenerationId) return false;
   try {
@@ -644,12 +717,6 @@ function playAudioBlobImmediate(
       activeAudioRef.current.onended = null;
       activeAudioRef.current.onerror = null;
       activeAudioRef.current.pause();
-      activeAudioRef.current.currentTime = 0;
-      activeAudioRef.current = null;
-    }
-    if (activeHtml5TtsAudio) {
-      activeHtml5TtsAudio.pause();
-      activeHtml5TtsAudio = null;
     }
     if (activeHtml5ObjectUrl) {
       URL.revokeObjectURL(activeHtml5ObjectUrl);
@@ -657,20 +724,24 @@ function playAudioBlobImmediate(
     }
     const objUrl = URL.createObjectURL(blob);
     activeHtml5ObjectUrl = objUrl;
-    const audio = new Audio(objUrl);
+
+    const audio = getOrCreateSingletonAudioElement() || new Audio();
+    audio.src = objUrl;
     audio.volume = 1.0;
     const targetRate = Math.max(
-      0.92,
-      Math.min(1.35, rate || DEFAULT_BUDDY_VOICE_RATE)
+      0.95,
+      Math.min(1.35, rate ? rate * 1.02 : CLOUD_NEURAL_MALE_PLAYBACK_RATE)
     );
     audio.playbackRate = targetRate;
     activeAudioRef.current = audio;
     activeHtml5TtsAudio = audio;
+
     audio.onplay = () => {
       if (generationId !== activeSpeechGenerationId) {
         audio.pause();
         return;
       }
+      isSingletonAudioUnlocked = true;
       onStart?.();
     };
     audio.onended = () => {
@@ -708,19 +779,16 @@ function playAudioBlobImmediate(
         onEnd?.();
       }
     };
-    const playPromise = audio.play();
-    if (playPromise && typeof playPromise.catch === 'function') {
-      playPromise.catch(() => {
-        if (activeAudioRef.current === audio) {
-          activeAudioRef.current = null;
-        }
-        if (activeHtml5TtsAudio === audio) {
-          activeHtml5TtsAudio = null;
-        }
-      });
-    }
+
+    await audio.play();
     return true;
   } catch {
+    if (activeAudioRef.current) {
+      activeAudioRef.current = null;
+    }
+    if (activeHtml5TtsAudio) {
+      activeHtml5TtsAudio = null;
+    }
     return false;
   }
 }
@@ -745,10 +813,16 @@ async function tryPlayNeuralMaleAudioStream(
     return false;
   }
 
-  const ok = playAudioBlobImmediate(blob, rate, generationId, onStart, onEnd);
+  const ok = await playAudioBlobImmediate(
+    blob,
+    rate,
+    generationId,
+    onStart,
+    onEnd
+  );
   if (ok) {
     onVoiceResolved?.(
-      `Voz Neural Masculina (Duarte/Antonio Neural • ${rate.toFixed(2)}x)`
+      `Voz Neural Masculina (Ricardo/Duarte • ${CLOUD_NEURAL_MALE_PLAYBACK_RATE}x)`
     );
     return true;
   }
@@ -864,10 +938,11 @@ export function speakWithBuddyVoiceEngine(
   const normalizedText = text.trim().replace(/\s+/g, ' ');
   const nowMs = Date.now();
 
-  // Strict Global Debounce Lock: ignore duplicate calls with the same text within 1500ms!
+  // Hard Singleton Debounce Lock: ignore any duplicate speak() call fired within 1200ms of the previous call!
   if (
-    normalizedText.toLowerCase() === lastSpokenText.toLowerCase() &&
-    nowMs - lastSpokenAt < DUPLICATE_SPEECH_DEBOUNCE_MS
+    nowMs - lastSpokenAt < DUPLICATE_SPEECH_DEBOUNCE_MS &&
+    (normalizedText.toLowerCase() === lastSpokenText.toLowerCase() ||
+      nowMs - lastSpokenAt < 650)
   ) {
     return;
   }
@@ -881,15 +956,14 @@ export function speakWithBuddyVoiceEngine(
 
   const activeRate =
     rate !== undefined && Number.isFinite(rate)
-      ? Math.max(0.9, Math.min(1.4, rate))
-      : getSavedBuddyVoiceRate();
+      ? Math.max(0.95, Math.min(1.4, rate))
+      : 1.06;
 
   if (!skipChime) {
     playBuddyConfirmationChime();
   }
 
   // ENGINE 1 (PRIMARY WHEN ONLINE): Direct Neural Male Audio Stream Player (HTMLAudioElement)
-  // Completely bypasses Android Samsung WebView's female window.speechSynthesis!
   if (typeof navigator === 'undefined' || navigator.onLine !== false) {
     onStart?.();
     void tryPlayNeuralMaleAudioStream(
@@ -903,11 +977,11 @@ export function speakWithBuddyVoiceEngine(
       if (playedNeural || currentGenId !== activeSpeechGenerationId) {
         return;
       }
-      // Offline / unreachable fallback
+      // Fallback to Android Native Male Voice Selector (pitch = 0.78, rate = 1.06)
       speakOfflineFallback(
         normalizedText,
-        activeRate,
-        pitch,
+        1.06,
+        0.78,
         onStart,
         onEnd,
         onError,
@@ -917,11 +991,11 @@ export function speakWithBuddyVoiceEngine(
     return;
   }
 
-  // ENGINE 2 (OFFLINE FALLBACK ONLY): When device has no internet connection
+  // ENGINE 2 (OFFLINE FALLBACK): Android Native Male Voice Selector (pitch = 0.78, rate = 1.06)
   speakOfflineFallback(
     normalizedText,
-    activeRate,
-    pitch,
+    1.06,
+    0.78,
     onStart,
     onEnd,
     onError,
@@ -938,6 +1012,24 @@ function speakOfflineFallback(
   onError?: () => void,
   onVoiceResolved?: (voiceLabel: string) => void
 ): void {
+  // Prioritize window.speechSynthesis with our strict Male Voice Selector + pitch = 0.78 & rate = 1.06
+  // so it never uses the Android APK bridge's unpitched index-0 female 'afs' voice!
+  if (typeof window !== 'undefined' && Boolean(window.speechSynthesis)) {
+    const voices = window.speechSynthesis.getVoices() || [];
+    const chosenVoice = selectBestGeminiLikePtVoice(voices);
+    speakViaBrowserSpeechSynthesis(
+      normalizedText,
+      activeRate || 1.06,
+      pitch || 0.78,
+      chosenVoice,
+      onStart,
+      onEnd,
+      onError,
+      onVoiceResolved
+    );
+    return;
+  }
+
   const winAny = window as unknown as {
     BuddyNativeOverlay?: {
       speakText?: (spokenText: string) => void;
@@ -952,13 +1044,13 @@ function speakOfflineFallback(
       winAny.BuddyNativeOverlay?.speakNativeTts;
     if (typeof nativeSpeakFn === 'function') {
       try {
-        winAny.BuddyNativeOverlay?.setSpeechRate?.(activeRate);
+        winAny.BuddyNativeOverlay?.setSpeechRate?.(activeRate || 1.06);
       } catch {
         // ignore
       }
       onStart?.();
       nativeSpeakFn.call(winAny.BuddyNativeOverlay, normalizedText);
-      onVoiceResolved?.(`Voz Offline Masculina (${activeRate.toFixed(2)}x)`);
+      onVoiceResolved?.(`Voz Offline Masculina (${(activeRate || 1.06).toFixed(2)}x)`);
       activeNativeSpeechEndTimer = window.setTimeout(() => {
         activeNativeSpeechEndTimer = null;
         if (activeOnEndCallback) {
@@ -971,22 +1063,6 @@ function speakOfflineFallback(
     }
   } catch {
     // ignore
-  }
-
-  if ('speechSynthesis' in window) {
-    const voices = window.speechSynthesis.getVoices() || [];
-    const chosenVoice = selectBestGeminiLikePtVoice(voices);
-    speakViaBrowserSpeechSynthesis(
-      normalizedText,
-      activeRate,
-      pitch,
-      chosenVoice,
-      onStart,
-      onEnd,
-      onError,
-      onVoiceResolved
-    );
-    return;
   }
 
   onError?.();
@@ -1006,19 +1082,22 @@ function speakViaBrowserSpeechSynthesis(
     window.speechSynthesis.cancel();
     window.speechSynthesis.resume?.();
 
+    const safePitch = Math.min(0.82, Math.max(0.72, pitch || 0.78));
+    const safeRate = Math.min(1.15, Math.max(1.0, activeRate || 1.06));
+
     const utterance = new SpeechSynthesisUtterance(normalizedText);
     utterance.lang = chosenVoice?.lang || 'pt-BR';
-    utterance.rate = activeRate;
-    utterance.pitch = pitch; // Natural 0.92 male pitch
+    utterance.rate = safeRate; // 1.06 natural male pacing
+    utterance.pitch = safePitch; // 0.78 clear male baritone pitch
     utterance.volume = 1.0;
 
     if (chosenVoice) {
       utterance.voice = chosenVoice;
       onVoiceResolved?.(
-        `${chosenVoice.name} (${chosenVoice.lang} • Pitch ${pitch.toFixed(2)})`
+        `${chosenVoice.name} (${chosenVoice.lang} • Barítono ${safePitch.toFixed(2)})`
       );
     } else {
-      onVoiceResolved?.(`Português Masculino (Pitch ${pitch.toFixed(2)})`);
+      onVoiceResolved?.(`Português Barítono Masculino (Pitch ${safePitch.toFixed(2)})`);
     }
 
     let hasStarted = false;

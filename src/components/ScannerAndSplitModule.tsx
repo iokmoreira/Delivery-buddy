@@ -16,6 +16,9 @@ import {
   AlertTriangle,
   MapPin,
   Camera,
+  Languages,
+  ScanLine,
+  X,
 } from 'lucide-react';
 import { CargoChecklistItemId } from '../types/models';
 import { HEAVY_ITEMS_DB, SCANNER_OFFER_PRESETS } from '../data/seedData';
@@ -81,6 +84,7 @@ export const ScannerAndSplitModule: React.FC = () => {
   const [showWeightEditor, setShowWeightEditor] = useState<boolean>(false);
   const [isEarningsModalOpen, setIsEarningsModalOpen] =
     useState<boolean>(false);
+  const hasSpokenForModalOpenRef = useRef<boolean>(false);
 
   // Intercept Smart Back ("↩ Voltar") when Resumo de Ganhos modal or Weight Editor is open
   useEffect(() => {
@@ -181,6 +185,25 @@ export const ScannerAndSplitModule: React.FC = () => {
 
   const formatEurPt = (val: number): string =>
     `€${val.toFixed(2).replace('.', ',')}`;
+
+  // Speak ONLY ONCE when Resumo de Ganhos modal opens (never on parent click and never on close)
+  useEffect(() => {
+    if (isEarningsModalOpen) {
+      if (!hasSpokenForModalOpenRef.current) {
+        hasSpokenForModalOpenRef.current = true;
+        speakTextPt(
+          `Hoje: ${earningsTodayByApp.total.toFixed(2).replace('.', ',')} euros líquidos em ${realCompletedDeliveries.length} entregas.`
+        );
+      }
+    } else {
+      hasSpokenForModalOpenRef.current = false;
+    }
+  }, [
+    isEarningsModalOpen,
+    earningsTodayByApp.total,
+    realCompletedDeliveries.length,
+    speakTextPt,
+  ]);
 
   const matchedRouteTrap = useMemo(() => {
     if (!hasActiveOrder) return undefined;
@@ -668,63 +691,89 @@ export const ScannerAndSplitModule: React.FC = () => {
           ===================================================================== */}
       {!hasActiveOrder && (
         <>
-          {/* CLEAN TWO-COLUMN MINIMAL HEADER STRIP (No inner pills or heavy borders) */}
+          {/* 1. TOP SUMMARY BAR (Balanced 2-Column Header Container — Zero Line-Wrapping Bug) */}
           <div
-            className={`grid grid-cols-2 divide-x border-b pb-3 pt-1 ${
+            className={`grid grid-cols-2 gap-4 py-3.5 px-4 rounded-2xl border ${
               isDaylight
-                ? 'divide-slate-200 border-slate-200 text-slate-900'
-                : 'divide-slate-800 border-slate-800 text-slate-100'
+                ? 'bg-slate-50/70 border-slate-200/80 text-slate-900'
+                : 'bg-slate-900/80 border-slate-800 text-slate-100'
             }`}
           >
-            {/* LEFT COLUMN (GANHOS): €0,00 • 0 entregas — Click opens Detailed Earnings Modal */}
+            {/* LEFT COLUMN (Resumo de Ganhos trigger): Stacked €0,00 on top + 0 entregas hoje below */}
             <button
               type="button"
-              onClick={() => {
-                setIsEarningsModalOpen(true);
-                speakTextPt(
-                  `Hoje: ${earningsTodayByApp.total.toFixed(2).replace('.', ',')} euros líquidos em ${realCompletedDeliveries.length} entregas.`
-                );
-              }}
+              onClick={() => setIsEarningsModalOpen(true)}
               title="Toque para abrir Resumo de Ganhos & Estatísticas de Hoje"
-              className="pr-3 py-1.5 flex items-baseline justify-between gap-2 cursor-pointer transition text-left hover:opacity-85"
+              className="flex flex-col items-start justify-center cursor-pointer transition text-left hover:opacity-85"
             >
               <span
-                className={`text-2xl font-black tracking-tight leading-none ${
+                className={`text-2xl font-extrabold tracking-tight leading-none ${
                   isDaylight ? 'text-slate-900' : 'text-white'
                 }`}
               >
                 {formatEurPt(earningsTodayByApp.total)}
               </span>
               <span
-                className={`text-sm font-medium shrink-0 whitespace-nowrap ${
-                  isDaylight ? 'text-slate-600' : 'text-slate-400'
+                className={`text-xs font-medium mt-1 whitespace-nowrap ${
+                  isDaylight ? 'text-slate-500' : 'text-slate-400'
                 }`}
               >
-                • {realCompletedDeliveries.length} entregas
+                {realCompletedDeliveries.length} entregas hoje
               </span>
             </button>
 
-            {/* RIGHT COLUMN (CLIMA): ⛅ 18.2 °C Amarante — Click opens Weather Modal */}
+            {/* RIGHT COLUMN (Clima trigger): Custom Duotone SVG Weather Icon on Left + Stacked 17.9 °C & Amarante on Right */}
             <button
               type="button"
-              onClick={() => void openAndFetchAmaranteWeather(true)}
+              onClick={() => void openAndFetchAmaranteWeather(false)}
               title="Toque para abrir Clima Atual em Amarante e ouvir previsão"
-              className="pl-3 py-1.5 flex items-center justify-between gap-2 cursor-pointer transition text-left hover:opacity-85"
+              className={`border-l pl-4 flex items-center gap-3 cursor-pointer transition text-left hover:opacity-85 ${
+                isDaylight ? 'border-slate-200' : 'border-slate-800'
+              }`}
             >
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-xl leading-none select-none shrink-0">
-                  {amaranteLiveWeather.conditionEmoji}
-                </span>
+              {/* Custom Duotone SVG Weather Icon (Sun + Cloud Vector, strokeWidth=2) */}
+              <svg
+                viewBox="0 0 32 32"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-8 h-8 shrink-0"
+                aria-hidden="true"
+              >
+                {/* Geometric Sun & Rays in Cyan Accent */}
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="4.5"
+                  fill={isDaylight ? '#E0F2FE' : 'rgba(0, 229, 255, 0.16)'}
+                  stroke={isDaylight ? '#0891B2' : '#00E5FF'}
+                  strokeWidth="2"
+                />
+                <path
+                  d="M12 4V5.8M12 18.2V20M4 12H5.8M18.2 12H20M6.34 6.34L7.62 7.62M16.38 16.38L17.66 17.66M17.66 6.34L16.38 7.62M7.62 16.38L6.34 17.66"
+                  stroke={isDaylight ? '#0891B2' : '#00E5FF'}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                {/* Crisp Vector Cloud in Matte Slate */}
+                <path
+                  d="M11.5 25H22.5C25.2614 25 27.5 22.7614 27.5 20C27.5 17.3923 25.5037 15.2508 22.9539 15.0205C22.2484 11.8683 19.4357 9.5 16.05 9.5C12.1564 9.5 9 12.6564 9 16.55C9 16.7438 9.0078 16.9358 9.0231 17.1255C7.3095 17.6481 6 19.2422 6 21.15C6 23.2763 7.7237 25 9.85 25H11.5Z"
+                  fill={isDaylight ? '#FFFFFF' : '#0F172A'}
+                  stroke={isDaylight ? '#0F172A' : '#F8FAFC'}
+                  strokeWidth="2"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <div className="flex flex-col items-start justify-center min-w-0">
                 <span
-                  className={`text-xl font-black tracking-tight leading-none whitespace-nowrap ${
+                  className={`text-xl font-extrabold tracking-tight leading-none whitespace-nowrap ${
                     isDaylight ? 'text-slate-900' : 'text-white'
                   }`}
                 >
                   {amaranteLiveWeather.temperatureC.toFixed(1)} °C
                 </span>
                 <span
-                  className={`text-sm font-medium whitespace-nowrap ${
-                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  className={`text-xs font-medium mt-1 whitespace-nowrap ${
+                    isDaylight ? 'text-slate-500' : 'text-slate-400'
                   }`}
                 >
                   Amarante
@@ -733,63 +782,75 @@ export const ScannerAndSplitModule: React.FC = () => {
             </button>
           </div>
 
-          {/* TOP SECTION: Última Entrega (Clean Flat Surface — No nested inner card or heavy pill buttons) */}
-          <section
-            className={`py-3.5 border-b space-y-2.5 ${
-              isDaylight ? 'border-slate-200' : 'border-slate-800'
-            }`}
-          >
+          {/* 2. ÚLTIMA ENTREGA SECTION (Clean Structured Header + Segmented SVG Action Bar + Proportional Surface) */}
+          <section className="py-2 space-y-2.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-cyan-500 shrink-0" />
                 <h2
-                  className={`text-lg font-extrabold tracking-tight ${
+                  className={`text-base font-extrabold tracking-tight ${
                     isDaylight ? 'text-slate-900' : 'text-white'
                   }`}
                 >
                   Última Entrega
                 </h2>
               </div>
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
                   onClick={() => openTranslatorModal('TRADUTOR')}
-                  className={`text-xs sm:text-sm font-bold flex items-center gap-1 cursor-pointer transition whitespace-nowrap hover:underline ${
-                    isDaylight ? 'text-cyan-700' : 'text-cyan-400'
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition whitespace-nowrap ${
+                    isDaylight
+                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-800'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-100'
                   }`}
                 >
-                  <span>🌍 Tradutor &amp; Libras</span>
+                  <Languages
+                    className={`h-3.5 w-3.5 shrink-0 ${
+                      isDaylight ? 'text-[#0891B2]' : 'text-[#00E5FF]'
+                    }`}
+                    strokeWidth={2.2}
+                  />
+                  <span>Tradutor &amp; Libras</span>
                 </button>
-                <span
-                  className={isDaylight ? 'text-slate-300' : 'text-slate-700'}
-                >
-                  |
-                </span>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className={`text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap hover:underline ${
-                    isDaylight ? 'text-slate-700' : 'text-slate-200'
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition whitespace-nowrap ${
+                    isDaylight
+                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-800'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-100'
                   }`}
                 >
-                  <Camera className="h-4 w-4 text-cyan-500 shrink-0" />
+                  <ScanLine
+                    className={`h-3.5 w-3.5 shrink-0 ${
+                      isDaylight ? 'text-[#0891B2]' : 'text-[#00E5FF]'
+                    }`}
+                    strokeWidth={2.2}
+                  />
                   <span>Ler Pedido</span>
                 </button>
               </div>
             </div>
 
             {earningsTodayByApp.lastDelivery ? (
-              <div className="pt-1 space-y-1.5">
+              <div
+                className={`py-3 px-3.5 rounded-xl border space-y-1.5 ${
+                  isDaylight
+                    ? 'bg-slate-50/50 border-slate-100'
+                    : 'bg-slate-900/60 border-slate-800/80'
+                }`}
+              >
                 <div className="flex items-baseline justify-between gap-2">
                   <span
-                    className={`text-sm font-extrabold uppercase tracking-wide ${
+                    className={`text-xs font-extrabold uppercase tracking-wide ${
                       isDaylight ? 'text-cyan-700' : 'text-cyan-400'
                     }`}
                   >
                     {earningsTodayByApp.lastDelivery.platform}
                   </span>
                   <span
-                    className={`text-2xl font-black ${
+                    className={`text-xl font-black ${
                       isDaylight ? 'text-slate-900' : 'text-white'
                     }`}
                   >
@@ -797,15 +858,15 @@ export const ScannerAndSplitModule: React.FC = () => {
                   </span>
                 </div>
                 <div
-                  className={`text-base font-bold truncate ${
+                  className={`text-sm font-bold truncate ${
                     isDaylight ? 'text-slate-800' : 'text-slate-100'
                   }`}
                 >
                   {earningsTodayByApp.lastDelivery.segment}
                 </div>
                 <div
-                  className={`flex items-center justify-between text-sm pt-1 ${
-                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  className={`flex items-center justify-between text-xs pt-1 ${
+                    isDaylight ? 'text-slate-500' : 'text-slate-400'
                   }`}
                 >
                   <span>
@@ -837,17 +898,23 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="pt-0.5">
+              <div
+                className={`py-3 px-3.5 rounded-xl border ${
+                  isDaylight
+                    ? 'bg-slate-50/50 border-slate-100'
+                    : 'bg-slate-900/60 border-slate-800/80'
+                }`}
+              >
                 <p
-                  className={`text-base font-bold ${
-                    isDaylight ? 'text-slate-900' : 'text-slate-100'
+                  className={`text-sm font-bold ${
+                    isDaylight ? 'text-slate-800' : 'text-slate-100'
                   }`}
                 >
                   Nenhuma entrega registada hoje
                 </p>
                 <p
-                  className={`text-sm font-medium mt-0.5 leading-relaxed ${
-                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  className={`text-xs mt-0.5 leading-relaxed ${
+                    isDaylight ? 'text-slate-500' : 'text-slate-400'
                   }`}
                 >
                   Assim que aceitar ou ler um pedido, entrará automaticamente em
@@ -857,10 +924,10 @@ export const ScannerAndSplitModule: React.FC = () => {
             )}
           </section>
 
-          {/* BOTTOM SECTION: Estatística Diária (Open 2x2 Typographic Grid with 1px Hairlines — Zero Colored Card Boxes) */}
-          <section className="pt-2 space-y-3">
+          {/* 3. ESTATÍSTICA DIÁRIA & META DIÁRIA (Crisp 2x2 Grid + pr-20 Safe Padding Against Floating Buddy Overlap) */}
+          <section className="pt-1 space-y-3">
             <h2
-              className={`text-lg font-extrabold tracking-tight ${
+              className={`text-base font-extrabold tracking-tight ${
                 isDaylight ? 'text-slate-900' : 'text-white'
               }`}
             >
@@ -868,22 +935,22 @@ export const ScannerAndSplitModule: React.FC = () => {
             </h2>
 
             <div
-              className={`grid grid-cols-2 divide-x divide-y border-t border-b ${
+              className={`grid grid-cols-2 border-t border-b divide-x divide-y ${
                 isDaylight
-                  ? 'divide-slate-100 border-slate-100'
-                  : 'divide-slate-800/80 border-slate-800/80'
+                  ? 'border-slate-200/80 divide-slate-200/80'
+                  : 'border-slate-800 divide-slate-800'
               }`}
             >
-              <div className="py-3 pr-3">
+              <div className="p-3.5">
                 <span
-                  className={`text-sm font-medium block ${
-                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  className={`text-xs font-medium block ${
+                    isDaylight ? 'text-slate-500' : 'text-slate-400'
                   }`}
                 >
                   Entregas concluídas
                 </span>
                 <span
-                  className={`text-xl font-black mt-0.5 block ${
+                  className={`text-lg font-extrabold mt-0.5 block ${
                     isDaylight ? 'text-slate-900' : 'text-white'
                   }`}
                 >
@@ -891,16 +958,16 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </span>
               </div>
 
-              <div className="py-3 pl-3">
+              <div className="p-3.5">
                 <span
-                  className={`text-sm font-medium block ${
-                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  className={`text-xs font-medium block ${
+                    isDaylight ? 'text-slate-500' : 'text-slate-400'
                   }`}
                 >
                   Distância hoje
                 </span>
                 <span
-                  className={`text-xl font-black mt-0.5 block ${
+                  className={`text-lg font-extrabold mt-0.5 block ${
                     isDaylight ? 'text-slate-900' : 'text-white'
                   }`}
                 >
@@ -908,17 +975,17 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </span>
               </div>
 
-              <div className="py-3 pr-3">
+              <div className="p-3.5">
                 <span
-                  className={`text-sm font-medium block ${
-                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  className={`text-xs font-medium block ${
+                    isDaylight ? 'text-slate-500' : 'text-slate-400'
                   }`}
                 >
-                  Média líquida €/km
+                  Média Líquida €/km
                 </span>
                 <span
-                  className={`text-xl font-black mt-0.5 block ${
-                    isDaylight ? 'text-cyan-700' : 'text-cyan-400'
+                  className={`text-lg font-extrabold mt-0.5 block ${
+                    isDaylight ? 'text-[#0891B2]' : 'text-[#00E5FF]'
                   }`}
                 >
                   {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')}{' '}
@@ -926,16 +993,16 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </span>
               </div>
 
-              <div className="py-3 pl-3">
+              <div className="p-3.5">
                 <span
-                  className={`text-sm font-medium block ${
-                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  className={`text-xs font-medium block ${
+                    isDaylight ? 'text-slate-500' : 'text-slate-400'
                   }`}
                 >
                   Média por hora
                 </span>
                 <span
-                  className={`text-xl font-black mt-0.5 block ${
+                  className={`text-lg font-extrabold mt-0.5 block ${
                     isDaylight ? 'text-slate-900' : 'text-white'
                   }`}
                 >
@@ -945,28 +1012,27 @@ export const ScannerAndSplitModule: React.FC = () => {
               </div>
             </div>
 
-            {/* Minimal Progress Bar for Meta Diária (Zero Colored Card Background) */}
-            <div className="pt-1 space-y-1.5">
-              <div className="flex items-center justify-between text-sm">
+            {/* Meta Diária Row: Label & Value placed on Left/Center with pr-20 right safe padding so Floating Buddy never covers it */}
+            <div className="pt-1 pr-20 space-y-1.5">
+              <div className="flex items-center justify-between gap-2 text-xs">
                 <span
-                  className={`font-bold ${
+                  className={`font-bold whitespace-nowrap ${
                     isDaylight ? 'text-slate-700' : 'text-slate-300'
                   }`}
                 >
-                  Meta Diária
+                  Meta Diária ({earningsTodayByApp.goalProgressPct}%)
                 </span>
                 <span
-                  className={`font-extrabold ${
-                    isDaylight ? 'text-slate-900' : 'text-cyan-400'
+                  className={`font-extrabold whitespace-nowrap ${
+                    isDaylight ? 'text-slate-900' : 'text-[#00E5FF]'
                   }`}
                 >
                   {formatEurPt(earningsTodayByApp.total)} /{' '}
-                  {formatEurPt(earningsTodayByApp.goalTargetEur)} (
-                  {earningsTodayByApp.goalProgressPct}%)
+                  {formatEurPt(earningsTodayByApp.goalTargetEur)}
                 </span>
               </div>
               <div
-                className={`w-full h-2 rounded-full overflow-hidden ${
+                className={`w-full h-1 rounded-full overflow-hidden ${
                   isDaylight ? 'bg-slate-200' : 'bg-slate-800'
                 }`}
               >
@@ -1028,13 +1094,14 @@ export const ScannerAndSplitModule: React.FC = () => {
                     cancelSpeechNow();
                     setIsEarningsModalOpen(false);
                   }}
-                  className={`rounded-xl border px-3 py-1.5 text-base font-bold cursor-pointer shrink-0 transition ${
+                  className={`rounded-xl border p-2 cursor-pointer shrink-0 transition ${
                     isDaylight
                       ? 'bg-slate-50 border-slate-200 text-slate-900 hover:bg-slate-100'
                       : 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700'
                   }`}
+                  aria-label="Fechar Resumo de Ganhos"
                 >
-                  ✕
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
