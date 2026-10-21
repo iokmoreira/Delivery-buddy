@@ -45,6 +45,12 @@ import {
 } from '../utils/amaranteCopilotTelemetry';
 import { playBuddyOpenChime } from '../services/voiceEngine';
 import {
+  BUDDY_CUTOUT_AVATARS,
+  getActiveBuddyAvatar,
+  resolveBuddyShiftVisualState,
+  useBuddySkin,
+} from '../utils/buddyAvatars';
+import {
   CloudApprovalRequest,
   computeSameLocationPinOffset,
   getDeterministicCourierCenterCoords,
@@ -707,6 +713,23 @@ const AMARANTE_INITIAL_VIEW_CENTER = {
   lng: -8.0818,
 };
 
+// Map auto-follow: resume following the driver this long after the last manual gesture
+const AUTO_FOLLOW_RESUME_MS = 6000;
+
+// Crosswalk (passadeira) alerting
+const CROSSWALK_ALERT_MAX_M = 60; // start alerting from 60m ahead
+const CROSSWALK_ALERT_MIN_M = 8; // never alert once (almost) on top of / past it
+const CROSSWALK_PER_ID_COOLDOWN_MS = 45000;
+const CROSSWALK_GLOBAL_GAP_MS = 3000;
+const CROSSWALK_MIN_SPEED_KMH = 15;
+
+// GPS sanity filter (multipath / urban-canyon protection)
+const GPS_MAX_ACCURACY_M = 22;
+const GPS_MAX_PLAUSIBLE_KMH = 110;
+const GPS_MAX_ACCEL_MS2 = 9;
+const GPS_DOPPLER_SMOOTH_SAMPLES = 3;
+const GPS_JUMP_RESET_AFTER_REJECTS = 4;
+
 export const ShiftRadarModule: React.FC = () => {
   const {
     themeMode,
@@ -719,13 +742,34 @@ export const ShiftRadarModule: React.FC = () => {
     activeDeliveryLifecycle,
     hasRealActiveDelivery,
     currentMascotState,
-    currentMascotImageUrl,
     addRoadHazardPin,
     awardBuddyRewardTask,
     speakTextPt,
+    userPrefs,
   } = useEstafetas();
 
   const isDaylight = themeMode === 'DAYLIGHT';
+
+  // Single source of truth for the user's own map marker (same helper as Header / Bubble / Navbar)
+  const [buddySkin] = useBuddySkin();
+  const selfVisualState = resolveBuddyShiftVisualState({
+    isAppPaused,
+    isNinja: Boolean(userPrefs?.anonymousMode),
+    isDelivery: currentMascotState === 'DELIVERY',
+  });
+  const selfMarkerAvatarUrl = getActiveBuddyAvatar(selfVisualState, buddySkin, {
+    cutout: true,
+  });
+  const selfMarkerBadgeLabel =
+    selfVisualState === 'NINJA'
+      ? 'NINJA'
+      : selfVisualState === 'AUSENTE'
+        ? 'AUSENTE'
+        : buddySkin === 'PRESIDENTE'
+          ? 'PRESIDENTE'
+          : selfVisualState === 'DELIVERY'
+            ? 'EM ENTREGA'
+            : 'ONLINE';
 
   const [mapStyleMode, setMapStyleMode] = useState<
     'MAPA_NEON' | 'TRANSITO_GOOGLE' | 'SATELITE'
@@ -816,6 +860,7 @@ export const ShiftRadarModule: React.FC = () => {
   const learnedPathsLayerRef = useRef<L.LayerGroup | null>(null);
   const learnedPathAlertCooldownRef = useRef<Record<string, number>>({});
   const isAutoFollowRef = useRef<boolean>(true);
+  const followResumeTimerRef = useRef<number | null>(null);
   const hasCenteredOnFirstFixRef = useRef<boolean>(false);
   const hasHighAccuracyFixRef = useRef<boolean>(false);
   const lastHighAccuracyFixMsRef = useRef<number>(0);
@@ -838,6 +883,10 @@ export const ShiftRadarModule: React.FC = () => {
   const consecutiveOverSecRef = useRef<number>(0);
   const lastSpeedVoiceAlertMsRef = useRef<number>(0);
   const crosswalkCooldownMapRef = useRef<Record<string, number>>({});
+  const lastCrosswalkAlertAnyMsRef = useRef<number>(0);
+  const dopplerSpeedSamplesRef = useRef<number[]>([]);
+  const lastAcceptedSpeedMsRef = useRef<number>(0);
+  const consecutiveJumpRejectsRef = useRef<number>(0);
   const prevCrosswalkDistancesRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
@@ -895,7 +944,9 @@ export const ShiftRadarModule: React.FC = () => {
     []
   );
 
-  // Check proximity to mapped or courier-taught Amarante crosswalks (<= 45m & > 28 km/h along heading)
+  // Check proximity to mapped or courier-taught Amarante crosswalks (8–60m ahead along heading).
+  // Cooldown is tracked PER crosswalk ID (45s) with only a 3s global gap, so consecutive
+  // crosswalks on the same road (e.g. EM 312) each get their own alert.
   const evaluateCrosswalkProximity = useCallback(
     (
       lat: number,
@@ -903,51 +954,61 @@ export const ShiftRadarModule: React.FC = () => {
       speedKmh: number,
       riderHeading: number | null
     ) => {
-      if (speedKmh <= 28) {
-        setApproachingCrosswalkAlert(null);
-        return;
-      }
-
       const nowMs = Date.now();
-      let closestMatch: {
+      const candidates: Array<{
         cw: AmaranteCrosswalkPoint;
         distMeters: number;
-      } | null = null;
+      }> = [];
 
       for (const cw of amaranteCrosswalks) {
         const distMeters = computeHaversineMeters(lat, lng, cw.lat, cw.lng);
         const prevDist = prevCrosswalkDistancesRef.current[cw.id];
         prevCrosswalkDistancesRef.current[cw.id] = distMeters;
 
-        if (distMeters <= 45) {
-          const bearingToCw = computeBearingDegrees(lat, lng, cw.lat, cw.lng);
-          const isAlongHeading =
-            riderHeading !== null
-              ? getAngleDifferenceDeg(riderHeading, bearingToCw) <= 68
-              : prevDist === undefined || distMeters <= prevDist + 1.5;
-
-          if (isAlongHeading) {
-            if (!closestMatch || distMeters < closestMatch.distMeters) {
-              closestMatch = { cw, distMeters: Math.round(distMeters) };
-            }
-          }
+        if (
+          distMeters > CROSSWALK_ALERT_MAX_M ||
+          distMeters < CROSSWALK_ALERT_MIN_M
+        ) {
+          continue;
+        }
+        const bearingToCw = computeBearingDegrees(lat, lng, cw.lat, cw.lng);
+        const isAhead =
+          riderHeading !== null
+            ? getAngleDifferenceDeg(riderHeading, bearingToCw) <= 65
+            : prevDist !== undefined && distMeters < prevDist - 0.5;
+        if (isAhead) {
+          candidates.push({ cw, distMeters });
         }
       }
 
-      if (closestMatch) {
-        setApproachingCrosswalkAlert({
-          streetLabel: closestMatch.cw.streetLabel,
-          distanceMeters: Math.max(8, closestMatch.distMeters),
-        });
-        const lastAlerted =
-          crosswalkCooldownMapRef.current[closestMatch.cw.id] || 0;
-        if (nowMs - lastAlerted > 90000) {
-          crosswalkCooldownMapRef.current[closestMatch.cw.id] = nowMs;
-          playBuddyOpenChime();
-          speakTextPt('Atenção: passadeira à frente.');
-        }
-      } else {
+      if (speedKmh < CROSSWALK_MIN_SPEED_KMH || candidates.length === 0) {
         setApproachingCrosswalkAlert(null);
+        return;
+      }
+
+      candidates.sort((a, b) => a.distMeters - b.distMeters);
+      const closest = candidates[0];
+      setApproachingCrosswalkAlert({
+        streetLabel: closest.cw.streetLabel,
+        distanceMeters: Math.max(8, Math.round(closest.distMeters)),
+      });
+
+      // Voice alert for the nearest crosswalk that is not in its own cooldown
+      if (nowMs - lastCrosswalkAlertAnyMsRef.current < CROSSWALK_GLOBAL_GAP_MS) {
+        return;
+      }
+      const due = candidates.find(
+        (c) =>
+          nowMs - (crosswalkCooldownMapRef.current[c.cw.id] || 0) >
+          CROSSWALK_PER_ID_COOLDOWN_MS
+      );
+      if (due) {
+        crosswalkCooldownMapRef.current[due.cw.id] = nowMs;
+        lastCrosswalkAlertAnyMsRef.current = nowMs;
+        playBuddyOpenChime();
+        speakTextPt(
+          `Atenção: passadeira a ${Math.round(due.distMeters / 5) * 5} metros.`
+        );
       }
     },
     [amaranteCrosswalks, speakTextPt]
@@ -972,27 +1033,33 @@ export const ShiftRadarModule: React.FC = () => {
       }
 
       const nowMs = Date.now();
-      const isHighAcc =
+      const hasAccuracy =
         typeof accuracy === 'number' &&
         Number.isFinite(accuracy) &&
-        accuracy > 0 &&
-        accuracy <= 40;
-
-      if (isHighAcc) {
+        accuracy > 0;
+      // 1. Accuracy gate: fixes worse than 22m (multipath / cell-tower) never move the pin
+      //    once a good fix exists, and NEVER feed the speedometer.
+      const isLowQualityFix =
+        hasAccuracy && (accuracy as number) > GPS_MAX_ACCURACY_M;
+      if (!isLowQualityFix) {
         hasHighAccuracyFixRef.current = true;
         lastHighAccuracyFixMsRef.current = nowMs;
-      } else if (
-        !forceAccept &&
-        hasHighAccuracyFixRef.current &&
-        nowMs - lastHighAccuracyFixMsRef.current < 60000 &&
-        typeof accuracy === 'number' &&
-        accuracy > 45
-      ) {
-        // Ignore coarse cell-tower / network coordinate jumps once high-accuracy GPS is locked!
+      } else if (!forceAccept && hasHighAccuracyFixRef.current) {
         return null;
       }
 
+      const rawDopplerKmh =
+        typeof rawSpeedMetersPerSec === 'number' &&
+        Number.isFinite(rawSpeedMetersPerSec) &&
+        rawSpeedMetersPerSec >= 0
+          ? rawSpeedMetersPerSec * 3.6
+          : null;
+
       const prev = lastAcceptedCoordsRef.current;
+      const dtSec = Math.max(
+        0.3,
+        (nowMs - lastFixTimestampMsRef.current) / 1000
+      );
       let computedDeltaKmh: number | null = null;
       let computedBearing: number | null =
         typeof rawHeadingDeg === 'number' &&
@@ -1000,6 +1067,7 @@ export const ShiftRadarModule: React.FC = () => {
         rawHeadingDeg >= 0
           ? Math.round(rawHeadingDeg)
           : null;
+      let positionOnly = isLowQualityFix;
 
       if (prev) {
         const distMeters = computeHaversineMeters(
@@ -1008,92 +1076,115 @@ export const ShiftRadarModule: React.FC = () => {
           lat,
           lng
         );
-        const dtSec = Math.max(
-          0.4,
-          (nowMs - lastFixTimestampMsRef.current) / 1000
-        );
-
-        if (distMeters >= 2 && dtSec <= 25) {
-          computedDeltaKmh = Math.min(
-            135,
-            Math.round((distMeters / dtSec) * 3.6)
-          );
-          if (computedBearing === null) {
-            computedBearing = Math.round(
-              computeBearingDegrees(prev.lat, prev.lng, lat, lng)
-            );
-          }
-        }
 
         // Minimum movement deadband to prevent stationary pin jitter while preserving 4-second speed hold
         if (!forceAccept && distMeters < 4) {
-          const rawGpsKmh =
-            typeof rawSpeedMetersPerSec === 'number' &&
-            Number.isFinite(rawSpeedMetersPerSec) &&
-            rawSpeedMetersPerSec > 0
-              ? Math.round(rawSpeedMetersPerSec * 3.6)
+          if (!isLowQualityFix && rawDopplerKmh !== null) {
+            const samples = dopplerSpeedSamplesRef.current;
+            samples.push(rawDopplerKmh);
+            while (samples.length > GPS_DOPPLER_SMOOTH_SAMPLES) samples.shift();
+          }
+          const smoothedDoppler =
+            dopplerSpeedSamplesRef.current.length > 0
+              ? dopplerSpeedSamplesRef.current.reduce((a, b) => a + b, 0) /
+                dopplerSpeedSamplesRef.current.length
               : 0;
-          if (rawGpsKmh >= 3) {
-            const smoothed =
-              lastMovingSpeedKmhRef.current > 3
-                ? Math.round(
-                    0.65 * rawGpsKmh + 0.35 * lastMovingSpeedKmhRef.current
-                  )
-                : rawGpsKmh;
-            lastMovingSpeedKmhRef.current = smoothed;
+          if (smoothedDoppler >= 3) {
+            const kmh = Math.round(Math.min(GPS_MAX_PLAUSIBLE_KMH, smoothedDoppler));
+            lastMovingSpeedKmhRef.current = kmh;
             lastMovingSpeedAtMsRef.current = nowMs;
-            currentSpeedRef.current = smoothed;
-            setCurrentSpeedKmh(smoothed);
+            currentSpeedRef.current = kmh;
+            lastAcceptedSpeedMsRef.current = kmh / 3.6;
+            setCurrentSpeedKmh(kmh);
           } else if (nowMs - lastMovingSpeedAtMsRef.current < 4000) {
             // 4-Second Speed Hold: never drop to 0 KM/H on intermediate GPS ticks while driving!
             currentSpeedRef.current = lastMovingSpeedKmhRef.current;
             setCurrentSpeedKmh(lastMovingSpeedKmhRef.current);
           } else {
             currentSpeedRef.current = 0;
+            lastAcceptedSpeedMsRef.current = 0;
             setCurrentSpeedKmh(0);
           }
           return null;
+        }
+
+        // 2. Impossible-jump rejection: > 110 km/h implied, or > 9 m/s² acceleration
+        if (!forceAccept && !positionOnly && dtSec <= 20) {
+          const impliedMs = distMeters / dtSec;
+          // Some devices report speed=0 when Doppler is unavailable: then trust the implied speed
+          const newSpeedMs =
+            rawDopplerKmh !== null && rawDopplerKmh > 0.5
+              ? rawDopplerKmh / 3.6
+              : impliedMs;
+          const accelMs2 =
+            Math.abs(newSpeedMs - lastAcceptedSpeedMsRef.current) /
+            Math.max(1, dtSec);
+          const isImpossible =
+            impliedMs * 3.6 > GPS_MAX_PLAUSIBLE_KMH ||
+            accelMs2 > GPS_MAX_ACCEL_MS2;
+          if (isImpossible) {
+            consecutiveJumpRejectsRef.current += 1;
+            if (consecutiveJumpRejectsRef.current < GPS_JUMP_RESET_AFTER_REJECTS) {
+              return null;
+            }
+            // Persistent disagreement (e.g. after a tunnel): re-anchor the pin,
+            // but never count this jump as speed or distance.
+            positionOnly = true;
+            dopplerSpeedSamplesRef.current = [];
+          }
+        }
+        consecutiveJumpRejectsRef.current = 0;
+
+        if (!positionOnly && distMeters >= 2 && dtSec <= 25) {
+          computedDeltaKmh = (distMeters / dtSec) * 3.6;
+          if (computedBearing === null) {
+            computedBearing = Math.round(
+              computeBearingDegrees(prev.lat, prev.lng, lat, lng)
+            );
+          }
         }
       }
 
       lastFixTimestampMsRef.current = nowMs;
 
-      const rawSensorKmh =
-        typeof rawSpeedMetersPerSec === 'number' &&
-        Number.isFinite(rawSpeedMetersPerSec) &&
-        rawSpeedMetersPerSec > 0
-          ? Math.round(rawSpeedMetersPerSec * 3.6)
-          : 0;
-
-      // Combine native coords.speed with Haversine velocity fallback (distanceMeters / elapsedSeconds * 3.6)
-      const candidateMovingKmh =
-        rawSensorKmh >= 3
-          ? computedDeltaKmh !== null && computedDeltaKmh > rawSensorKmh * 1.35
-            ? Math.round(0.6 * rawSensorKmh + 0.4 * computedDeltaKmh)
-            : rawSensorKmh
-          : computedDeltaKmh !== null && computedDeltaKmh >= 3
-            ? computedDeltaKmh
-            : 0;
-
+      // 3. Speed: hardware Doppler (coords.speed) averaged over the last 3 samples;
+      //    Haversine delta is only a fallback when the device gives no Doppler speed.
       let cleanSpeedKmh = 0;
-      if (candidateMovingKmh >= 3) {
-        cleanSpeedKmh =
+      if (!positionOnly) {
+        let candidateKmh = 0;
+        const dopplerUsable =
+          rawDopplerKmh !== null &&
+          (rawDopplerKmh > 0.5 ||
+            computedDeltaKmh === null ||
+            computedDeltaKmh < 8);
+        if (rawDopplerKmh !== null && dopplerUsable) {
+          const samples = dopplerSpeedSamplesRef.current;
+          samples.push(rawDopplerKmh);
+          while (samples.length > GPS_DOPPLER_SMOOTH_SAMPLES) samples.shift();
+          candidateKmh = samples.reduce((a, b) => a + b, 0) / samples.length;
+        } else if (computedDeltaKmh !== null) {
+          candidateKmh =
+            lastMovingSpeedKmhRef.current > 3 &&
+            nowMs - lastMovingSpeedAtMsRef.current < 6000
+              ? 0.6 * computedDeltaKmh + 0.4 * lastMovingSpeedKmhRef.current
+              : computedDeltaKmh;
+        }
+        candidateKmh = Math.min(GPS_MAX_PLAUSIBLE_KMH, candidateKmh);
+
+        if (candidateKmh >= 3) {
+          cleanSpeedKmh = Math.round(candidateKmh);
+          lastMovingSpeedKmhRef.current = cleanSpeedKmh;
+          lastMovingSpeedAtMsRef.current = nowMs;
+        } else if (
           lastMovingSpeedKmhRef.current > 3 &&
-          nowMs - lastMovingSpeedAtMsRef.current < 6000
-            ? Math.round(
-                0.7 * candidateMovingKmh + 0.3 * lastMovingSpeedKmhRef.current
-              )
-            : candidateMovingKmh;
-        lastMovingSpeedKmhRef.current = cleanSpeedKmh;
-        lastMovingSpeedAtMsRef.current = nowMs;
-      } else if (
-        lastMovingSpeedKmhRef.current > 3 &&
-        nowMs - lastMovingSpeedAtMsRef.current < 4000
-      ) {
-        // Hold last moving speed for 4 full seconds before decaying to 0 KM/H
-        cleanSpeedKmh = lastMovingSpeedKmhRef.current;
+          nowMs - lastMovingSpeedAtMsRef.current < 4000
+        ) {
+          // Hold last moving speed for 4 full seconds before decaying to 0 KM/H
+          cleanSpeedKmh = lastMovingSpeedKmhRef.current;
+        }
+        lastAcceptedSpeedMsRef.current = cleanSpeedKmh / 3.6;
       } else {
-        cleanSpeedKmh = 0;
+        cleanSpeedKmh = currentSpeedRef.current;
       }
 
       currentSpeedRef.current = cleanSpeedKmh;
@@ -1886,12 +1977,36 @@ export const ShiftRadarModule: React.FC = () => {
     const learnedPathsLayer = L.layerGroup().addTo(map);
     const peerLayer = L.layerGroup().addTo(map);
 
-    // Immediately pause auto-follow on any user touch/drag/zoom so the map NEVER snaps back while panning
+    // Pause auto-follow on any user touch/drag/zoom so the map never fights the finger,
+    // then automatically resume following the driver 6 seconds after the last gesture.
+    const resumeFollowNow = () => {
+      followResumeTimerRef.current = null;
+      if (isAutoFollowRef.current) return;
+      isAutoFollowRef.current = true;
+      setIsAutoFollowActive(true);
+      const fix = lastAcceptedCoordsRef.current;
+      if (fix) {
+        map.panTo([fix.lat, fix.lng], { animate: true, duration: 0.6 });
+      }
+    };
+    const scheduleFollowResume = () => {
+      if (followResumeTimerRef.current !== null) {
+        window.clearTimeout(followResumeTimerRef.current);
+      }
+      followResumeTimerRef.current = window.setTimeout(
+        resumeFollowNow,
+        AUTO_FOLLOW_RESUME_MS
+      );
+    };
     const disableAutoFollowOnUserGesture = () => {
       if (isAutoFollowRef.current) {
         isAutoFollowRef.current = false;
         setIsAutoFollowActive(false);
       }
+      scheduleFollowResume();
+    };
+    const restartResumeTimerIfPaused = () => {
+      if (!isAutoFollowRef.current) scheduleFollowResume();
     };
 
     const handleZoomChanged = () => {
@@ -1900,7 +2015,9 @@ export const ShiftRadarModule: React.FC = () => {
 
     map.on('dragstart', disableAutoFollowOnUserGesture);
     map.on('mousedown', disableAutoFollowOnUserGesture);
+    map.on('dragend', restartResumeTimerIfPaused);
     map.on('zoomend', handleZoomChanged);
+    map.on('zoomend', restartResumeTimerIfPaused);
     const containerEl = mapContainerRef.current;
     if (containerEl) {
       containerEl.addEventListener(
@@ -1928,6 +2045,10 @@ export const ShiftRadarModule: React.FC = () => {
 
     return () => {
       window.clearTimeout(timer);
+      if (followResumeTimerRef.current !== null) {
+        window.clearTimeout(followResumeTimerRef.current);
+        followResumeTimerRef.current = null;
+      }
       if (glidingAnimFrameRef.current !== null) {
         cancelAnimationFrame(glidingAnimFrameRef.current);
       }
@@ -2201,11 +2322,11 @@ export const ShiftRadarModule: React.FC = () => {
           ${headingArrowHtml}
           <span style="position:absolute;inset:-3px;border-radius:9999px;background:${dotColor};opacity:0.28;animation:ping 1.8s cubic-bezier(0,0,0.2,1) infinite;"></span>
           <div style="width:52px;height:52px;border-radius:9999px;background:transparent;border:2.5px solid ${dotColor};display:flex;align-items:center;justify-content:center;padding:1px;">
-            <img src="${currentMascotImageUrl}" alt="Buddy" style="width:100%;height:100%;object-fit:contain;" />
+            <img src="${selfMarkerAvatarUrl}" alt="Buddy ${selfMarkerBadgeLabel}" style="width:100%;height:100%;object-fit:contain;" />
           </div>
         </div>
-        <span style="margin-top:2px;background:#09090b;color:#ffffff;font-size:11px;font-weight:900;padding:2px 8px;border-radius:9999px;border:1.5px solid ${dotColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.45);">
-          ${selfCallsign}
+        <span title="${selfCallsign}" style="margin-top:2px;background:#09090b;color:#ffffff;font-size:10px;letter-spacing:0.06em;font-weight:900;padding:2px 8px;border-radius:9999px;border:1.5px solid ${dotColor};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.45);">
+          ${selfMarkerBadgeLabel}
         </span>
       </div>`,
       iconSize: [0, 0],
@@ -2243,7 +2364,8 @@ export const ShiftRadarModule: React.FC = () => {
     realCourierProfile?.lng,
     isAppPaused,
     currentMascotState,
-    currentMascotImageUrl,
+    selfMarkerAvatarUrl,
+    selfMarkerBadgeLabel,
     headingDeg,
     allMapPinPointsForOffset,
   ]);
@@ -2285,12 +2407,12 @@ export const ShiftRadarModule: React.FC = () => {
           ? 'Online'
           : 'Em Entrega';
 
-      const avatarSource = c.avatarPhotoUrl || currentMascotImageUrl;
+      const avatarSource = c.avatarPhotoUrl || BUDDY_CUTOUT_AVATARS.online;
       const signature = `${c.callsign}|${statusBadgeLabel}|${ringColor}|${avatarSource}`;
 
       const avatarInnerHtml = c.avatarPhotoUrl
         ? `<img src="${c.avatarPhotoUrl}" alt="${c.callsign}" style="width:100%;height:100%;object-fit:cover;border-radius:9999px;" />`
-        : `<img src="${currentMascotImageUrl}" alt="${c.callsign}" style="width:100%;height:100%;object-fit:contain;" />`;
+        : `<img src="${BUDDY_CUTOUT_AVATARS.online}" alt="${c.callsign}" style="width:100%;height:100%;object-fit:contain;" />`;
 
       const buildPeerIcon = () =>
         L.divIcon({
@@ -2345,11 +2467,14 @@ export const ShiftRadarModule: React.FC = () => {
     activePeerCouriers,
     allMapPinPointsForOffset,
     cloudApprovalRequests,
-    currentMascotImageUrl,
     handleOpenBuddyProfilePopup,
   ]);
 
   const handleRecenterAndFollowGps = () => {
+    if (followResumeTimerRef.current !== null) {
+      window.clearTimeout(followResumeTimerRef.current);
+      followResumeTimerRef.current = null;
+    }
     isAutoFollowRef.current = true;
     setIsAutoFollowActive(true);
     void refreshLiveGpsPosition();
@@ -2754,32 +2879,6 @@ export const ShiftRadarModule: React.FC = () => {
           </button>
         </div>
 
-        {/* BOTTOM-RIGHT DISTINCT "Marcar" ACTION BUTTON (Separated safely away from map view controls) */}
-        <div
-          style={{
-            bottom: hasRealActiveDelivery ? '68px' : '20px',
-            right: '12px',
-          }}
-          className="absolute z-[430]"
-        >
-          <button
-            type="button"
-            onClick={() => setIsMarkMapModalOpen(true)}
-            title="Ensinar Passadeira ou Reportar Perigo na Via"
-            aria-label="Marcar no Mapa"
-            style={{
-              backgroundColor: '#090D16',
-              borderColor: '#00E5FF',
-              color: '#00E5FF',
-              boxShadow: '0 4px 16px rgba(0, 229, 255, 0.38)',
-            }}
-            className="rounded-2xl border-2 px-3.5 py-2.5 flex items-center gap-1.5 font-black text-xs cursor-pointer transition active:scale-95"
-          >
-            <Plus className="h-4 w-4 text-[#00E5FF] stroke-[3]" />
-            <span>Marcar</span>
-          </button>
-        </div>
-
         {/* TOP HUD ALERTS: Crosswalk Proximity Heads-Up (<= 45m & > 28 km/h) or Taught Confirmation */}
         {(approachingCrosswalkAlert || crosswalkFeedbackBanner) && (
           <div className="absolute top-14 left-3 right-16 z-[450] flex flex-col items-start gap-1.5 pointer-events-none">
@@ -2860,31 +2959,37 @@ export const ShiftRadarModule: React.FC = () => {
           </div>
         )}
 
-        {/* WAZE-STYLE SPEEDOMETER & ROAD LIMIT HUD (Positioned cleanly at bottom: 20px inside map container) */}
+        {/* UNIFIED BOTTOM HUD ROW: Speedometer card (left, flex-1) + "+ Marcar" (right, shrink-0) — zero overlap in normal & fullscreen */}
         <div
-          style={{ bottom: '20px', left: '12px' }}
-          className="absolute z-[420] flex items-center gap-2 pointer-events-none"
+          style={{
+            bottom: hasRealActiveDelivery
+              ? '68px'
+              : isFullRoadView
+                ? '20px'
+                : '24px',
+          }}
+          className="absolute left-3 right-3 z-[430] flex items-center gap-2.5 pointer-events-none"
         >
           <div
             style={{
               backgroundColor: isDaylight
-                ? 'rgba(255, 255, 255, 0.96)'
+                ? 'rgba(255, 255, 255, 0.95)'
                 : 'rgba(11, 15, 23, 0.95)',
               borderColor: isSpeedAlertPulsing
                 ? '#00E5FF'
                 : isDaylight
-                  ? '#00B8D4'
-                  : 'rgba(0, 229, 255, 0.45)',
+                  ? 'rgba(226, 232, 240, 0.8)'
+                  : 'rgba(0, 229, 255, 0.35)',
               boxShadow: isSpeedAlertPulsing
                 ? '0 0 22px rgba(0, 229, 255, 0.85)'
-                : '0 4px 16px rgba(0, 0, 0, 0.45)',
+                : undefined,
             }}
-            className={`pointer-events-auto rounded-2xl border-2 px-3 py-2 flex items-center gap-2.5 transition-all ${
+            className={`flex-1 min-w-0 h-[58px] pointer-events-auto backdrop-blur-md rounded-2xl px-3.5 py-2.5 shadow-lg border flex items-center gap-3 transition-all ${
               isSpeedAlertPulsing ? 'animate-pulse' : ''
             }`}
           >
             {/* Current GPS Speed (km/h) */}
-            <div className="text-center min-w-[44px]">
+            <div className="text-center min-w-[40px] shrink-0">
               <span
                 style={{
                   color: isSpeedAlertPulsing
@@ -2913,7 +3018,7 @@ export const ShiftRadarModule: React.FC = () => {
                 borderColor: '#F59E0B',
                 color: '#090D16',
               }}
-              className="h-10 w-10 rounded-full border-[3.5px] flex flex-col items-center justify-center shrink-0 shadow-sm"
+              className="h-9 w-9 rounded-full border-[3px] flex items-center justify-center shrink-0 shadow-sm"
             >
               <span
                 style={{ color: '#090D16' }}
@@ -2923,8 +3028,8 @@ export const ShiftRadarModule: React.FC = () => {
               </span>
             </div>
 
-            {/* Subtle 20s Over-Speed Progress / Road Label & Crosswalk Count */}
-            <div className="min-w-0 max-w-[128px]">
+            {/* Road Label (truncated) & Crosswalk Count / 20s Over-Speed Progress */}
+            <div className="min-w-0 flex-1">
               <span
                 style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
                 className="text-[11px] font-extrabold block truncate leading-tight"
@@ -2932,7 +3037,7 @@ export const ShiftRadarModule: React.FC = () => {
                 {roadNameLabel}
               </span>
               {consecutiveOverSpeedSec > 0 ? (
-                <span className="text-[10px] font-extrabold text-[#00E5FF] flex items-center gap-1 leading-tight mt-0.5">
+                <span className="text-[10px] font-extrabold text-[#00E5FF] flex items-center gap-1 leading-tight mt-0.5 truncate">
                   {consecutiveOverSpeedSec >= 20 && (
                     <Bell className="h-3 w-3 shrink-0" />
                   )}
@@ -2943,13 +3048,24 @@ export const ShiftRadarModule: React.FC = () => {
               ) : (
                 <span
                   style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
-                  className="text-[10px] font-bold block leading-tight mt-0.5"
+                  className="text-[10px] font-bold block leading-tight mt-0.5 truncate"
                 >
                   {amaranteCrosswalks.length} passadeiras
                 </span>
               )}
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsMarkMapModalOpen(true)}
+            title="Ensinar Passadeira ou Reportar Perigo na Via"
+            aria-label="Marcar no Mapa"
+            className="shrink-0 pointer-events-auto h-[58px] px-4 rounded-2xl bg-[#071318] text-[#00E5FF] font-semibold text-sm shadow-lg border border-[#00E5FF]/40 flex items-center justify-center gap-1.5 cursor-pointer transition active:scale-95"
+          >
+            <Plus className="h-4 w-4 text-[#00E5FF] stroke-[3]" />
+            <span>Marcar</span>
+          </button>
         </div>
 
         {/* Optional Active Delivery Quick External Navigation Buttons (Bottom-Right Corner Only When Active Order Exists) */}

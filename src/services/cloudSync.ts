@@ -450,6 +450,72 @@ export function registerLocalCloudIdentityProvider(
   localIdentityProvider = provider;
 }
 
+// =========================================================================
+// AUTHORITATIVE LOCAL SHIFT MODE (Online / Ausente / Modo Ninja)
+// The user's own tap is the single source of truth. EVERY presence publisher
+// (20s heartbeat, profile sync, discovery replies, legacy broadcasters) goes
+// through publishCourierPresenceToCloud, which enforces this mode for the
+// local courier — so no background ping can flip Ninja/Ausente back to Online.
+// =========================================================================
+export type LocalShiftPresenceMode = 'online' | 'paused' | 'ninja';
+const LOCAL_SHIFT_MODE_STORAGE_KEY = 'buddy_local_shift_presence_mode_v1';
+const NINJA_OFFLINE_REPUBLISH_MS = 15000;
+
+function readStoredLocalShiftMode(): LocalShiftPresenceMode {
+  if (typeof window === 'undefined') return 'online';
+  try {
+    const raw = window.localStorage.getItem(LOCAL_SHIFT_MODE_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { mode?: string };
+      if (parsed.mode === 'paused' || parsed.mode === 'ninja') return parsed.mode;
+    }
+  } catch {
+    // ignore
+  }
+  return 'online';
+}
+
+let localShiftMode: LocalShiftPresenceMode = readStoredLocalShiftMode();
+let localShiftIdentity: { id: string; nameKey: string } | null = null;
+
+export function setLocalShiftPresenceMode(
+  mode: LocalShiftPresenceMode,
+  identity?: { id?: string; name?: string }
+): void {
+  localShiftMode = mode;
+  if (identity && (identity.id || identity.name)) {
+    const isFounder = identity.name ? isCourierAdminByName(identity.name) : false;
+    localShiftIdentity = {
+      id: isFounder ? FOUNDER_ADMIN_COURIER_ID : identity.id || '',
+      nameKey: identity.name ? normalizeAccountKey(identity.name) : '',
+    };
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(
+        LOCAL_SHIFT_MODE_STORAGE_KEY,
+        JSON.stringify({ mode, changedAt: Date.now() })
+      );
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function getLocalShiftPresenceMode(): LocalShiftPresenceMode {
+  return localShiftMode;
+}
+
+function isLocalCourierPresence(effectiveId: string, name: string): boolean {
+  if (!localShiftIdentity) return false;
+  if (localShiftIdentity.id && effectiveId === localShiftIdentity.id) return true;
+  return Boolean(
+    localShiftIdentity.nameKey &&
+      name &&
+      normalizeAccountKey(name) === localShiftIdentity.nameKey
+  );
+}
+
 async function postPacketToNtfyTopic(
   topic: string,
   envelope: CloudSyncEnvelope
@@ -552,6 +618,21 @@ export async function publishCourierPresenceToCloud(
 
   const isFounderAdmin = isCourierAdminByName(presence.name);
   const effectiveId = isFounderAdmin ? FOUNDER_ADMIN_COURIER_ID : presence.id;
+
+  // Local user action is authoritative: Ninja => stay offline/hidden, Ausente => always 'paused'
+  if (isLocalCourierPresence(effectiveId, presence.name)) {
+    if (localShiftMode === 'ninja') {
+      const lastOffline = lastOfflineAtMsByCourier[effectiveId] || 0;
+      if (Date.now() - lastOffline > NINJA_OFFLINE_REPUBLISH_MS) {
+        void publishCourierOfflineToCloud(effectiveId, presence.name);
+      }
+      return;
+    }
+    if (localShiftMode === 'paused' && presence.status !== 'offline') {
+      presence = { ...presence, status: 'paused' };
+    }
+  }
+
   const existingCourier = inMemoryCloudState.couriers[effectiveId];
   const existingReq = inMemoryCloudState.approvalRequestsMap[effectiveId];
 

@@ -158,6 +158,7 @@ import {
   publishRoadHazardToCloud,
   publishWalkieMessageToCloud,
   registerLocalCloudIdentityProvider,
+  setLocalShiftPresenceMode,
   resolveApprovalStatusForCourier,
   saveAndSyncCourierShiftVaultSnapshot,
   startRealtimeCloudSyncStream,
@@ -3029,7 +3030,15 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
     runSafePreLogoutSweepAndDisconnect();
   }, [runSafePreLogoutSweepAndDisconnect]);
 
+  // Debounce lock: ignore ghost double-fires (double tap / tap + voice) within 350ms so the
+  // shift state never flips back and forth between Online / Ausente / Ninja.
+  const lastPauseToggleAtRef = useRef<number>(0);
+  const lastAnonToggleAtRef = useRef<number>(0);
+
   const toggleAppPauseMode = useCallback(() => {
+    const nowMs = Date.now();
+    if (nowMs - lastPauseToggleAtRef.current < 350) return;
+    lastPauseToggleAtRef.current = nowMs;
     setState((prev) => {
       const nextPaused = !prev.isAppPaused;
       if (
@@ -3105,6 +3114,9 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const toggleAnonymousMode = useCallback(() => {
+    const nowMs = Date.now();
+    if (nowMs - lastAnonToggleAtRef.current < 350) return;
+    lastAnonToggleAtRef.current = nowMs;
     setState((prev) => {
       const nextAnon = !prev.userPrefs.anonymousMode;
       return {
@@ -6651,6 +6663,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const hasHighAccuracyGpsFixRef = useRef<boolean>(false);
   const lastHighAccuracyGpsFixMsRef = useRef<number>(0);
+  const lastSaneGpsFixRef = useRef<{ lat: number; lng: number; atMs: number } | null>(null);
+  const gpsJumpRejectCountRef = useRef<number>(0);
 
   const applyLiveDeviceGpsFix = useCallback(
     (rawLat: number, rawLng: number, accuracy?: number) => {
@@ -6667,20 +6681,39 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         typeof accuracy === 'number' &&
         Number.isFinite(accuracy) &&
         accuracy > 0 &&
-        accuracy <= 40;
+        accuracy <= 22;
 
       if (isHighAcc) {
         hasHighAccuracyGpsFixRef.current = true;
         lastHighAccuracyGpsFixMsRef.current = nowMs;
       } else if (
         hasHighAccuracyGpsFixRef.current &&
-        nowMs - lastHighAccuracyGpsFixMsRef.current < 60000 &&
         typeof accuracy === 'number' &&
-        accuracy > 45
+        accuracy > 22
       ) {
-        // Once a high-accuracy GPS fix is active, ignore coarse cell-tower / network jumps!
+        // Once a good GPS fix exists, ignore multipath / cell-tower fixes worse than 22m
         return;
       }
+
+      // Reject physically impossible jumps (> 110 km/h implied) unless they persist (tunnel exit)
+      const lastGood = lastSaneGpsFixRef.current;
+      if (lastGood) {
+        const dtSec = Math.max(0.3, (nowMs - lastGood.atMs) / 1000);
+        const dLat = ((rawLat - lastGood.lat) * Math.PI) / 180;
+        const dLng = ((rawLng - lastGood.lng) * Math.PI) / 180;
+        const h =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((lastGood.lat * Math.PI) / 180) *
+            Math.cos((rawLat * Math.PI) / 180) *
+            Math.sin(dLng / 2) ** 2;
+        const jumpMeters = 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+        if (dtSec <= 20 && (jumpMeters / dtSec) * 3.6 > 110) {
+          gpsJumpRejectCountRef.current += 1;
+          if (gpsJumpRejectCountRef.current < 4) return;
+        }
+      }
+      gpsJumpRejectCountRef.current = 0;
+      lastSaneGpsFixRef.current = { lat: rawLat, lng: rawLng, atMs: nowMs };
 
       setRealCourierProfile((prev) => {
         if (
@@ -8313,10 +8346,34 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   ]);
 
   // Start Zero-Config Automatic Cloud Sync Engine on mount & subscribe to incoming real-time updates
+  // (the provider is a stable wrapper around a ref, so periodic cloud pings ALWAYS use the
+  // latest Online/Ausente/Ninja state instead of a stale mount-time closure)
+  const broadcastIdentitiesRef = useRef(broadcastAllLocalIdentitiesToCloud);
+  broadcastIdentitiesRef.current = broadcastAllLocalIdentitiesToCloud;
+
+  // Authoritative local shift mode -> persisted immediately + enforced by every cloud publisher
+  useEffect(() => {
+    const prof = realCourierProfileRef.current;
+    setLocalShiftPresenceMode(
+      state.userPrefs.anonymousMode
+        ? 'ninja'
+        : state.isAppPaused
+          ? 'paused'
+          : 'online',
+      { id: prof.id, name: prof.name }
+    );
+    broadcastIdentitiesRef.current();
+  }, [
+    state.userPrefs.anonymousMode,
+    state.isAppPaused,
+    realCourierProfile.id,
+    realCourierProfile.name,
+  ]);
+
   useEffect(() => {
     startRealtimeCloudSyncStream();
-    registerLocalCloudIdentityProvider(broadcastAllLocalIdentitiesToCloud);
-    broadcastAllLocalIdentitiesToCloud();
+    registerLocalCloudIdentityProvider(() => broadcastIdentitiesRef.current());
+    broadcastIdentitiesRef.current();
 
     const unsub = subscribeToCloudSharedState((nextCloud) => {
       setCloudSharedState({
@@ -10904,9 +10961,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     ) {
       abortActiveSpeechRecOnly();
       try {
-        if (state.voiceActivationConfig.triggerWordEnabled && typeof winAny.BuddyNativeOverlay.startNativeVoice === 'function') {
-          winAny.BuddyNativeOverlay.startNativeVoice();
-        } else if (typeof winAny.BuddyNativeOverlay.startSingleShotVoice === 'function') {
+        // Always single-shot on the native bridge (no always-listening loop)
+        if (typeof winAny.BuddyNativeOverlay.startSingleShotVoice === 'function') {
           winAny.BuddyNativeOverlay.startSingleShotVoice();
         } else if (typeof winAny.BuddyNativeOverlay.startNativeVoice === 'function') {
           winAny.BuddyNativeOverlay.startNativeVoice();
@@ -10966,30 +11022,19 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       })();
 
       recognition.lang = 'pt-PT';
-      recognition.continuous = true;
+      // Single-shot capture: one utterance per explicit tap, never a background loop
+      recognition.continuous = false;
       recognition.interimResults = true;
       activeSpeechRecRef.current = recognition;
       setIsListeningSpeechRecognition(true);
 
-      const scheduleAutoRestart120ms = () => {
-        if (!keepVoiceListeningRef.current) {
-          setIsListeningSpeechRecognition(false);
-          return;
-        }
+      const endListeningSession = () => {
+        keepVoiceListeningRef.current = false;
         if (watchdogRestartTimerRef.current !== null) {
           window.clearTimeout(watchdogRestartTimerRef.current);
-        }
-        watchdogRestartTimerRef.current = window.setTimeout(() => {
           watchdogRestartTimerRef.current = null;
-          if (
-            keepVoiceListeningRef.current &&
-            !state.isAppPaused &&
-            !isInputOrModalPausedRef.current &&
-            !isSpeakingTtsRef.current
-          ) {
-            startContinuousRecognitionInstanceRef.current();
-          }
-        }, 120);
+        }
+        setIsListeningSpeechRecognition(false);
       };
 
       recognition.onstart = () => {
@@ -11006,7 +11051,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         const isFinal = Boolean(latestItem?.isFinal);
 
         const executed = processIncomingVoiceTranscript(latestRaw, isFinal);
-        if (executed && !state.voiceActivationConfig.triggerWordEnabled) {
+        if (executed) {
           keepVoiceListeningRef.current = false;
           setIsListeningSpeechRecognition(false);
           activeSpeechRecRef.current = null;
@@ -11021,34 +11066,17 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       recognition.onerror = (errEvent) => {
         const errCode = errEvent?.error || '';
         activeSpeechRecRef.current = null;
+        endListeningSession();
         if (errCode === 'not-allowed' || errCode === 'service-not-allowed') {
-          keepVoiceListeningRef.current = false;
-          setIsListeningSpeechRecognition(false);
-          if (typeof winAny.BuddyNativeOverlay?.startNativeVoice === 'function') {
-            try {
-              winAny.BuddyNativeOverlay.startNativeVoice();
-              winAny.BuddyNativeOverlay.setBubbleListeningState?.(true);
-              setIsListeningSpeechRecognition(true);
-              return;
-            } catch {
-              // ignore
-            }
-          }
           showLiveMicTranscriptFeedback(
             'Microfone bloqueado pelo navegador — permita o acesso no cadeado'
           );
-          return;
         }
-        scheduleAutoRestart120ms();
       };
 
       recognition.onend = () => {
         activeSpeechRecRef.current = null;
-        if (keepVoiceListeningRef.current) {
-          scheduleAutoRestart120ms();
-        } else {
-          setIsListeningSpeechRecognition(false);
-        }
+        endListeningSession();
       };
 
       recognition.start();
@@ -11072,28 +11100,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       startContinuousRecognitionInstance;
   }, [startContinuousRecognitionInstance]);
 
-  // 4000ms Watchdog Interval: revives SpeechRecognition if Android paused it while Escuta Ativa is ON
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const watchdogInterval = window.setInterval(() => {
-      if (
-        keepVoiceListeningRef.current &&
-        !activeSpeechRecRef.current &&
-        !state.isAppPaused &&
-        !isInputOrModalPausedRef.current &&
-        !isSpeakingTtsRef.current
-      ) {
-        try {
-          startContinuousRecognitionInstanceRef.current();
-        } catch {
-          // ignore
-        }
-      }
-    }, 4000);
-    return () => {
-      window.clearInterval(watchdogInterval);
-    };
-  }, [state.isAppPaused]);
+  // (Former 4000ms auto-revive watchdog removed: the mic must never restart by itself.)
 
   const startContinuousVoiceMic = useCallback(() => {
     hasUnlockedMicOnFirstTouchRef.current = true;
@@ -11783,12 +11790,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           ...prev.voiceActivationConfig,
           ...patch,
         };
-        if (nextConfig.triggerWordEnabled) {
-          keepVoiceListeningRef.current = true;
-          window.setTimeout(() => {
-            startContinuousRecognitionInstanceRef.current();
-          }, 100);
-        } else if (patch.triggerWordEnabled === false) {
+        // Never auto-start the microphone from a settings change
+        if (patch.triggerWordEnabled === false) {
           keepVoiceListeningRef.current = false;
         }
         return {
@@ -11800,32 +11803,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     []
   );
 
-  // Automatically arm the Always-On Phonetic Trigger Word Engine ("Buddy") when triggerWordEnabled is ON
+  // Automatic arming of the microphone is DISABLED: changing status (Online / Ausente / Ninja),
+  // resuming the app or touching the screen must never open the mic. Voice capture only
+  // starts from an explicit user action (mic / PTT button) and runs as a single shot.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!state.isAuthenticated || state.isAppPaused) return;
-    if (!state.voiceActivationConfig.triggerWordEnabled) return;
-
-    keepVoiceListeningRef.current = true;
-    startContinuousRecognitionInstanceRef.current();
-
-    const unlockOnTouch = () => {
-      if (
-        state.voiceActivationConfig.triggerWordEnabled &&
-        !state.isAppPaused &&
-        !activeSpeechRecRef.current
-      ) {
-        keepVoiceListeningRef.current = true;
-        startContinuousRecognitionInstanceRef.current();
-      }
-    };
-    window.addEventListener('pointerdown', unlockOnTouch, {
-      passive: true,
-      once: true,
-    });
-    return () => {
-      window.removeEventListener('pointerdown', unlockOnTouch);
-    };
+    if (!state.voiceActivationConfig.triggerWordEnabled) {
+      keepVoiceListeningRef.current = false;
+    }
   }, [
     state.isAuthenticated,
     state.isAppPaused,
