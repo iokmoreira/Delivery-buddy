@@ -369,12 +369,19 @@ export const RoadHazardsSettingsSection: React.FC = () => {
   return (
     <div className="space-y-3">
       <section className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-lg font-bold text-zinc-100 flex items-center gap-1.5">
-            <AlertTriangle className="h-4 w-4 text-zinc-300" />
-            <span>Reportar Perigo na Via em 1 Toque (Amarante 35 km)</span>
-          </span>
-          <span className="text-base text-emerald-500 font-bold">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2 min-w-0 flex-1">
+            <AlertTriangle className="h-4 w-4 text-[#00E5FF] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <span className="text-sm font-extrabold text-zinc-100 block leading-snug">
+                Reportar Perigo na Via (Amarante 35 km)
+              </span>
+              <span className="text-[11px] text-zinc-400 block mt-0.5">
+                Publique em 1 toque para alertar os colegas na zona
+              </span>
+            </div>
+          </div>
+          <span className="rounded-full bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-0.5 text-xs text-emerald-400 font-extrabold shrink-0">
             +15 Coins
           </span>
         </div>
@@ -393,7 +400,7 @@ export const RoadHazardsSettingsSection: React.FC = () => {
               key={h.label}
               type="button"
               onClick={() => handleQuickHazardReport(h.type)}
-              className="rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 py-2 px-1.5 text-xs font-semibold cursor-pointer transition text-center"
+              className="rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 py-2 px-1.5 text-xs font-extrabold cursor-pointer transition text-center whitespace-nowrap"
             >
               {h.label}
             </button>
@@ -402,7 +409,7 @@ export const RoadHazardsSettingsSection: React.FC = () => {
       </section>
 
       <section className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4 space-y-2.5">
-        <span className="text-xs font-semibold text-zinc-100 block">
+        <span className="text-xs font-extrabold text-zinc-100 block">
           Alertas Ativos na Via ({activeUnresolvedHazards.length})
         </span>
 
@@ -420,32 +427,39 @@ export const RoadHazardsSettingsSection: React.FC = () => {
             activeUnresolvedHazards.map((pin) => (
               <div
                 key={pin.id}
-                className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 flex items-center justify-between gap-2"
+                className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 space-y-2"
               >
-                <div className="min-w-0">
-                  <span className="text-xs font-semibold text-zinc-100 block truncate">
-                    {pin.hazardType}
-                  </span>
-                  <span className="text-[11px] text-zinc-400 block truncate">
-                    <MapPin className="inline h-3 w-3 mr-0.5 text-zinc-500" />
-                    {pin.streetLocation} ({pin.confirmations} conf.)
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => confirmRoadHazardPin(pin.id)}
-                    className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1 text-[10px] font-medium cursor-pointer"
-                  >
-                    +1
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => resolveRoadHazardPin(pin.id)}
-                    className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 px-2.5 py-1 text-[10px] cursor-pointer"
-                  >
-                    Limpo
-                  </button>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <span className="text-xs font-extrabold text-zinc-100 block leading-snug">
+                      ⚠️ {pin.hazardType}
+                    </span>
+                    <span className="text-[11px] text-zinc-300 flex items-start gap-1 leading-snug">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[#00E5FF]" />
+                      <span>
+                        {pin.streetLocation} •{' '}
+                        <strong className="text-zinc-200">
+                          {pin.confirmations} conf.
+                        </strong>
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => confirmRoadHazardPin(pin.id)}
+                      className="rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 px-2.5 py-1.5 text-xs font-extrabold cursor-pointer whitespace-nowrap"
+                    >
+                      +1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => resolveRoadHazardPin(pin.id)}
+                      className="rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 px-2.5 py-1.5 text-xs font-extrabold cursor-pointer whitespace-nowrap"
+                    >
+                      ✓ Limpo
+                    </button>
+                  </div>
                 </div>
               </div>
             ))

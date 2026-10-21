@@ -231,6 +231,7 @@ public class BuddyOverlayService extends Service {
         // Default ergonomic Bottom-Right position: right edge x = screenWidth - dp(68), bottom y = screenHeight - dp(190)
         int defaultRightX = Math.max(dpToPx(8f), screenW - sizePx - dpToPx(10f));
         int defaultLeftX = dpToPx(10f);
+        int defaultTopY = dpToPx(84f);
         int defaultBottomY = Math.max(dpToPx(40f), screenH - dpToPx(190f));
         int defaultMiddleY = (int) (screenH * 0.48f);
 
@@ -238,7 +239,11 @@ public class BuddyOverlayService extends Service {
         String preset = prefs.getString(KEY_RESTING_PRESET, "BOTTOM_RIGHT");
         if (preset == null) preset = "BOTTOM_RIGHT";
 
-        if ("BOTTOM_LEFT".equals(preset)) {
+        if ("TOP_LEFT".equals(preset)) {
+            return new int[] { defaultLeftX, defaultTopY };
+        } else if ("TOP_RIGHT".equals(preset)) {
+            return new int[] { defaultRightX, defaultTopY };
+        } else if ("BOTTOM_LEFT".equals(preset)) {
             return new int[] { defaultLeftX, defaultBottomY };
         } else if ("MIDDLE_RIGHT".equals(preset)) {
             return new int[] { defaultRightX, defaultMiddleY };

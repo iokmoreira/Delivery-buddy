@@ -40,7 +40,7 @@ const VAULT_CATEGORY_TABS: {
   },
   {
     id: 'ENTREGADORES_CONDUTA',
-    shortLabel: '3. Entregadores',
+    shortLabel: '3. Entregas',
     fullTitle: 'Entregadores (Registados ou Externos Não Registados)',
     targetAuthority: 'Auditoria Comunitária & Segurança de Balcão',
   },
@@ -52,7 +52,7 @@ const VAULT_CATEGORY_TABS: {
   },
   {
     id: 'LOCAIS_CLIENTES_ZERO_PII',
-    shortLabel: '5. Locais (Zero-PII)',
+    shortLabel: '5. Locais',
     fullTitle: 'Locais / Clientes (Má Conduta Recorrente — Zero PII)',
     targetAuthority: 'Segurança Operacional RGPD (Apenas Rua + Cód. Pedido)',
   },
@@ -169,27 +169,27 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
       aria-label="Arquivo de Provas (Dossiê de Evidências)"
       className="rounded-2xl bg-zinc-900 border border-zinc-800 p-3.5 space-y-3 shadow-sm"
     >
-      {/* Top Header + 1-Tap Category Export & "+ Nova Prova" */}
-      <div className="flex items-start justify-between gap-2">
+      {/* Stacked Header + Full-Width 2-Column Action Buttons (+ Prova & Exportar Dossiê) */}
+      <div className="space-y-2.5">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <FileCheck2 className="h-4 w-4 text-zinc-200 shrink-0" />
-            <h2 className="text-xs font-bold text-zinc-100 truncate">
+            <FileCheck2 className="h-4 w-4 text-[#00E5FF] shrink-0" />
+            <h2 className="text-xs sm:text-sm font-extrabold text-zinc-100 leading-snug">
               Arquivo de Provas (Dossiê Legal &amp; Reincidência)
             </h2>
           </div>
-          <p className="text-[10px] text-zinc-400 truncate mt-0.5">
+          <p className="text-[11px] text-zinc-400 leading-snug mt-0.5">
             {activeCategoryMeta.fullTitle}
           </p>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="grid grid-cols-2 gap-2 w-full">
           <button
             type="button"
             onClick={() => setIsNewFormOpen((prev) => !prev)}
-            className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-2.5 py-1.5 text-[10px] font-semibold flex items-center gap-1 cursor-pointer"
+            className="w-full rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
           >
-            <Plus className="h-3 w-3" />
+            <Plus className="h-3.5 w-3.5 text-[#00E5FF]" />
             <span>+ Prova</span>
           </button>
           <button
@@ -202,16 +202,16 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
                   : evidentiaryVaultRecords
               )
             }
-            className="rounded-lg bg-white text-zinc-950 px-2.5 py-1.5 text-[10px] font-bold flex items-center gap-1 cursor-pointer shadow-xs"
+            className="w-full rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 py-2 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition"
           >
             {copiedId === `CAT-${selectedCategory}` ? (
               <>
-                <Check className="h-3 w-3" />
+                <Check className="h-3.5 w-3.5" />
                 <span>Dossiê Copiado</span>
               </>
             ) : (
               <>
-                <Copy className="h-3 w-3" />
+                <Copy className="h-3.5 w-3.5" />
                 <span>Exportar Dossiê ({filteredRecords.length})</span>
               </>
             )}
@@ -219,8 +219,8 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
         </div>
       </div>
 
-      {/* 5 Target Category Filter Pills */}
-      <div className="grid grid-cols-5 gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
+      {/* Horizontally Scrollable 5 Target Category Filter Pills (Zero Truncation) */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-zinc-950 p-1.5 rounded-xl border border-zinc-800">
         {VAULT_CATEGORY_TABS.map((tab) => {
           const active = selectedCategory === tab.id;
           return (
@@ -231,7 +231,7 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
                 setSelectedCategory(tab.id);
                 setFormalPreviewReport(null);
               }}
-              className={`rounded-lg py-1.5 px-1 text-[10px] font-semibold transition cursor-pointer truncate ${
+              className={`rounded-lg py-1.5 px-3 text-xs font-extrabold transition cursor-pointer whitespace-nowrap shrink-0 ${
                 active
                   ? 'bg-white text-zinc-950 shadow-xs'
                   : 'text-zinc-400 hover:text-zinc-100'

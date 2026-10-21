@@ -1,10 +1,12 @@
 export type BuddyMascotState = 'INACTIVE' | 'ACTIVE' | 'DELIVERY';
 
 export type BubbleRestingPreset =
-  | 'BOTTOM_RIGHT'
-  | 'BOTTOM_LEFT'
-  | 'MIDDLE_RIGHT'
+  | 'TOP_LEFT'
+  | 'TOP_RIGHT'
   | 'MIDDLE_LEFT'
+  | 'MIDDLE_RIGHT'
+  | 'BOTTOM_LEFT'
+  | 'BOTTOM_RIGHT'
   | 'CUSTOM_DRAG';
 
 export interface BuddyMascotImagesSet {
@@ -71,29 +73,39 @@ export const BUBBLE_RESTING_PRESET_OPTIONS: {
   shortDesc: string;
 }[] = [
   {
-    id: 'BOTTOM_RIGHT',
-    label: 'Canto Inferior Direito (Padrão)',
-    shortDesc: 'Posição ergonómica para o polegar direito acima da dock',
+    id: 'TOP_LEFT',
+    label: '↖ Topo Esq',
+    shortDesc: 'Canto superior esquerdo abaixo do cabeçalho',
   },
   {
-    id: 'BOTTOM_LEFT',
-    label: 'Canto Inferior Esquerdo',
-    shortDesc: 'Posição ergonómica para a mão esquerda acima da dock',
-  },
-  {
-    id: 'MIDDLE_RIGHT',
-    label: 'Meio Direita',
-    shortDesc: 'Encostada à margem direita a meia altura do ecrã',
+    id: 'TOP_RIGHT',
+    label: '↗ Topo Dir',
+    shortDesc: 'Canto superior direito abaixo do cabeçalho',
   },
   {
     id: 'MIDDLE_LEFT',
-    label: 'Meio Esquerda',
+    label: '⬅ Meio Esq',
     shortDesc: 'Encostada à margem esquerda a meia altura do ecrã',
+  },
+  {
+    id: 'MIDDLE_RIGHT',
+    label: '➡ Meio Dir',
+    shortDesc: 'Encostada à margem direita a meia altura do ecrã',
+  },
+  {
+    id: 'BOTTOM_LEFT',
+    label: '↙ Baixo Esq',
+    shortDesc: 'Posição ergonómica para a mão esquerda acima da dock',
+  },
+  {
+    id: 'BOTTOM_RIGHT',
+    label: '↘ Baixo Dir',
+    shortDesc: 'Posição ergonómica para o polegar direito acima da dock',
   },
   {
     id: 'CUSTOM_DRAG',
     label: '📌 Fixar onde eu arrastar a bolinha',
-    shortDesc: 'Guarda automaticamente o último ponto (X, Y) onde largar a bolinha',
+    shortDesc: 'Guarda automaticamente o último ponto onde soltares',
   },
 ];
 
@@ -637,6 +649,8 @@ export function loadSavedBubbleRestingPreset(): BubbleRestingPreset {
   try {
     const raw = window.localStorage.getItem(BUBBLE_RESTING_PRESET_STORAGE_KEY);
     if (
+      raw === 'TOP_LEFT' ||
+      raw === 'TOP_RIGHT' ||
       raw === 'BOTTOM_RIGHT' ||
       raw === 'BOTTOM_LEFT' ||
       raw === 'MIDDLE_RIGHT' ||

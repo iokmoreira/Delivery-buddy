@@ -385,17 +385,16 @@ export const AlertVoiceMessagesCustomizationPanel: React.FC = () => {
       className="rounded-2xl bg-zinc-900 border border-zinc-800/80 p-3.5 space-y-3 shadow-sm"
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Sliders className="h-4 w-4 text-zinc-300 shrink-0" />
-          <div className="min-w-0">
-            <h2 className="text-xs font-bold text-zinc-100 truncate">
-              Personalizar Alertas (±45%), Voz &amp; Mensagens
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          <Sliders className="h-4 w-4 text-[#00E5FF] shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xs sm:text-sm font-extrabold text-zinc-100 leading-snug">
+              Personalizar Alertas, Voz &amp; Mensagens
             </h2>
-            <p className="text-[10px] text-zinc-400 truncate">
-              Tamanho/Posição do Pop-up, Trigger Word (&ldquo;
-              {voiceActivationConfig.customTriggerWord || 'Buddy'}&rdquo;) e
-              Textos Rápidos
+            <p className="text-[11px] text-zinc-400 leading-snug mt-0.5">
+              Pop-up ({alertPopupPrefs.sizeVh.replace('VH', '%')}), Trigger (&ldquo;
+              {voiceActivationConfig.customTriggerWord || 'Buddy'}&rdquo;) e Textos Rápidos
             </p>
           </div>
         </div>
@@ -406,19 +405,19 @@ export const AlertVoiceMessagesCustomizationPanel: React.FC = () => {
               `${voiceActivationConfig.customTriggerWord || 'Buddy'} como está o trânsito agora`
             )
           }
-          className="rounded-lg bg-white text-zinc-950 px-2.5 py-1 text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0 shadow-sm"
+          className="rounded-lg bg-white text-zinc-950 px-2.5 py-1.5 text-[11px] font-bold flex items-center gap-1 cursor-pointer shrink-0 shadow-sm"
         >
           <BellRing className="h-3 w-3" />
-          <span>Testar Pop-up {alertPopupPrefs.sizeVh.replace('VH', '%')}</span>
+          <span>Testar Pop-up</span>
         </button>
       </div>
 
-      {/* 3 Sub-Tabs Inside Customization Panel */}
+      {/* 3 Sub-Tabs Inside Customization Panel (Clean Labels Without Clipping) */}
       <div className="bg-zinc-950 p-1 rounded-xl grid grid-cols-3 gap-1 border border-zinc-800">
         <button
           type="button"
           onClick={() => setActiveConfigSection('VOZ_TRIGGER')}
-          className={`rounded-lg py-1.5 px-2 text-[11px] font-semibold transition cursor-pointer truncate ${
+          className={`rounded-lg py-2 px-1.5 text-[11px] font-extrabold transition cursor-pointer text-center whitespace-nowrap ${
             activeConfigSection === 'VOZ_TRIGGER'
               ? 'bg-white text-zinc-950 shadow-sm'
               : 'text-zinc-400 hover:text-zinc-100'
@@ -429,24 +428,24 @@ export const AlertVoiceMessagesCustomizationPanel: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveConfigSection('ALERTAS_45')}
-          className={`rounded-lg py-1.5 px-2 text-[11px] font-semibold transition cursor-pointer truncate ${
+          className={`rounded-lg py-2 px-1.5 text-[11px] font-extrabold transition cursor-pointer text-center whitespace-nowrap ${
             activeConfigSection === 'ALERTAS_45'
               ? 'bg-white text-zinc-950 shadow-sm'
               : 'text-zinc-400 hover:text-zinc-100'
           }`}
         >
-          2. Alertas ({alertPopupPrefs.sizeVh.replace('VH', '%')})
+          2. Pop-up
         </button>
         <button
           type="button"
           onClick={() => setActiveConfigSection('MENSAGENS_AUTO')}
-          className={`rounded-lg py-1.5 px-2 text-[11px] font-semibold transition cursor-pointer truncate ${
+          className={`rounded-lg py-2 px-1.5 text-[11px] font-extrabold transition cursor-pointer text-center whitespace-nowrap ${
             activeConfigSection === 'MENSAGENS_AUTO'
               ? 'bg-white text-zinc-950 shadow-sm'
               : 'text-zinc-400 hover:text-zinc-100'
           }`}
         >
-          3. Mensagens ({customAutoMessages.length})
+          3. Mensagens
         </button>
       </div>
 
@@ -696,7 +695,7 @@ export const AlertVoiceMessagesCustomizationPanel: React.FC = () => {
           )}
 
           {/* List of Messages in Current Category */}
-          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-0.5">
             {filteredMessages.map((msg) => {
               const isEditing = editingMsgId === msg.id;
               const isCopied = copiedId === msg.id;
@@ -750,97 +749,93 @@ export const AlertVoiceMessagesCustomizationPanel: React.FC = () => {
               return (
                 <div
                   key={msg.id}
-                  className="rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 space-y-1.5"
+                  className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 space-y-2"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-zinc-100 truncate">
-                      {msg.title}
-                    </span>
-                    <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-400 shrink-0">
-                      Voz: &ldquo;{msg.voiceTriggerPhrase}&rdquo;
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    {msg.messageBody}
-                  </p>
-                  <div className="flex items-center justify-between pt-0.5">
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEdit(msg)}
-                        className="rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2 py-1 text-[10px] text-zinc-300 flex items-center gap-1 cursor-pointer"
-                      >
-                        <Pencil className="h-3 w-3" />
-                        <span>Editar</span>
-                      </button>
+                  {/* Full-width Title + Voice Trigger Badge + Trash Delete */}
+                  <div className="space-y-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs font-extrabold text-zinc-100 leading-snug block flex-1">
+                        {msg.title}
+                      </span>
                       <button
                         type="button"
                         onClick={() => deleteCustomAutoMessage(msg.id)}
-                        className="rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 p-1 text-zinc-400 hover:text-rose-400 cursor-pointer"
+                        className="rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 p-1 text-zinc-400 hover:text-rose-400 cursor-pointer shrink-0"
                         title="Apagar mensagem"
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
                     </div>
+                    <span className="inline-block rounded bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-[#00E5FF]">
+                      🎙️ Voz: &ldquo;{msg.voiceTriggerPhrase}&rdquo;
+                    </span>
+                  </div>
 
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          startLiveVoiceDictation({
-                            targetType:
-                              msg.category === 'CLIENTE'
-                                ? 'CLIENTE'
-                                : msg.category === 'SUPORTE'
-                                  ? 'SUPORTE'
-                                  : 'BUDDY_DIRETO',
-                            recipientId:
-                              msg.category === 'ESTAFETA_BUDDY'
-                                ? onlineDirectoryCouriers[0]?.id || 'DIR-AMA-1'
-                                : msg.id,
-                            recipientName:
-                              msg.category === 'CLIENTE'
-                                ? 'Cliente da Entrega'
-                                : msg.category === 'SUPORTE'
-                                  ? 'Suporte da Plataforma'
-                                  : onlineDirectoryCouriers[0]?.callsign ||
-                                    'Rui Moto',
-                            initialPhrase: msg.messageBody,
-                          })
-                        }
-                        className="rounded-md bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-2 py-1 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                      >
-                        <Mic className="h-3 w-3" />
-                        <span>Ditar ao Vivo</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => speakTextPt(msg.messageBody)}
-                        className="rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2 py-1 text-[10px] text-zinc-200 flex items-center gap-1 cursor-pointer"
-                      >
-                        <Volume2 className="h-3 w-3" />
-                        <span>Ouvir</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleCopyMessage(msg.id, msg.messageBody)
-                        }
-                        className="rounded-md bg-white text-zinc-950 px-2.5 py-1 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                      >
-                        {isCopied ? (
-                          <>
-                            <Check className="h-3 w-3" />
-                            <span>Copiado</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3 w-3" />
-                            <span>Copiar</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                  {/* Full-width Message Body */}
+                  <p className="text-xs text-zinc-300 leading-relaxed w-full">
+                    {msg.messageBody}
+                  </p>
+
+                  {/* Uniform 4-Column Single-Line Action Row (✏️ Editar | 🎙️ Ditar | 🔊 Ouvir | 📋 Copiar) */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEdit(msg)}
+                      className="h-8 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-1.5 text-[11px] font-bold text-zinc-200 flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap"
+                    >
+                      <span>✏️ Editar</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        startLiveVoiceDictation({
+                          targetType:
+                            msg.category === 'CLIENTE'
+                              ? 'CLIENTE'
+                              : msg.category === 'SUPORTE'
+                                ? 'SUPORTE'
+                                : 'BUDDY_DIRETO',
+                          recipientId:
+                            msg.category === 'ESTAFETA_BUDDY'
+                              ? onlineDirectoryCouriers[0]?.id || 'DIR-AMA-1'
+                              : msg.id,
+                          recipientName:
+                            msg.category === 'CLIENTE'
+                              ? 'Cliente da Entrega'
+                              : msg.category === 'SUPORTE'
+                                ? 'Suporte da Plataforma'
+                                : onlineDirectoryCouriers[0]?.callsign ||
+                                  'Buddy',
+                          initialPhrase: msg.messageBody,
+                        })
+                      }
+                      style={{
+                        backgroundColor: '#00E5FF',
+                        color: '#05070B',
+                      }}
+                      className="h-8 rounded-lg px-1.5 text-[11px] font-extrabold flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap transition hover:opacity-95"
+                    >
+                      <span>🎙️ Ditar</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => speakTextPt(msg.messageBody)}
+                      className="h-8 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-1.5 text-[11px] font-bold text-zinc-200 flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap"
+                    >
+                      <span>🔊 Ouvir</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCopyMessage(msg.id, msg.messageBody)
+                      }
+                      className="h-8 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 px-1.5 text-[11px] font-extrabold flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap"
+                    >
+                      <span>{isCopied ? '✓ Copiado' : '📋 Copiar'}</span>
+                    </button>
                   </div>
                 </div>
               );

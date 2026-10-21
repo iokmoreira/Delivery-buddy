@@ -188,9 +188,16 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
       const h = typeof window !== 'undefined' ? window.innerHeight : 760;
       const rightX = clampBubbleX(w - 72);
       const leftX = clampBubbleX(12);
+      const topY = clampBubbleY(68);
       const bottomY = clampBubbleY(h - 150);
       const midY = clampBubbleY(Math.round(h * 0.46));
 
+      if (preset === 'TOP_LEFT') {
+        return { x: leftX, y: topY };
+      }
+      if (preset === 'TOP_RIGHT') {
+        return { x: rightX, y: topY };
+      }
       if (preset === 'BOTTOM_LEFT') {
         return { x: leftX, y: bottomY };
       }

@@ -274,59 +274,42 @@ export const ZeroAiProfilePhotoUploader: React.FC<{
           </div>
           <div className="min-w-0">
             <span className="block text-xs font-extrabold text-zinc-100 truncate">
-              Foto de Perfil (Opcional)
+              Foto de Perfil
             </span>
             <span className="block text-[10px] text-zinc-400 truncate">
               {compressedPreviewUrl
                 ? `Foto pronta ${compressedSizeKb ? `(${compressedSizeKb})` : ''}`
-                : 'Aparece no teu ícone em Amarante'}
+                : 'Aparece no teu ícone no Mapa'}
             </span>
           </div>
         </div>
 
-        {compressedPreviewUrl && (
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
-            onClick={() => {
-              setIsCropping(false);
-              loadedImageRef.current = null;
-              setCompressedPreviewUrl(undefined);
-              setCompressedSizeKb('');
-              onAvatarCompressedChange(undefined);
-            }}
-            title="Remover foto"
-            className="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-rose-400 p-2 cursor-pointer transition shrink-0"
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-[#00E5FF]/50 text-white px-3 py-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm whitespace-nowrap"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Camera className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+            <span>📷 Escolher Foto</span>
           </button>
-        )}
-      </div>
 
-      {/* Responsive 2-Column Grid for Escolher Foto & Colar Foto (100% Inside Card) */}
-      <div className="grid grid-cols-2 gap-2 w-full">
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="w-full rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-2.5 py-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm truncate"
-        >
-          <Camera className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
-          <span className="truncate">📷 Escolher Foto</span>
-        </button>
-        <div
-          contentEditable
-          suppressContentEditableWarning
-          onPaste={handlePasteAvatar}
-          onInput={(e) => {
-            const el = e.currentTarget;
-            const imgEl = el.querySelector('img');
-            if (imgEl && imgEl.src) {
-              loadAvatarFromDataUrl(imgEl.src);
-            }
-            el.innerHTML = '';
-          }}
-          className="w-full rounded-xl bg-zinc-900 border border-dashed border-[#00E5FF]/50 px-2.5 py-2 text-xs font-extrabold text-[#00E5FF] flex items-center justify-center cursor-text outline-none focus:border-[#00E5FF] truncate text-center"
-        >
-          📋 Colar Foto
+          {compressedPreviewUrl && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsCropping(false);
+                loadedImageRef.current = null;
+                setCompressedPreviewUrl(undefined);
+                setCompressedSizeKb('');
+                onAvatarCompressedChange(undefined);
+              }}
+              title="Remover foto"
+              className="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-rose-400 p-2 cursor-pointer transition shrink-0"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1217,116 +1200,36 @@ const OfficialManualAndCommandsModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Manual e Dossiê Legal, Burocrático e RGPD Delivery Buddy"
+      aria-label="Manual e Dossiê Legal Delivery Buddy"
     >
       <div
         style={{
           backgroundColor: surfaceBg,
           borderColor: '#00E5FF',
           color: primaryText,
+          height: '92dvh',
         }}
-        className="w-full max-w-2xl rounded-2xl border-2 p-4 space-y-3 shadow-[0_0_35px_rgba(0,229,255,0.22)] my-auto max-h-[92vh] flex flex-col"
+        className="w-full max-w-2xl rounded-2xl border-2 p-3 sm:p-4 shadow-[0_0_35px_rgba(0,229,255,0.22)] flex flex-col gap-2 overflow-hidden"
       >
-        {/* Header */}
+        {/* 1. Compact Single-Row Top Bar (flex-shrink: 0) */}
         <div
           style={{ borderColor: borderCol }}
-          className="flex items-start justify-between gap-2 border-b pb-2.5 shrink-0"
+          className="flex items-center justify-between gap-2 border-b pb-2 shrink-0"
         >
-          <div className="flex items-center gap-2.5">
-            <div
-              style={{
-                backgroundColor: '#0B0F17',
-                borderColor: '#00E5FF',
-                color: '#00E5FF',
-              }}
-              className="h-9 w-9 rounded-xl border flex items-center justify-center shrink-0"
+          <div className="flex items-center gap-2 min-w-0">
+            <BookOpen className="h-4 w-4 text-[#00E5FF] shrink-0" />
+            <h2
+              style={{ color: primaryText }}
+              className="text-sm sm:text-base font-black truncate"
             >
-              <BookOpen className="h-5 w-5" />
-            </div>
-            <div>
-              <span
-                style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
-                className="text-[10px] font-extrabold uppercase tracking-wider block"
-              >
-                DOCUMENTAÇÃO OFICIAL &amp; CONFORMIDADE UE / PORTUGAL
-              </span>
-              <h2
-                style={{ color: primaryText }}
-                className="text-sm sm:text-base font-black"
-              >
-                📘 Manual &amp; Dossiê Legal, Burocrático e RGPD
-              </h2>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              backgroundColor: '#0B0F17',
-              borderColor: '#00E5FF',
-              color: '#00E5FF',
-            }}
-            className="rounded-xl border px-2.5 py-1.5 text-xs font-extrabold flex items-center gap-1 cursor-pointer shrink-0"
-            aria-label="Fechar Manual"
-          >
-            <X className="h-4 w-4" />
-            <span>Fechar</span>
-          </button>
-        </div>
-
-        {/* Search & Download Complete Dossier Bar */}
-        <div className="flex flex-col gap-2 shrink-0">
-          <div className="relative">
-            <Search
-              style={{ color: secondaryText }}
-              className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2"
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Pesquisar RGPD, AT, IVA Art. 53, INPI, Libras, comandos de voz..."
-              style={{
-                backgroundColor: innerBg,
-                borderColor: borderCol,
-                color: primaryText,
-              }}
-              className="w-full rounded-xl border pl-8 pr-3 py-2 text-xs font-bold focus:outline-none focus:border-[#00E5FF]"
-            />
+              📘 Manual &amp; Dossiê Legal
+            </h2>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => handleDownloadManualFile('txt')}
-              style={{
-                backgroundColor: '#0B0F17',
-                borderColor: '#00E5FF',
-                color: '#00E5FF',
-              }}
-              className="flex-1 rounded-xl border px-3 py-2 text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95 shadow-xs"
-            >
-              <Download className="h-3.5 w-3.5 shrink-0" />
-              <span>
-                📥 Baixar Manual &amp; Dossiê Completo (.TXT / .MD / Imprimir PDF)
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDownloadManualFile('md')}
-              style={{
-                backgroundColor: cardBg,
-                borderColor: borderCol,
-                color: primaryText,
-              }}
-              className="rounded-xl border px-2.5 py-2 text-[11px] font-extrabold cursor-pointer"
-              title="Transferir em formato Markdown (.MD)"
-            >
-              .MD
-            </button>
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={handlePrintPdfManual}
@@ -1335,11 +1238,36 @@ const OfficialManualAndCommandsModal: React.FC<{
                 borderColor: borderCol,
                 color: primaryText,
               }}
-              className="rounded-xl border px-2.5 py-2 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer"
+              className="rounded-lg border px-2 py-1 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer whitespace-nowrap"
               title="Imprimir ou Guardar como PDF"
             >
-              <Printer className="h-3.5 w-3.5 text-[#00E5FF]" />
-              <span>PDF</span>
+              <span>📥 PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDownloadManualFile('txt')}
+              style={{
+                backgroundColor: cardBg,
+                borderColor: borderCol,
+                color: primaryText,
+              }}
+              className="rounded-lg border px-2 py-1 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              title="Transferir Manual e Dossiê em .TXT"
+            >
+              <span>📥 TXT</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                backgroundColor: '#0B0F17',
+                borderColor: '#00E5FF',
+                color: '#00E5FF',
+              }}
+              className="rounded-lg border px-2.5 py-1 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              aria-label="Fechar Manual"
+            >
+              <span>✕ Fechar</span>
             </button>
           </div>
         </div>
@@ -1351,65 +1279,86 @@ const OfficialManualAndCommandsModal: React.FC<{
               borderColor: '#00E5FF',
               color: '#00E5FF',
             }}
-            className="rounded-xl border px-3 py-1.5 text-xs font-extrabold shrink-0"
+            className="rounded-lg border px-2.5 py-1 text-[11px] font-extrabold shrink-0"
           >
             ✓ {downloadFeedback}
           </div>
         )}
 
-        {/* 3 Structured Tabs: Manual do Estafeta | Manual Executivo | Dossiê Legal, Burocrático & RGPD */}
-        <div
-          style={{ backgroundColor: cardBg, borderColor: borderCol }}
-          className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-1.5 rounded-xl border shrink-0"
-        >
-          {(
-            [
-              {
-                id: 'MANUAL_ESTAFETA',
-                label: '📘 Manual do Estafeta',
-              },
-              {
-                id: 'MANUAL_EXECUTIVO',
-                label: '🛡️ Manual Executivo (CEO / Admin)',
-              },
-              {
-                id: 'DOSSIE_LEGAL_RGPD',
-                label: '⚖️ Dossiê Legal, Burocrático & RGPD',
-              },
-            ] as const
-          ).map((t) => {
-            const active = activeManualTab === t.id && !normalizedQuery;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setActiveManualTab(t.id);
-                }}
-                style={
-                  active
-                    ? {
-                        backgroundColor: '#0B0F17',
-                        borderColor: '#00E5FF',
-                        color: '#00E5FF',
-                      }
-                    : {
-                        backgroundColor: 'transparent',
-                        borderColor: 'transparent',
-                        color: secondaryText,
-                      }
-                }
-                className="rounded-lg border py-2 px-2.5 text-xs font-black transition cursor-pointer text-center"
-              >
-                {t.label}
-              </button>
-            );
-          })}
+        {/* 2. Compact Horizontal 3-Tab Switcher + Slim Search Input (flex-shrink: 0) */}
+        <div className="space-y-1.5 shrink-0">
+          <div
+            style={{ backgroundColor: cardBg, borderColor: borderCol }}
+            className="grid grid-cols-3 gap-1 p-1 rounded-xl border"
+          >
+            {(
+              [
+                {
+                  id: 'MANUAL_ESTAFETA',
+                  label: '📘 Estafeta',
+                },
+                {
+                  id: 'MANUAL_EXECUTIVO',
+                  label: '🛡️ Executivo',
+                },
+                {
+                  id: 'DOSSIE_LEGAL_RGPD',
+                  label: '⚖️ Dossiê Legal',
+                },
+              ] as const
+            ).map((t) => {
+              const active = activeManualTab === t.id && !normalizedQuery;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setActiveManualTab(t.id);
+                  }}
+                  style={
+                    active
+                      ? {
+                          backgroundColor: '#0B0F17',
+                          borderColor: '#00E5FF',
+                          color: '#00E5FF',
+                        }
+                      : {
+                          backgroundColor: 'transparent',
+                          borderColor: 'transparent',
+                          color: secondaryText,
+                        }
+                  }
+                  className="rounded-lg border py-1.5 px-1.5 text-[11px] font-black transition cursor-pointer text-center whitespace-nowrap truncate"
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="relative">
+            <Search
+              style={{ color: secondaryText }}
+              className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2"
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Pesquisar RGPD, AT, IVA Art. 53, INPI, Libras, comandos..."
+              style={{
+                backgroundColor: innerBg,
+                borderColor: borderCol,
+                color: primaryText,
+              }}
+              className="w-full rounded-xl border pl-8 pr-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#00E5FF]"
+            />
+          </div>
         </div>
 
-        {/* Content Body */}
-        <div className="overflow-y-auto space-y-2.5 pr-1 flex-1">
+        {/* 3. Spacious Scrollable Content Body (flex: 1, overflow-y: auto, min-height: 68dvh) */}
+        <div className="flex-1 min-h-[68dvh] overflow-y-auto space-y-2.5 pr-1">
           {filteredSections.map((sec) => (
             <div
               key={sec.id}
@@ -1442,7 +1391,7 @@ const OfficialManualAndCommandsModal: React.FC<{
                     borderColor: borderCol,
                     color: primaryText,
                   }}
-                  className="rounded-lg border px-2.5 py-1 text-[10px] font-extrabold flex items-center gap-1 cursor-pointer"
+                  className="rounded-lg border px-2.5 py-1 text-[10px] font-extrabold flex items-center gap-1 cursor-pointer shrink-0"
                 >
                   <Volume2 className="h-3 w-3 text-[#00E5FF]" />
                   <span>Ouvir</span>
@@ -1450,7 +1399,7 @@ const OfficialManualAndCommandsModal: React.FC<{
               </div>
               <h3
                 style={{ color: primaryText }}
-                className="text-xs sm:text-sm font-black"
+                className="text-xs sm:text-sm font-black leading-snug"
               >
                 {sec.title}
               </h3>
@@ -1465,7 +1414,7 @@ const OfficialManualAndCommandsModal: React.FC<{
                   <li
                     key={idx}
                     style={{ color: primaryText }}
-                    className="text-xs flex items-start gap-1.5 leading-snug"
+                    className="text-xs flex items-start gap-1.5 leading-relaxed"
                   >
                     <span className="text-[#00E5FF] font-black">•</span>
                     <span>{b}</span>
@@ -1490,7 +1439,7 @@ const OfficialManualAndCommandsModal: React.FC<{
                 >
                   <Volume2 className="h-3.5 w-3.5 text-[#00E5FF]" />
                   <span>
-                    Tabela Completa de Comandos de Voz Mãos-Livres (pt-BR)
+                    Tabela de Comandos de Voz Mãos-Livres (pt-BR)
                   </span>
                 </span>
                 <span
@@ -1499,7 +1448,7 @@ const OfficialManualAndCommandsModal: React.FC<{
                     borderColor: '#00E5FF',
                     color: '#00E5FF',
                   }}
-                  className="rounded border px-2 py-0.5 text-[10px] font-extrabold"
+                  className="rounded border px-2 py-0.5 text-[10px] font-extrabold shrink-0"
                 >
                   {filteredVoiceCommands.length} Comandos
                 </span>
@@ -1563,28 +1512,6 @@ const OfficialManualAndCommandsModal: React.FC<{
               </div>
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div
-          style={{ borderColor: borderCol }}
-          className="flex items-center justify-between pt-2 border-t shrink-0"
-        >
-          <span style={{ color: secondaryText }} className="text-[11px] font-bold">
-            RGPD (UE 2016/679) • Lei n.º 58/2019 • DL n.º 252/94 • Lei n.º 13/2023
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              backgroundColor: '#0B0F17',
-              borderColor: '#00E5FF',
-              color: '#00E5FF',
-            }}
-            className="rounded-xl border px-4 py-1.5 text-xs font-extrabold cursor-pointer"
-          >
-            Fechar Manual
-          </button>
         </div>
       </div>
     </div>
@@ -1856,7 +1783,7 @@ export const MenuMaisHubView: React.FC = () => {
   const [subPage, setSubPage] = useState<AjustesSubPageId>('LISTA_PRINCIPAL');
   const [openAccordion, setOpenAccordion] = useState<
     'PERFIL' | 'VOZ_BOLINHA' | 'CENTRO_FINANCAS' | 'SEGURANCA_SISTEMA' | null
-  >('PERFIL');
+  >(null);
   const [isLiveSupportModalOpen, setIsLiveSupportModalOpen] =
     useState<boolean>(false);
   const [isDirectApkShareModalOpen, setIsDirectApkShareModalOpen] =
@@ -1877,16 +1804,19 @@ export const MenuMaisHubView: React.FC = () => {
       ? 'Anónimo'
       : 'Online';
 
+  const currentUserName =
+    realCourierProfile?.name?.trim() || 'Estafeta';
+
   // 100% Full-Screen Sub-Page View (No Stuck Top Card)
   if (subPage !== 'LISTA_PRINCIPAL') {
     const subPageTitleMap: Record<
       Exclude<AjustesSubPageId, 'LISTA_PRINCIPAL'>,
       string
     > = {
-      PERSONALIZAR_ALERTAS_VOZ: 'Personalizar Alertas (±45%), Voz & Mensagens',
+      PERSONALIZAR_ALERTAS_VOZ: 'Personalizar Alertas, Voz & Mensagens',
       ARQUIVO_PROVAS: 'Arquivo de Provas (Dossiê Legal)',
       ACORDOS_ZONA: 'Acordos de Zona (Piso Mínimo)',
-      PERIGOS_VIA: 'Perigos na Via (Amarante — Raio 35 km)',
+      PERIGOS_VIA: 'Perigos na Via (Amarante 35 km)',
       RAIO_MAPA: 'Centro Operacional & Raio 35 km',
     };
 
@@ -1901,7 +1831,7 @@ export const MenuMaisHubView: React.FC = () => {
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>Voltar a Ajustes</span>
           </button>
-          <span className="text-[11px] font-bold text-zinc-300 truncate">
+          <span className="text-xs font-extrabold text-zinc-200 text-right leading-snug">
             {subPageTitleMap[subPage]}
           </span>
         </div>
@@ -1919,7 +1849,57 @@ export const MenuMaisHubView: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {/* Unified Monochromatic Slate & Light Neon Blue Quick Actions Grid (Strict Light/Dark Theme) */}
+      {/* 1. VERY TOP OF AJUSTES: 🚪 Terminar Sessão / Trocar Conta */}
+      <button
+        type="button"
+        onClick={logoutSession}
+        style={{
+          backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+          borderColor:
+            themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.35)',
+          color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+          borderRadius: '12px',
+        }}
+        className="w-full border px-4 py-3 text-left flex items-center justify-between gap-3 cursor-pointer transition hover:border-[#00E5FF] shadow-xs"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            style={{
+              backgroundColor: 'rgba(244, 63, 94, 0.14)',
+              borderColor: 'rgba(244, 63, 94, 0.45)',
+            }}
+            className="h-9 w-9 rounded-lg border flex items-center justify-center shrink-0 text-base"
+          >
+            🚪
+          </span>
+          <div className="min-w-0">
+            <span
+              style={{
+                color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+              }}
+              className="block text-sm font-extrabold truncate"
+            >
+              🚪 Terminar Sessão / Trocar Conta
+            </span>
+            <span
+              style={{
+                color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+              }}
+              className="block text-xs font-semibold truncate"
+            >
+              Sessão ativa: {currentUserName} • Toque para sair ou trocar
+            </span>
+          </div>
+        </div>
+        <ChevronRight
+          style={{
+            color: themeMode === 'DAYLIGHT' ? '#090D16' : '#00E5FF',
+          }}
+          className="h-5 w-5 shrink-0"
+        />
+      </button>
+
+      {/* Top Quick Actions Grid: Enviar App / QR Code APK | Suporte em Tempo Real | Manual & Dossiê Legal */}
       <div
         style={{
           backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
@@ -2084,7 +2064,7 @@ export const MenuMaisHubView: React.FC = () => {
       )}
 
       {/* =====================================================================
-          ACCORDION CARD 1: 👤 MEU PERFIL & PLATAFORMAS
+          ACCORDION CARD 1: 👤 PERFIL (${currentUserName})
           ===================================================================== */}
       <div
         style={{
@@ -2112,7 +2092,7 @@ export const MenuMaisHubView: React.FC = () => {
               }}
               className="block text-sm sm:text-base font-extrabold truncate"
             >
-              👤 Meu Perfil &amp; Plataformas
+              👤 Perfil ({currentUserName})
             </span>
             <span
               style={{
@@ -2120,8 +2100,7 @@ export const MenuMaisHubView: React.FC = () => {
               }}
               className="block text-xs font-semibold truncate mt-0.5"
             >
-              {realCourierProfile?.name || 'Estafeta'} •{' '}
-              {activePlatforms.join(', ')}
+              {activePlatforms.join(' • ')} • Turno: {shiftBadge}
             </span>
           </div>
           <ChevronRight
@@ -2135,73 +2114,145 @@ export const MenuMaisHubView: React.FC = () => {
         </button>
 
         {openAccordion === 'PERFIL' && (
-          <div className="p-3.5 pt-2 border-t border-zinc-800 space-y-3 bg-zinc-950/60">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2.5 min-w-0">
-                {realCourierProfile?.isRegistered &&
-                realCourierProfile.avatar_url ? (
-                  <img
-                    src={realCourierProfile.avatar_url}
-                    alt={realCourierProfile.name}
-                    className="h-10 w-10 rounded-full object-cover border-2 border-emerald-400 shrink-0"
-                  />
-                ) : (
-                  <MapPin className="h-5 w-5 text-emerald-400 shrink-0" />
-                )}
-                <div className="min-w-0">
-                  <span className="block text-sm font-extrabold text-zinc-100 truncate">
-                    {realCourierProfile?.isRegistered && realCourierProfile.name
-                      ? `Registado no Mapa: ${realCourierProfile.name} (${realCourierProfile.vehicle})`
-                      : 'Ainda não registado no Mapa em Tempo Real'}
-                  </span>
-                  <span className="block text-xs text-zinc-400 truncate">
-                    {realCourierProfile?.isRegistered && realCourierProfile.name
-                      ? `Zona: ${realCourierProfile.zone} • GPS: ${realCourierProfile.lat.toFixed(4)}, ${realCourierProfile.lng.toFixed(4)}`
-                      : 'Registe o seu perfil para aparecer no Mapa de Amarante e Buddys.'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-                <button
-                  type="button"
-                  onClick={refreshLiveGpsPosition}
-                  className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer transition"
-                >
-                  <RefreshCw className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>GPS</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCourierRegistrationModalOpen(true)}
-                  className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-extrabold flex items-center gap-1 cursor-pointer transition"
-                >
-                  <UserCheck className="h-4 w-4" />
-                  <span>Editar Meu Perfil / Registo</span>
-                </button>
-              </div>
+          <div className="p-3.5 pt-2.5 border-t border-zinc-800 space-y-2.5 bg-zinc-950/60">
+            {/* Top Quick Buttons: 📍 GPS | ✏️ Editar Perfil */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={refreshLiveGpsPosition}
+                className="w-full rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-100 py-2.5 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
+              >
+                <span>📍 GPS</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCourierRegistrationModalOpen(true)}
+                style={{
+                  backgroundColor: '#00E5FF',
+                  color: '#05070B',
+                }}
+                className="w-full rounded-xl py-2.5 px-3 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95 shadow-xs"
+              >
+                <span>✏️ Editar Perfil</span>
+              </button>
             </div>
 
+            {/* Clean Avatar Preview + Single 📷 Escolher Foto Button */}
             <ZeroAiProfilePhotoUploader
               avatarUrl={
                 realCourierProfile?.isRegistered
                   ? realCourierProfile.avatar_url
                   : undefined
               }
-              courierName={
-                realCourierProfile?.isRegistered && realCourierProfile.name
-                  ? realCourierProfile.name
-                  : 'Novo Estafeta'
-              }
+              courierName={currentUserName}
               onAvatarCompressedChange={(dataUrl) => {
                 void updateCourierAvatarUrl(dataUrl);
               }}
               compact
             />
 
-            <ActivePlatformsSelectorGroup
-              selectedPlatforms={activePlatforms}
-              onTogglePlatform={toggleActivePlatform}
-            />
+            {/* Personal, Financial, Theme & Shift Controls inside Perfil */}
+            <div className="rounded-xl bg-zinc-900 border border-zinc-800 divide-y divide-zinc-800 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setActiveTab('financas')}
+                className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              >
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
+                  🎯 Metas Financeiras &amp; Caixa
+                </span>
+                <ChevronRight className="h-4 w-4 text-[#00E5FF] shrink-0" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('calculadora')}
+                className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              >
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
+                  🚗 Veículo, Custos &amp; Impostos
+                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="rounded bg-zinc-950 border border-[#00E5FF]/40 px-2 py-0.5 text-[11px] font-extrabold text-[#00E5FF]">
+                    &gt;= {userPrefs.minGrossOrderValueEur.toFixed(2)} €
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-[#00E5FF]" />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleThemeMode}
+                className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              >
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
+                  {themeMode === 'DAYLIGHT'
+                    ? '☀️ Tema Visual (Modo Claro / Escuro)'
+                    : '🌙 Tema Visual (Modo Claro / Escuro)'}
+                </span>
+                <span className="rounded bg-zinc-950 border border-zinc-700 px-2 py-0.5 text-[11px] font-extrabold text-zinc-200 shrink-0">
+                  {themeMode === 'DAYLIGHT' ? 'Modo Claro' : 'Modo Escuro'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsShiftDrawerOpen((prev) => !prev)}
+                className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              >
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
+                  🟢 Estado do Turno (Online / Pausa / Anónimo / Voz)
+                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="rounded bg-zinc-950 border border-[#00E5FF]/40 px-2 py-0.5 text-[11px] font-extrabold text-[#00E5FF]">
+                    {shiftBadge}
+                  </span>
+                  <ChevronRight
+                    className={`h-4 w-4 text-[#00E5FF] transition-transform ${
+                      isShiftDrawerOpen ? 'rotate-90' : ''
+                    }`}
+                  />
+                </div>
+              </button>
+
+              {isShiftDrawerOpen && (
+                <div className="px-3.5 py-2.5 bg-zinc-950 grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={toggleAppPauseMode}
+                    className={`rounded-lg py-2 px-2 text-xs font-extrabold cursor-pointer ${
+                      isAppPaused
+                        ? 'bg-white text-zinc-950'
+                        : 'bg-zinc-900 text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    {isAppPaused ? '▶ Retomar' : '⏸ Pausar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleAnonymousMode}
+                    className={`rounded-lg py-2 px-2 text-xs font-extrabold cursor-pointer ${
+                      userPrefs.anonymousMode
+                        ? 'bg-white text-zinc-950'
+                        : 'bg-zinc-900 text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Anónimo: {userPrefs.anonymousMode ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleTtsVoice}
+                    className={`rounded-lg py-2 px-2 text-xs font-extrabold cursor-pointer ${
+                      ttsVoiceEnabled
+                        ? 'bg-white text-zinc-950'
+                        : 'bg-zinc-900 text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Voz: {ttsVoiceEnabled ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -2243,8 +2294,7 @@ export const MenuMaisHubView: React.FC = () => {
               }}
               className="block text-xs font-semibold truncate mt-0.5"
             >
-              Velocidade {buddyVoiceRate.toFixed(2)}x • Voz Masculina pt-BR &amp;
-              Repouso
+              Velocidade {buddyVoiceRate.toFixed(2)}x • Setas Direcionais &amp; Alertas
             </span>
           </div>
           <ChevronRight
@@ -2364,7 +2414,7 @@ export const MenuMaisHubView: React.FC = () => {
               </div>
             </div>
 
-            {/* 3 Bundled 3D Poses Status Preview (Theme-Aware Cards + #00E5FF Active Border) */}
+            {/* 3 Bundled 3D Poses Status Preview */}
             <div className="grid grid-cols-3 gap-2">
               <div
                 style={{
@@ -2469,50 +2519,81 @@ export const MenuMaisHubView: React.FC = () => {
               </div>
             </div>
 
-            {/* Configurable Floating Bubble Resting Position Selector (Theme-Aware Cards) */}
+            {/* Directional Pad (D-Pad) for Floating Bubble Resting Position */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="text-sm font-extrabold text-zinc-100">
-                  📍 Posição de Repouso da Bolinha Flutuante
-                </span>
-                <span
-                  style={{
-                    backgroundColor: '#0B0F17',
-                    borderColor: '#00E5FF',
-                    color: '#00E5FF',
-                  }}
-                  className="rounded-full border px-2.5 py-0.5 text-xs font-extrabold"
-                >
-                  {BUBBLE_RESTING_PRESET_OPTIONS.find(
-                    (o) => o.id === bubbleRestingPreset
-                  )?.label || 'Canto Inferior Direito'}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {BUBBLE_RESTING_PRESET_OPTIONS.map((opt) => {
-                  const isSelected = bubbleRestingPreset === opt.id;
+              <span className="text-sm font-extrabold text-zinc-100 block">
+                📍 Posição de Repouso da Bolinha Flutuante
+              </span>
+
+              {/* 6-Direction Visual D-Pad (↖ Topo Esq | ↗ Topo Dir | ⬅ Meio Esq | ➡ Meio Dir | ↙ Baixo Esq | ↘ Baixo Dir) */}
+              <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-2.5 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { id: 'TOP_LEFT', label: '↖ Topo Esq' },
+                      { id: 'TOP_RIGHT', label: '↗ Topo Dir' },
+                      { id: 'MIDDLE_LEFT', label: '⬅ Meio Esq' },
+                      { id: 'MIDDLE_RIGHT', label: '➡ Meio Dir' },
+                      { id: 'BOTTOM_LEFT', label: '↙ Baixo Esq' },
+                      { id: 'BOTTOM_RIGHT', label: '↘ Baixo Dir' },
+                    ] as const
+                  ).map((dir) => {
+                    const isSelected = bubbleRestingPreset === dir.id;
+                    return (
+                      <button
+                        key={dir.id}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => setBubbleRestingPreset(dir.id)}
+                        style={{
+                          backgroundColor: isSelected
+                            ? '#00E5FF'
+                            : themeMode === 'DAYLIGHT'
+                              ? '#FFFFFF'
+                              : '#111827',
+                          borderColor: isSelected
+                            ? '#00E5FF'
+                            : themeMode === 'DAYLIGHT'
+                              ? '#CBD5E1'
+                              : 'rgba(0, 229, 255, 0.35)',
+                          color: isSelected
+                            ? '#05070B'
+                            : themeMode === 'DAYLIGHT'
+                              ? '#090D16'
+                              : '#FFFFFF',
+                        }}
+                        className="rounded-xl border-2 py-2.5 px-3 text-xs font-black flex items-center justify-between gap-2 cursor-pointer transition active:scale-95"
+                      >
+                        <span>{dir.label}</span>
+                        {isSelected && <span className="text-xs font-black">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Single Card Directly Below D-Pad: 📌 Fixar onde eu arrastar a bolinha */}
+                {(() => {
+                  const isCustomDrag = bubbleRestingPreset === 'CUSTOM_DRAG';
                   return (
                     <button
-                      key={opt.id}
                       type="button"
-                      aria-pressed={isSelected}
-                      onClick={() => setBubbleRestingPreset(opt.id)}
+                      aria-pressed={isCustomDrag}
+                      onClick={() => setBubbleRestingPreset('CUSTOM_DRAG')}
                       style={{
                         backgroundColor:
                           themeMode === 'DAYLIGHT'
-                            ? isSelected
+                            ? isCustomDrag
                               ? '#ECFEFF'
                               : '#FFFFFF'
                             : '#111827',
-                        borderColor: isSelected
+                        borderColor: isCustomDrag
                           ? '#00E5FF'
                           : themeMode === 'DAYLIGHT'
-                            ? '#E2E8F0'
-                            : 'rgba(0, 229, 255, 0.25)',
-                        color:
-                          themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                            ? '#CBD5E1'
+                            : 'rgba(0, 229, 255, 0.3)',
+                        color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
                       }}
-                      className="rounded-xl px-3 py-2.5 text-left border-2 transition cursor-pointer flex items-center justify-between gap-2"
+                      className="w-full rounded-xl px-3 py-2.5 text-left border-2 transition cursor-pointer flex items-center justify-between gap-2"
                     >
                       <div className="min-w-0">
                         <span
@@ -2520,31 +2601,31 @@ export const MenuMaisHubView: React.FC = () => {
                             color:
                               themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
                           }}
-                          className="block text-sm font-extrabold truncate"
+                          className="block text-xs sm:text-sm font-extrabold"
                         >
-                          {opt.label}
+                          📌 Fixar onde eu arrastar a bolinha
                         </span>
                         <span
                           style={{
                             color:
                               themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
                           }}
-                          className="block text-xs truncate"
+                          className="block text-[11px]"
                         >
-                          {opt.shortDesc}
+                          Guarda automaticamente o último ponto onde soltares
                         </span>
                       </div>
                       <span
                         style={{
-                          backgroundColor: isSelected
+                          backgroundColor: isCustomDrag
                             ? '#0B0F17'
                             : 'transparent',
-                          borderColor: isSelected
+                          borderColor: isCustomDrag
                             ? '#00E5FF'
                             : themeMode === 'DAYLIGHT'
                               ? '#CBD5E1'
                               : 'rgba(0, 229, 255, 0.35)',
-                          color: isSelected
+                          color: isCustomDrag
                             ? '#00E5FF'
                             : themeMode === 'DAYLIGHT'
                               ? '#64748B'
@@ -2552,34 +2633,34 @@ export const MenuMaisHubView: React.FC = () => {
                         }}
                         className="h-5 w-5 rounded-full border flex items-center justify-center text-xs font-black shrink-0"
                       >
-                        {isSelected ? '✓' : ''}
+                        {isCustomDrag ? '✓' : ''}
                       </span>
                     </button>
                   );
-                })}
+                })()}
               </div>
             </div>
 
             <button
               type="button"
               onClick={() => setSubPage('PERSONALIZAR_ALERTAS_VOZ')}
-              className="w-full rounded-xl bg-zinc-900 border border-zinc-800 py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/60 transition cursor-pointer"
+              className="w-full rounded-xl bg-zinc-900 border border-zinc-800 py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/60 transition cursor-pointer"
             >
-              <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-2 min-w-0">
-                <Sliders className="h-4 w-4 text-emerald-400 shrink-0" />
-                <span className="truncate">
-                  Personalizar Alertas (±45%), Trigger (&ldquo;
-                  {voiceActivationConfig.customTriggerWord || 'Buddy'}&rdquo;) &amp; Macros
+              <span className="text-xs sm:text-sm font-extrabold text-zinc-100 flex items-center gap-2 min-w-0">
+                <Sliders className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                <span>
+                  Personalizar Alertas, Trigger (&ldquo;
+                  {voiceActivationConfig.customTriggerWord || 'Buddy'}&rdquo;) &amp; Mensagens
                 </span>
               </span>
-              <ChevronRight className="h-4 w-4 text-zinc-400 shrink-0" />
+              <ChevronRight className="h-4 w-4 text-[#00E5FF] shrink-0" />
             </button>
           </div>
         )}
       </div>
 
       {/* =====================================================================
-          ACCORDION CARD 3: 📍 CENTRO: AMARANTE & FINANÇAS
+          ACCORDION CARD 3: 📍 MAPA, ZONA & ACORDOS (AMARANTE)
           ===================================================================== */}
       <div
         style={{
@@ -2607,7 +2688,7 @@ export const MenuMaisHubView: React.FC = () => {
               }}
               className="block text-sm sm:text-base font-extrabold truncate"
             >
-              📍 Centro: {selectedRegionName} &amp; Finanças
+              📍 Mapa, Zona &amp; Acordos ({selectedRegionName})
             </span>
             <span
               style={{
@@ -2615,7 +2696,7 @@ export const MenuMaisHubView: React.FC = () => {
               }}
               className="block text-xs font-semibold truncate mt-0.5"
             >
-              Raio operacional {mapRadiusKm} km • Metas, Custos &amp; Acordos
+              Centro operacional • Raio {mapRadiusKm} km &amp; Piso Mínimo Coletivo
             </span>
           </div>
           <ChevronRight
@@ -2629,66 +2710,46 @@ export const MenuMaisHubView: React.FC = () => {
         </button>
 
         {openAccordion === 'CENTRO_FINANCAS' && (
-          <div className="border-t border-zinc-800 divide-y divide-zinc-800 bg-zinc-950/60">
+          <div className="p-3.5 pt-2.5 border-t border-zinc-800 space-y-2.5 bg-zinc-950/60">
+            {/* 1. 📍 Editar Centro & Raio do Mapa */}
             <button
               type="button"
               onClick={() => setIsHubSelectorModalOpen(true)}
-              className="w-full py-3.5 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              className="w-full rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 p-3 flex items-center justify-between gap-2.5 text-left transition cursor-pointer"
             >
-              <span className="text-base font-bold text-zinc-100 flex items-center gap-2">
-                <Compass className="h-4 w-4 text-emerald-400 shrink-0" />
-                <span>📍 Centro: Amarante (Raio 35 km)</span>
-              </span>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-1 text-sm font-bold text-emerald-300">
-                  Ativo • 35 km
+              <div className="min-w-0">
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100 block">
+                  📍 Editar Centro &amp; Raio do Mapa
                 </span>
-                <ChevronRight className="h-4 w-4 text-zinc-500" />
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('financas')}
-              className="w-full py-3.5 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
-            >
-              <span className="text-sm font-bold text-zinc-100">
-                💰 Metas Financeiras &amp; Caixa
-              </span>
-              <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('calculadora')}
-              className="w-full py-3.5 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
-            >
-              <span className="text-sm font-bold text-zinc-100">
-                🧮 Veículo, Custos &amp; Impostos
-              </span>
-              <div className="flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
-                <span className="text-xs font-bold text-emerald-300">
-                  &gt;= {userPrefs.minGrossOrderValueEur.toFixed(2)} €
+                <span className="text-xs text-[#00E5FF] font-semibold block mt-0.5">
+                  {selectedRegionName} • Raio {mapRadiusKm} km
                 </span>
-                <ChevronRight className="h-4 w-4 text-zinc-500" />
               </div>
+              <span className="rounded-lg bg-[#0B0F17] border border-[#00E5FF] px-2.5 py-1 text-xs font-extrabold text-[#00E5FF] shrink-0 whitespace-nowrap">
+                Alterar
+              </span>
             </button>
 
+            {/* 2. 🤝 Acordos de Zona (Piso Mínimo Coletivo) */}
             <button
               type="button"
               onClick={() => setSubPage('ACORDOS_ZONA')}
-              className="w-full py-3.5 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+              className="w-full rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 p-3 flex items-center justify-between gap-2.5 text-left transition cursor-pointer"
             >
-              <span className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                <Handshake className="h-4 w-4 text-zinc-400 shrink-0" />
-                <span>Acordos de Zona (Piso Mínimo Coletivo)</span>
-              </span>
+              <div className="min-w-0">
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100 block">
+                  🤝 Acordos de Zona (Piso Mínimo Coletivo)
+                </span>
+                <span className="text-xs text-zinc-400 font-semibold block mt-0.5">
+                  Tarifa mínima acordada entre estafetas da zona
+                </span>
+              </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-200">
+                <span className="rounded-lg bg-zinc-950 border border-zinc-700 px-2.5 py-1 text-xs font-extrabold text-zinc-200 whitespace-nowrap">
                   {zonePacts.filter((p) => p.joinedByUser).length}/
                   {zonePacts.length} Ativos
                 </span>
-                <ChevronRight className="h-4 w-4 text-zinc-500" />
+                <ChevronRight className="h-4 w-4 text-[#00E5FF]" />
               </div>
             </button>
           </div>
@@ -2732,8 +2793,7 @@ export const MenuMaisHubView: React.FC = () => {
               }}
               className="block text-xs font-semibold truncate mt-0.5"
             >
-              Modo Chuva, Queda 45s, SOS, Dossiê Legal &amp; Bateria (
-              {batteryLevelPct}%)
+              Modo Chuva, Queda 45s, SOS, Perigos &amp; Bateria ({batteryLevelPct}%)
             </span>
           </div>
           <ChevronRight
@@ -2747,25 +2807,25 @@ export const MenuMaisHubView: React.FC = () => {
         </button>
 
         {openAccordion === 'SEGURANCA_SISTEMA' && (
-          <div className="p-3.5 pt-2 border-t border-zinc-800 space-y-3 bg-zinc-950/60">
-            {/* Street Safety & Battery Survival Modules */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="p-3.5 pt-2.5 border-t border-zinc-800 space-y-2.5 bg-zinc-950/60">
+            {/* 1. Street Safety & Battery Survival Modules */}
+            <div className="space-y-2">
               <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-zinc-100 block truncate">
+                  <span className="text-xs font-extrabold text-zinc-100 block">
                     🌧️ Modo Chuva &amp; Luvas
                   </span>
-                  <span className="text-[11px] text-zinc-400 block truncate">
-                    Bloqueia toques fantasma
+                  <span className="text-[11px] text-zinc-400 block">
+                    Bloqueia toques fantasma de gotas de água
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={toggleRainLock}
-                  className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-extrabold cursor-pointer ${
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-extrabold cursor-pointer ${
                     rainLockActive
                       ? 'bg-sky-500 text-zinc-950'
-                      : 'bg-zinc-800 text-zinc-300'
+                      : 'bg-zinc-800 text-zinc-200'
                   }`}
                 >
                   {rainLockActive ? 'ATIVO' : 'Ativar'}
@@ -2774,18 +2834,18 @@ export const MenuMaisHubView: React.FC = () => {
 
               <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-zinc-100 block truncate">
-                    🚨 Deteção Queda (45s)
+                  <span className="text-xs font-extrabold text-zinc-100 block">
+                    🚨 Deteção Automática de Queda (45s)
                   </span>
-                  <span className="text-[11px] text-zinc-400 block truncate">
-                    Auto-SOS se imóvel
+                  <span className="text-[11px] text-zinc-400 block">
+                    Envia Auto-SOS se ficar imóvel após impacto
                   </span>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
                     onClick={toggleCrashDetection}
-                    className={`rounded-lg px-2 py-1 text-xs font-extrabold cursor-pointer ${
+                    className={`rounded-lg px-2.5 py-1.5 text-xs font-extrabold cursor-pointer ${
                       crashDetectionEnabled
                         ? 'bg-emerald-500 text-zinc-950'
                         : 'bg-zinc-800 text-zinc-400'
@@ -2796,7 +2856,7 @@ export const MenuMaisHubView: React.FC = () => {
                   <button
                     type="button"
                     onClick={triggerSimulatedCrashTest}
-                    className="rounded-lg bg-rose-600/20 border border-rose-500/40 text-rose-300 px-2 py-1 text-xs font-bold cursor-pointer"
+                    className="rounded-lg bg-rose-600/20 border border-rose-500/40 text-rose-300 px-2.5 py-1.5 text-xs font-bold cursor-pointer"
                   >
                     Testar
                   </button>
@@ -2805,18 +2865,18 @@ export const MenuMaisHubView: React.FC = () => {
 
               <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-zinc-100 block truncate">
-                    🔋 Sobrevivência &lt;20%
+                  <span className="text-xs font-extrabold text-zinc-100 block">
+                    🔋 Modo Sobrevivência (&lt;20%)
                   </span>
-                  <span className="text-[11px] text-zinc-400 block truncate">
-                    Alerta cabo desligado
+                  <span className="text-[11px] text-zinc-400 block">
+                    Poupança extrema e alerta de cabo desligado
                   </span>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
                     onClick={toggleBatterySurvivalMode}
-                    className={`rounded-lg px-2 py-1 text-xs font-extrabold cursor-pointer ${
+                    className={`rounded-lg px-2.5 py-1.5 text-xs font-extrabold cursor-pointer ${
                       batterySurvivalMode
                         ? 'bg-amber-500 text-zinc-950'
                         : 'bg-zinc-800 text-zinc-300'
@@ -2827,7 +2887,7 @@ export const MenuMaisHubView: React.FC = () => {
                   <button
                     type="button"
                     onClick={simulateChargerUnpluggedAlert}
-                    className="rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2 py-1 text-xs font-bold cursor-pointer"
+                    className="rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2.5 py-1.5 text-xs font-bold cursor-pointer"
                   >
                     Cabo
                   </button>
@@ -2835,67 +2895,39 @@ export const MenuMaisHubView: React.FC = () => {
               </div>
             </div>
 
+            {/* 2. 🆘 Acionar Alerta SOS de Emergência */}
             <button
               type="button"
               onClick={() => requestOrConfirmSosActivation('Acidente na Via')}
               style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
-              className="w-full rounded-xl border border-red-400 py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition hover:opacity-95"
+              className="w-full rounded-xl border border-red-400 py-2.5 px-3 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition hover:opacity-95"
             >
               <span>
                 🆘 Acionar Alerta SOS de Emergência (ou diga &ldquo;Buddy SOS&rdquo;)
               </span>
             </button>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setIsOfficialManualModalOpen(true)}
-                style={{
-                  backgroundColor:
-                    themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#111827',
-                  borderColor:
-                    themeMode === 'DAYLIGHT'
-                      ? '#E2E8F0'
-                      : 'rgba(0, 229, 255, 0.28)',
-                  color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
-                }}
-                className="rounded-xl border py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition hover:border-[#00E5FF]"
-              >
-                <BookOpen className="h-4 w-4 text-[#00E5FF] shrink-0" />
-                <span>📘 Manual &amp; Dossiê Legal</span>
-              </button>
-
+            {/* 3. 🔒 Ecrã Sempre Ligado | 📱 Auto-Detetor de Pedidos | 🔄 Atualizar App Agora (OTA) */}
+            <div className="rounded-xl bg-zinc-900 border border-zinc-800 divide-y divide-zinc-800 overflow-hidden">
               <button
                 type="button"
                 onClick={toggleWakeLock}
-                style={{
-                  backgroundColor:
-                    themeMode === 'DAYLIGHT'
-                      ? wakeLockEnabled
-                        ? '#ECFEFF'
-                        : '#FFFFFF'
-                      : '#111827',
-                  borderColor: wakeLockEnabled
-                    ? '#00E5FF'
-                    : themeMode === 'DAYLIGHT'
-                      ? '#E2E8F0'
-                      : 'rgba(0, 229, 255, 0.28)',
-                  color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
-                }}
-                className="rounded-xl py-2.5 px-3 text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border"
+                className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                {wakeLockEnabled ? (
-                  <Lock className="h-4 w-4 text-[#00E5FF] shrink-0" />
-                ) : (
-                  <Unlock className="h-4 w-4 text-slate-400 shrink-0" />
-                )}
-                <span>
-                  Ecrã Sempre Ligado: {wakeLockEnabled ? 'ON' : 'OFF'}
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
+                  🔒 Ecrã Sempre Ligado
+                </span>
+                <span
+                  className={`rounded px-2 py-0.5 text-xs font-extrabold shrink-0 ${
+                    wakeLockEnabled
+                      ? 'bg-[#00E5FF] text-slate-950'
+                      : 'bg-zinc-800 text-zinc-300'
+                  }`}
+                >
+                  {wakeLockEnabled ? 'ON' : 'OFF'}
                 </span>
               </button>
-            </div>
 
-            <div className="rounded-xl bg-zinc-900 border border-zinc-800 divide-y divide-zinc-800 overflow-hidden">
               <button
                 type="button"
                 onClick={() => {
@@ -2915,11 +2947,10 @@ export const MenuMaisHubView: React.FC = () => {
                     );
                   }
                 }}
-                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+                className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>Auto-Detetor de Pedidos (Acessibilidade)</span>
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
+                  📱 Auto-Detetor de Pedidos
                 </span>
                 <span className="rounded bg-emerald-500/15 border border-emerald-500/35 px-2 py-0.5 text-xs font-bold text-emerald-300 shrink-0">
                   Configurar
@@ -2964,176 +2995,58 @@ export const MenuMaisHubView: React.FC = () => {
                   const baseUrl = window.location.href.split('?')[0];
                   window.location.replace(`${baseUrl}?ota_ts=${Date.now()}`);
                 }}
-                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+                className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                  <RefreshCw className="h-4 w-4 text-sky-400 shrink-0" />
-                  <span>Atualizar App Agora (OTA)</span>
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
+                  🔄 Atualizar App Agora (OTA)
                 </span>
                 <span className="rounded bg-sky-500/15 border border-sky-500/35 px-2 py-0.5 text-xs font-bold text-sky-300 shrink-0">
                   Recarregar
                 </span>
               </button>
 
+              {/* 4. ⚠️ Perigos na Via | 📁 Rotas Proibidas & Reclamações */}
               <button
                 type="button"
                 onClick={() => setSubPage('PERIGOS_VIA')}
-                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+                className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-zinc-400 shrink-0" />
-                  <span>Perigos na Via (Amarante — Raio 35 km)</span>
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
+                  ⚠️ Perigos na Via
                 </span>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="rounded-lg bg-zinc-800 px-2.5 py-0.5 text-xs font-bold text-zinc-200">
                     {roadHazards.filter((h) => !h.resolved).length} Alertas
                   </span>
-                  <ChevronRight className="h-4 w-4 text-zinc-500" />
+                  <ChevronRight className="h-4 w-4 text-[#00E5FF]" />
                 </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('reclamacoes')}
-                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
+                className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-sm font-bold text-zinc-100">
-                  ⚠️ Rotas Proibidas &amp; Reclamações
+                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
+                  📁 Rotas Proibidas &amp; Reclamações
                 </span>
-                <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
+                <ChevronRight className="h-4 w-4 text-[#00E5FF] shrink-0" />
               </button>
-
-              <button
-                type="button"
-                onClick={toggleThemeMode}
-                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
-              >
-                <span className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                  {themeMode === 'DAYLIGHT' ? (
-                    <Sun className="h-4 w-4 text-zinc-400" />
-                  ) : (
-                    <Moon className="h-4 w-4 text-zinc-400" />
-                  )}
-                  <span>Tema Visual (Legibilidade ao Sol)</span>
-                </span>
-                <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-200">
-                  {themeMode === 'DAYLIGHT'
-                    ? 'Modo Claro (Solar)'
-                    : 'Modo Escuro Suave'}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsShiftDrawerOpen((prev) => !prev)}
-                className="w-full py-3 px-4 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
-              >
-                <span className="text-sm font-bold text-zinc-100">
-                  Estado do Turno (Pausa / Anónimo / Voz)
-                </span>
-                <div className="flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
-                  <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-200">
-                    {shiftBadge}
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-zinc-500" />
-                </div>
-              </button>
-
-              {isShiftDrawerOpen && (
-                <div className="px-4 py-3 bg-zinc-950 grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={toggleAppPauseMode}
-                    className={`rounded-lg py-2 px-2 text-xs font-semibold cursor-pointer ${
-                      isAppPaused
-                        ? 'bg-white text-zinc-950'
-                        : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
-                    }`}
-                  >
-                    {isAppPaused ? 'Retomar' : 'Pausar'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={toggleAnonymousMode}
-                    className={`rounded-lg py-2 px-2 text-xs font-semibold cursor-pointer ${
-                      userPrefs.anonymousMode
-                        ? 'bg-white text-zinc-950'
-                        : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
-                    }`}
-                  >
-                    Anónimo: {userPrefs.anonymousMode ? 'ON' : 'OFF'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={toggleTtsVoice}
-                    className={`rounded-lg py-2 px-2 text-xs font-semibold cursor-pointer ${
-                      ttsVoiceEnabled
-                        ? 'bg-white text-zinc-950'
-                        : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
-                    }`}
-                  >
-                    Voz: {ttsVoiceEnabled ? 'ON' : 'OFF'}
-                  </button>
-                </div>
-              )}
             </div>
 
+            {/* 5. ↺ Repor Dados */}
             <div className="flex items-center justify-start px-1 pt-1">
               <button
                 type="button"
                 onClick={resetAllToSeed}
-                className="text-sm text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 cursor-pointer"
+                className="text-xs sm:text-sm font-bold text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 cursor-pointer"
               >
                 <RotateCcw className="h-4 w-4" />
-                <span>Repor Dados</span>
+                <span>↺ Repor Dados</span>
               </button>
             </div>
           </div>
         )}
-      </div>
-
-      {/* Bottom Architectural Rectangular Card: Terminar Sessão / Trocar Conta */}
-      <div className="pt-1">
-        <button
-          type="button"
-          onClick={logoutSession}
-          style={{
-            backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
-            borderColor:
-              themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.25)',
-            color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
-            borderRadius: '12px',
-          }}
-          className="w-full border px-4 py-3 text-left flex items-center justify-between gap-3 cursor-pointer transition hover:border-[#00E5FF] shadow-xs"
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <LogOut className="h-4 w-4 text-rose-500 shrink-0" />
-            <div className="min-w-0">
-              <span
-                style={{
-                  color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
-                }}
-                className="block text-sm font-extrabold truncate"
-              >
-                Terminar Sessão / Trocar Conta
-              </span>
-              <span
-                style={{
-                  color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
-                }}
-                className="block text-xs font-semibold truncate"
-              >
-                Sair do turno atual de forma segura
-              </span>
-            </div>
-          </div>
-          <ChevronRight
-            style={{
-              color: themeMode === 'DAYLIGHT' ? '#090D16' : '#00E5FF',
-            }}
-            className="h-5 w-5 shrink-0"
-          />
-        </button>
       </div>
 
       <DirectApkShareModal
