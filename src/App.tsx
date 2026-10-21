@@ -98,6 +98,8 @@ const AppCockpitShell: React.FC = () => {
     triggerSosEmergencyBeacon,
     unpluggedChargerAlertActive,
     dismissUnpluggedChargerAlert,
+    snoozeUnpluggedChargerAlert,
+    userBatteryAlertThreshold,
     batterySurvivalMode,
     batteryLevelPct,
     isBatteryCharging,
@@ -388,28 +390,40 @@ const AppCockpitShell: React.FC = () => {
           </div>
         )}
 
-        {/* Module 5: Unplugged Motorcycle Charger Alert Banner */}
-        {unpluggedChargerAlertActive && (
-          <div
-            style={{ backgroundColor: '#78350f', color: '#fef3c7' }}
-            className="sticky top-11 z-50 mx-3 mt-1.5 rounded-xl border border-amber-400 px-3 py-2 flex items-center justify-between gap-2 shadow-lg"
-          >
-            <span className="text-xs font-extrabold">
-              ⚡ Atenção: Carregador desligado no suporte da mota!
-            </span>
-            <button
-              type="button"
-              onClick={dismissUnpluggedChargerAlert}
-              style={{ backgroundColor: '#f59e0b', color: '#0f172a' }}
-              className="rounded-lg px-2.5 py-1 text-[10px] font-black cursor-pointer shrink-0"
+        {/* Module 5: Unplugged Motorcycle Charger Alert Banner (Strictly Only When Battery <= User Threshold) */}
+        {unpluggedChargerAlertActive &&
+          batteryLevelPct <= userBatteryAlertThreshold &&
+          !isBatteryCharging && (
+            <div
+              style={{ backgroundColor: '#78350f', color: '#fef3c7' }}
+              className="sticky top-11 z-50 mx-3 mt-1.5 rounded-xl border border-amber-400 px-3 py-2 flex items-center justify-between gap-2 shadow-lg"
             >
-              OK
-            </button>
-          </div>
-        )}
+              <span className="text-xs font-extrabold">
+                ⚡ Bateria em {batteryLevelPct}% (≤{userBatteryAlertThreshold}%) • Carregador desligado!
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={snoozeUnpluggedChargerAlert}
+                  style={{ backgroundColor: '#0B0F17', color: '#00E5FF', borderColor: '#00E5FF' }}
+                  className="rounded-lg border px-2 py-1 text-[10px] font-black cursor-pointer"
+                >
+                  Adiar 30m
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissUnpluggedChargerAlert}
+                  style={{ backgroundColor: '#f59e0b', color: '#0f172a' }}
+                  className="rounded-lg px-2.5 py-1 text-[10px] font-black cursor-pointer"
+                >
+                  ✕ OK
+                </button>
+              </div>
+            </div>
+          )}
 
         {batterySurvivalMode &&
-          batteryLevelPct < 15 &&
+          batteryLevelPct <= userBatteryAlertThreshold &&
           !isBatteryCharging &&
           !batteryBannerDismissed && (
             <div
@@ -421,14 +435,15 @@ const AppCockpitShell: React.FC = () => {
               className="mx-3 mt-1 rounded-lg border px-2.5 py-1 text-[10px] font-bold flex items-center justify-between gap-2"
             >
               <span>
-                🔋 Modo Sobrevivência de Bateria Ativo ({batteryLevelPct}% • Poupança Extrema)
+                🔋 Modo Sobrevivência Ativo ({batteryLevelPct}% ≤ {userBatteryAlertThreshold}%)
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span className="">OLED Eco</span>
+                <span>OLED Eco</span>
                 <button
                   type="button"
                   onClick={() => {
                     setBatteryBannerDismissed(true);
+                    snoozeUnpluggedChargerAlert();
                     if (batterySurvivalMode) {
                       toggleBatterySurvivalMode();
                     }

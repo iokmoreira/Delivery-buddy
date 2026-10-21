@@ -1,9 +1,10 @@
 import { PlatformName } from '../types/models';
 
-export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate_v3_115';
-export const BUDDY_VOICE_RATE_MIGRATED_KEY = 'buddyVoiceRate_migrated_v3_115';
-export const DEFAULT_BUDDY_VOICE_RATE = 1.15;
-export const DEFAULT_BUDDY_VOICE_PITCH = 0.95;
+export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate_v4_110';
+export const BUDDY_VOICE_RATE_MIGRATED_KEY = 'buddyVoiceRate_migrated_v4_110';
+export const BUDDY_PREFERRED_VOICE_INDEX_KEY = 'buddy_preferred_voice_idx_v1';
+export const DEFAULT_BUDDY_VOICE_RATE = 1.1;
+export const DEFAULT_BUDDY_VOICE_PITCH = 0.8;
 
 let activeHtml5TtsAudio: HTMLAudioElement | null = null;
 let activeNativeSpeechEndTimer: number | null = null;
@@ -12,29 +13,13 @@ let activeOnEndCallback: (() => void) | null = null;
 export function getSavedBuddyVoiceRate(): number {
   if (typeof window === 'undefined') return DEFAULT_BUDDY_VOICE_RATE;
   try {
-    // One-time migration: reset any previously cached 1.3 or 1.5 voice speed to 1.15
+    // One-time migration to 1.10x default app voice speed
     const migrated = localStorage.getItem(BUDDY_VOICE_RATE_MIGRATED_KEY);
     if (migrated !== '1') {
-      const legacyVal =
-        localStorage.getItem(BUDDY_VOICE_RATE_STORAGE_KEY) ||
-        localStorage.getItem('buddyVoiceRate_v2_130') ||
-        localStorage.getItem('buddyVoiceRate');
-      const legacyNum = legacyVal ? Number(legacyVal) : NaN;
-      if (
-        !Number.isFinite(legacyNum) ||
-        Math.abs(legacyNum - 1.3) < 0.02 ||
-        Math.abs(legacyNum - 1.5) < 0.02
-      ) {
-        localStorage.setItem(
-          BUDDY_VOICE_RATE_STORAGE_KEY,
-          String(DEFAULT_BUDDY_VOICE_RATE)
-        );
-      } else {
-        localStorage.setItem(
-          BUDDY_VOICE_RATE_STORAGE_KEY,
-          String(Number(legacyNum.toFixed(2)))
-        );
-      }
+      localStorage.setItem(
+        BUDDY_VOICE_RATE_STORAGE_KEY,
+        String(DEFAULT_BUDDY_VOICE_RATE)
+      );
       localStorage.setItem(BUDDY_VOICE_RATE_MIGRATED_KEY, '1');
     }
 
@@ -47,7 +32,7 @@ export function getSavedBuddyVoiceRate(): number {
       return DEFAULT_BUDDY_VOICE_RATE;
     }
     const parsed = Number(raw);
-    if (Number.isFinite(parsed) && parsed >= 1.0 && parsed <= 1.5) {
+    if (Number.isFinite(parsed) && parsed >= 0.9 && parsed <= 1.5) {
       return Number(parsed.toFixed(2));
     }
   } catch {
@@ -57,7 +42,7 @@ export function getSavedBuddyVoiceRate(): number {
 }
 
 export function saveBuddyVoiceRate(rate: number): number {
-  const clamped = Number(Math.max(1.0, Math.min(1.5, rate)).toFixed(2));
+  const clamped = Number(Math.max(0.9, Math.min(1.5, rate)).toFixed(2));
   if (typeof window !== 'undefined') {
     try {
       localStorage.setItem(BUDDY_VOICE_RATE_STORAGE_KEY, String(clamped));
@@ -74,18 +59,85 @@ export function saveBuddyVoiceRate(rate: number): number {
   return clamped;
 }
 
+export function getSavedPreferredVoiceIndex(): number {
+  if (typeof window === 'undefined') return -1;
+  try {
+    const raw = localStorage.getItem(BUDDY_PREFERRED_VOICE_INDEX_KEY);
+    if (raw === null) return -1;
+    const n = Number(raw);
+    return Number.isInteger(n) && n >= -1 ? n : -1;
+  } catch {
+    return -1;
+  }
+}
+
+export function cyclePreferredDeviceVoice(): string {
+  if (typeof window === 'undefined') return 'Automático (Masculina PT-BR 0.80)';
+  try {
+    const winAny = window as unknown as {
+      BuddyNativeOverlay?: {
+        cycleNativePtVoice?: () => string;
+      };
+    };
+    if (typeof winAny.BuddyNativeOverlay?.cycleNativePtVoice === 'function') {
+      const nativeLabel = winAny.BuddyNativeOverlay.cycleNativePtVoice();
+      if (nativeLabel) return nativeLabel;
+    }
+  } catch {
+    // ignore
+  }
+  if (!('speechSynthesis' in window)) {
+    return 'Automático (Masculina PT-BR 0.80)';
+  }
+  const allVoices = window.speechSynthesis.getVoices() || [];
+  const ptPool = allVoices.filter((v) =>
+    v.lang.toLowerCase().includes('pt')
+  );
+  const pool = ptPool.length > 0 ? ptPool : allVoices;
+  if (pool.length === 0) {
+    return 'Automático (Masculina PT-BR 0.80)';
+  }
+  const currentIdx = getSavedPreferredVoiceIndex();
+  const nextIdx = currentIdx + 1 >= pool.length ? -1 : currentIdx + 1;
+  try {
+    localStorage.setItem(BUDDY_PREFERRED_VOICE_INDEX_KEY, String(nextIdx));
+  } catch {
+    // ignore
+  }
+  if (nextIdx === -1) {
+    const autoVoice = selectBestGeminiLikePtVoice(allVoices);
+    return autoVoice
+      ? `Auto Masculina: ${autoVoice.name}`
+      : 'Automático (Masculina PT-BR 0.80)';
+  }
+  const picked = pool[nextIdx];
+  return `Voz ${nextIdx + 1}/${pool.length}: ${picked.name} (${picked.lang})`;
+}
+
 export function selectBestGeminiLikePtVoice(
   voices: SpeechSynthesisVoice[]
 ): SpeechSynthesisVoice | undefined {
   if (!voices || voices.length === 0) return undefined;
 
-  // Strictly prioritize Brazilian Portuguese (pt-BR) voices so it never sounds like pt-PT female
+  // Check if courier manually cycled to a specific voice index
+  const preferredIdx = getSavedPreferredVoiceIndex();
+  if (preferredIdx >= 0) {
+    const ptPool = voices.filter((v) => v.lang.toLowerCase().includes('pt'));
+    const pool = ptPool.length > 0 ? ptPool : voices;
+    if (preferredIdx < pool.length) {
+      return pool[preferredIdx];
+    }
+  }
+
+  // Strictly prioritize Brazilian Portuguese (pt-BR) voices
   const ptBrVoices = voices.filter((v) => {
     const l = v.lang.toLowerCase();
-    const n = v.name.toLowerCase();
+    const n = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
     return (
       l.includes('pt-br') ||
       l.includes('pt_br') ||
+      n.includes('pt-br') ||
+      n.includes('pt_br') ||
       n.includes('brasil') ||
       n.includes('brazil')
     );
@@ -99,6 +151,7 @@ export function selectBestGeminiLikePtVoice(
   const candidatePool = ptBrVoices.length > 0 ? ptBrVoices : ptVoices;
   if (candidatePool.length === 0) return undefined;
 
+  // Note: 'ptd' (pt-br-x-ptd) is Google TTS female on Android!
   const knownFemaleTokens = [
     'francisca',
     'luciana',
@@ -114,44 +167,55 @@ export function selectBestGeminiLikePtVoice(
     'inês',
     'cristiano_female',
     'female',
+    'femin',
+    'mulher',
     'ptc',
+    'ptd',
     'bmg',
   ];
 
   const nonFemalePool = candidatePool.filter((v) => {
-    const lowerName = v.name.toLowerCase();
-    return !knownFemaleTokens.some((tok) => lowerName.includes(tok));
+    const descriptor = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
+    return !knownFemaleTokens.some((tok) => descriptor.includes(tok));
   });
 
   const searchPool = nonFemalePool.length > 0 ? nonFemalePool : candidatePool;
 
-  // Tier 1: Explicit Male Brazilian Portuguese (pt-BR) voices
+  // Tier 1: Explicit Android/Google/Microsoft Male Identifiers
   const maleKeywords = [
+    'afs',
+    'pte',
+    'jfb',
     'antonio',
     'antônio',
     'daniel',
+    'ricardo',
     'fabio',
     'fábio',
-    'ricardo',
     'nicolau',
-    'pt-br-x-pte',
-    'pt-br-x-afs',
-    'pt-br-x-ptd',
-    'pte',
-    'afs',
-    'ptd',
     'male',
-    'google português do brasil',
-    'google portugues do brasil',
+    'masculin',
+    'homem',
   ];
 
   for (const kw of maleKeywords) {
-    const match = searchPool.find((v) => v.name.toLowerCase().includes(kw));
+    const match = searchPool.find((v) =>
+      `${v.name} ${v.voiceURI || ''}`.toLowerCase().includes(kw)
+    );
     if (match) return match;
   }
 
-  const tier2Keywords = ['google', 'natural', 'neural', 'microsoft'];
-  for (const kw of tier2Keywords) {
+  // Tier 2: On Samsung/Android Chrome, Google's voice array has the female pt-BR voice at [0]
+  // and the male pt-BR voice at [1]. Prefer the second pt-BR voice when available!
+  if (nonFemalePool.length >= 2) {
+    return nonFemalePool[1];
+  }
+  if (ptBrVoices.length >= 2) {
+    return ptBrVoices[1];
+  }
+
+  const tier3Keywords = ['google', 'natural', 'neural', 'microsoft'];
+  for (const kw of tier3Keywords) {
     const match = searchPool.find((v) => v.name.toLowerCase().includes(kw));
     if (match) return match;
   }
@@ -370,7 +434,7 @@ export function speakWithBuddyVoiceEngine(
 
   const activeRate =
     rate !== undefined && Number.isFinite(rate)
-      ? Math.max(1.0, Math.min(1.5, rate))
+      ? Math.max(0.9, Math.min(1.5, rate))
       : getSavedBuddyVoiceRate();
 
   playBuddyConfirmationChime();

@@ -19,6 +19,7 @@ import {
   PlatformName,
 } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
+import { dispatchAdminNotificationEvent } from '../services/cloudSync';
 
 const VAULT_CATEGORY_TABS: {
   id: EvidentiaryVaultCategory;
@@ -64,6 +65,7 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
     addEvidentiaryVaultRecord,
     confirmEvidentiaryVaultRecord,
     generateFormalEvidentiaryReportText,
+    realCourierProfile,
   } = useEstafetas();
 
   const [selectedCategory, setSelectedCategory] =
@@ -156,6 +158,13 @@ export const EvidentiaryArchiveVaultSection: React.FC = () => {
         selectedCategory === 'ESTABELECIMENTOS'
           ? newEstablishmentName.trim() || 'Estabelecimento Parceiro'
           : undefined,
+    });
+
+    void dispatchAdminNotificationEvent({
+      eventType: 'REPORT',
+      title: `Nova Prova / Reclamação: ${newTitle.trim()}`,
+      body: `Estafeta: ${realCourierProfile?.name || 'Estafeta'} • Local: ${newStreetGps.trim()} • ${newDescription.trim() || 'Registo probatório arquivado.'}`,
+      senderName: realCourierProfile?.name || 'Estafeta',
     });
 
     setNewTitle('');

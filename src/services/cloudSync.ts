@@ -36,6 +36,10 @@ export interface CloudCourierPresence {
   avatar?: string;
   deviceModel?: string;
   screenAspectRatio?: string;
+  whatsapp?: string;
+  email?: string;
+  optInWhatsapp?: boolean;
+  optInEmail?: boolean;
   lastSeen: string;
 }
 
@@ -43,6 +47,10 @@ export interface CloudApprovalRequest {
   id: string;
   username: string;
   emailOrPhone: string;
+  whatsapp?: string;
+  email?: string;
+  optInWhatsapp?: boolean;
+  optInEmail?: boolean;
   vehicle: CourierRegistrationVehicle | string;
   platforms: PlatformName[];
   zone: AmaranteBaseZoneOption | string;
@@ -53,6 +61,24 @@ export interface CloudApprovalRequest {
   deviceModel?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdminNotificationConfig {
+  adminWhatsapp: string;
+  adminEmail: string;
+  autoNotifyNewUsers: boolean;
+  autoNotifyReportsAndSos: boolean;
+}
+
+export interface AdminNotificationEvent {
+  id: string;
+  eventType: 'NEW_USER' | 'REPORT' | 'SUPPORT' | 'SOS';
+  title: string;
+  body: string;
+  senderName: string;
+  senderWhatsapp?: string;
+  senderEmail?: string;
+  createdAt: string;
 }
 
 export interface CloudDirectChatMessage {
@@ -76,6 +102,8 @@ export interface CloudSharedState {
   walkieMessages: WalkieMessage[];
   directMessages: CloudDirectChatMessage[];
   roadHazards: RoadHazardPin[];
+  adminNotifications?: AdminNotificationEvent[];
+  adminConfig?: AdminNotificationConfig;
   lastUpdatedMs: number;
 }
 
@@ -92,7 +120,9 @@ type CloudPacketType =
   | 'WALKIE_MSG'
   | 'DIRECT_MSG'
   | 'ROAD_HAZARD'
-  | 'COURIER_LOGOUT';
+  | 'COURIER_LOGOUT'
+  | 'ADMIN_NOTIFICATION'
+  | 'ADMIN_CONFIG_SYNC';
 
 interface CloudSyncEnvelope {
   v?: 2;
@@ -405,6 +435,8 @@ export async function publishCourierPresenceToCloud(
 
   const isFounderAdmin = isCourierAdminByName(presence.name);
   const effectiveId = isFounderAdmin ? FOUNDER_ADMIN_COURIER_ID : presence.id;
+  const existingCourier = inMemoryCloudState.couriers[effectiveId];
+  const existingReq = inMemoryCloudState.approvalRequestsMap[effectiveId];
 
   const resolvedApproval = resolveApprovalStatusForCourier(
     effectiveId,
@@ -427,6 +459,17 @@ export async function publishCourierPresenceToCloud(
         ? Number(presence.lng.toFixed(6))
         : DEFAULT_AMARANTE_LNG,
     avatar: getSafeAvatarForRelay(presence.avatar),
+    whatsapp:
+      presence.whatsapp ?? existingCourier?.whatsapp ?? existingReq?.whatsapp,
+    email: presence.email ?? existingCourier?.email ?? existingReq?.email,
+    optInWhatsapp:
+      presence.optInWhatsapp ??
+      existingCourier?.optInWhatsapp ??
+      existingReq?.optInWhatsapp,
+    optInEmail:
+      presence.optInEmail ??
+      existingCourier?.optInEmail ??
+      existingReq?.optInEmail,
     lastSeen: new Date().toISOString(),
   };
 
@@ -455,11 +498,18 @@ export async function publishCourierPresenceToCloud(
     }
   });
 
-  const existingReq = inMemoryCloudState.approvalRequestsMap[cleanPresence.id];
   const reqRecord: CloudApprovalRequest = {
     id: cleanPresence.id,
     username: cleanPresence.name,
-    emailOrPhone: existingReq?.emailOrPhone || cleanPresence.name,
+    emailOrPhone:
+      existingReq?.emailOrPhone ||
+      cleanPresence.whatsapp ||
+      cleanPresence.email ||
+      cleanPresence.name,
+    whatsapp: cleanPresence.whatsapp,
+    email: cleanPresence.email,
+    optInWhatsapp: cleanPresence.optInWhatsapp,
+    optInEmail: cleanPresence.optInEmail,
     vehicle: cleanPresence.vehicle,
     platforms:
       cleanPresence.platforms && cleanPresence.platforms.length > 0
@@ -574,6 +624,10 @@ export async function publishAccountRegistrationToCloud(
     lat: cleanReq.lat,
     lng: cleanReq.lng,
     deviceModel: cleanReq.deviceModel,
+    whatsapp: cleanReq.whatsapp,
+    email: cleanReq.email,
+    optInWhatsapp: cleanReq.optInWhatsapp,
+    optInEmail: cleanReq.optInEmail,
     lastSeen: cleanReq.updatedAt,
   };
   inMemoryCloudState.couriers[id] = courierObj;
@@ -1173,9 +1227,363 @@ function ingestEnvelope(
       }
       break;
     }
+
+    case 'ADMIN_NOTIFICATION': {
+      const ev = envelope.payload as AdminNotificationEvent;
+      if (ev && ev.id && ev.title) {
+        const list = Array.isArray(inMemoryCloudState.adminNotifications)
+          ? inMemoryCloudState.adminNotifications
+          : [];
+        if (!list.some((item) => item.id === ev.id)) {
+          inMemoryCloudState.adminNotifications = [ev, ...list.slice(0, 39)];
+          stateChanged = true;
+        }
+      }
+      break;
+    }
+
+    case 'ADMIN_CONFIG_SYNC': {
+      const cfg = envelope.payload as AdminNotificationConfig;
+      if (cfg && typeof cfg === 'object') {
+        inMemoryCloudState.adminConfig = {
+          adminWhatsapp: String(cfg.adminWhatsapp || ''),
+          adminEmail: String(cfg.adminEmail || ''),
+          autoNotifyNewUsers: cfg.autoNotifyNewUsers !== false,
+          autoNotifyReportsAndSos: cfg.autoNotifyReportsAndSos !== false,
+        };
+        if (typeof window !== 'undefined') {
+          try {
+            window.localStorage.setItem(
+              'buddy_admin_notify_config_v1',
+              JSON.stringify(inMemoryCloudState.adminConfig)
+            );
+          } catch {
+            // ignore
+          }
+        }
+        stateChanged = true;
+      }
+      break;
+    }
   }
 
   return stateChanged;
+}
+
+export const ADMIN_NOTIFY_CONFIG_STORAGE_KEY = 'buddy_admin_notify_config_v1';
+
+export function loadAdminNotificationConfig(): AdminNotificationConfig {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = window.localStorage.getItem(ADMIN_NOTIFY_CONFIG_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<AdminNotificationConfig>;
+        return {
+          adminWhatsapp: String(parsed.adminWhatsapp || ''),
+          adminEmail: String(parsed.adminEmail || ''),
+          autoNotifyNewUsers: parsed.autoNotifyNewUsers !== false,
+          autoNotifyReportsAndSos: parsed.autoNotifyReportsAndSos !== false,
+        };
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (inMemoryCloudState.adminConfig) {
+    return inMemoryCloudState.adminConfig;
+  }
+  return {
+    adminWhatsapp: '+351',
+    adminEmail: '',
+    autoNotifyNewUsers: true,
+    autoNotifyReportsAndSos: true,
+  };
+}
+
+export async function saveAdminNotificationConfig(
+  cfg: AdminNotificationConfig
+): Promise<void> {
+  const clean: AdminNotificationConfig = {
+    adminWhatsapp: (cfg.adminWhatsapp || '').trim(),
+    adminEmail: (cfg.adminEmail || '').trim(),
+    autoNotifyNewUsers: cfg.autoNotifyNewUsers !== false,
+    autoNotifyReportsAndSos: cfg.autoNotifyReportsAndSos !== false,
+  };
+  inMemoryCloudState.adminConfig = clean;
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(
+        ADMIN_NOTIFY_CONFIG_STORAGE_KEY,
+        JSON.stringify(clean)
+      );
+    } catch {
+      // ignore
+    }
+  }
+  persistAndNotifyCloudState();
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
+    v: 2,
+    type: 'ADMIN_CONFIG_SYNC',
+    senderId: FOUNDER_ADMIN_COURIER_ID,
+    ts: Date.now(),
+    timestamp: Date.now(),
+    payload: clean,
+  });
+}
+
+export function buildWhatsAppDeepLink(phone: string, message: string): string {
+  const digits = (phone || '').replace(/[^0-9]/g, '');
+  const normalizedPhone =
+    digits.length === 9 ? `351${digits}` : digits.length >= 10 ? digits : '';
+  const encodedText = encodeURIComponent(message);
+  if (normalizedPhone) {
+    return `https://wa.me/${normalizedPhone}?text=${encodedText}`;
+  }
+  return `https://wa.me/?text=${encodedText}`;
+}
+
+export function buildMailtoDeepLink(
+  email: string,
+  subject: string,
+  body: string,
+  bccList?: string[]
+): string {
+  const to = (email || '').trim();
+  const params: string[] = [];
+  if (bccList && bccList.length > 0) {
+    params.push(`bcc=${encodeURIComponent(bccList.join(','))}`);
+  }
+  params.push(`subject=${encodeURIComponent(subject)}`);
+  params.push(`body=${encodeURIComponent(body)}`);
+  return `mailto:${encodeURIComponent(to)}?${params.join('&')}`;
+}
+
+export async function dispatchAdminNotificationEvent(
+  input: Omit<AdminNotificationEvent, 'id' | 'createdAt'> & {
+    id?: string;
+    createdAt?: string;
+  }
+): Promise<AdminNotificationEvent> {
+  const ev: AdminNotificationEvent = {
+    id:
+      input.id ||
+      `adm_notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    eventType: input.eventType,
+    title: input.title,
+    body: input.body,
+    senderName: input.senderName,
+    senderWhatsapp: input.senderWhatsapp,
+    senderEmail: input.senderEmail,
+    createdAt: input.createdAt || new Date().toISOString(),
+  };
+
+  const list = Array.isArray(inMemoryCloudState.adminNotifications)
+    ? inMemoryCloudState.adminNotifications
+    : [];
+  inMemoryCloudState.adminNotifications = [
+    ev,
+    ...list.filter((x) => x.id !== ev.id).slice(0, 39),
+  ];
+  persistAndNotifyCloudState();
+
+  // 1. Broadcast real-time notification packet to Admin via Cloud Relay
+  void postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
+    v: 2,
+    type: 'ADMIN_NOTIFICATION',
+    senderId: ev.senderName,
+    ts: Date.now(),
+    timestamp: Date.now(),
+    payload: ev,
+  });
+
+  // 2. If Admin configured an Email, also attempt a zero-config background email relay
+  const adminCfg = loadAdminNotificationConfig();
+  if (adminCfg.adminEmail && adminCfg.adminEmail.includes('@')) {
+    try {
+      void fetch(
+        `https://formsubmit.co/ajax/${encodeURIComponent(adminCfg.adminEmail.trim())}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            _subject: `[Delivery Buddy Admin] ${ev.title}`,
+            Tipo: ev.eventType,
+            Estafeta: ev.senderName,
+            WhatsApp: ev.senderWhatsapp || 'N/A',
+            Email: ev.senderEmail || 'N/A',
+            Mensagem: ev.body,
+            Data: new Date(ev.createdAt).toLocaleString('pt-PT'),
+          }),
+        }
+      ).catch(() => {
+        // ignore if offline or unactivated
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  return ev;
+}
+
+export interface CourierContactOptInPreferences {
+  whatsapp: string;
+  email: string;
+  optInWhatsapp: boolean;
+  optInEmail: boolean;
+}
+
+export function getCourierContactAndOptInPreferences(
+  courierNameOrId?: string
+): CourierContactOptInPreferences {
+  const cleanKey = normalizeAccountKey(courierNameOrId || '');
+  if (typeof window !== 'undefined') {
+    try {
+      const rawContact = window.localStorage.getItem(
+        `buddy_contact_optin_${cleanKey || 'default'}`
+      );
+      if (rawContact) {
+        const parsed = JSON.parse(
+          rawContact
+        ) as Partial<CourierContactOptInPreferences>;
+        return {
+          whatsapp: String(parsed.whatsapp || ''),
+          email: String(parsed.email || ''),
+          optInWhatsapp: parsed.optInWhatsapp !== false,
+          optInEmail: parsed.optInEmail !== false,
+        };
+      }
+      const rawAccounts = window.localStorage.getItem('buddy_saved_accounts_v1');
+      if (rawAccounts) {
+        const parsedAccounts = JSON.parse(rawAccounts) as Array<{
+          username?: string;
+          whatsapp?: string;
+          email?: string;
+          optInWhatsapp?: boolean;
+          optInEmail?: boolean;
+        }>;
+        const found = parsedAccounts.find(
+          (a) => a && normalizeAccountKey(a.username || '') === cleanKey
+        );
+        if (found) {
+          return {
+            whatsapp: String(found.whatsapp || ''),
+            email: String(found.email || ''),
+            optInWhatsapp: found.optInWhatsapp !== false,
+            optInEmail: found.optInEmail !== false,
+          };
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  const cloudCourier = Object.values(inMemoryCloudState.couriers).find(
+    (c) =>
+      c &&
+      (c.id === courierNameOrId ||
+        normalizeAccountKey(c.name) === cleanKey)
+  );
+  if (cloudCourier) {
+    return {
+      whatsapp: String(cloudCourier.whatsapp || ''),
+      email: String(cloudCourier.email || ''),
+      optInWhatsapp: cloudCourier.optInWhatsapp !== false,
+      optInEmail: cloudCourier.optInEmail !== false,
+    };
+  }
+  return {
+    whatsapp: '',
+    email: '',
+    optInWhatsapp: true,
+    optInEmail: true,
+  };
+}
+
+export async function saveCourierContactAndOptInPreferences(params: {
+  courierId: string;
+  courierName: string;
+  whatsapp: string;
+  email: string;
+  optInWhatsapp: boolean;
+  optInEmail: boolean;
+}): Promise<void> {
+  const cleanKey = normalizeAccountKey(params.courierName || '');
+  const cleanPrefs: CourierContactOptInPreferences = {
+    whatsapp: (params.whatsapp || '').trim(),
+    email: (params.email || '').trim(),
+    optInWhatsapp: Boolean(params.optInWhatsapp),
+    optInEmail: Boolean(params.optInEmail),
+  };
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(
+        `buddy_contact_optin_${cleanKey || 'default'}`,
+        JSON.stringify(cleanPrefs)
+      );
+      const rawAccounts = window.localStorage.getItem('buddy_saved_accounts_v1');
+      if (rawAccounts) {
+        const parsedAccounts = JSON.parse(rawAccounts) as Array<
+          Record<string, unknown> & { username?: string }
+        >;
+        if (Array.isArray(parsedAccounts)) {
+          const updated = parsedAccounts.map((acc) => {
+            if (
+              acc &&
+              normalizeAccountKey(acc.username || '') === cleanKey
+            ) {
+              return {
+                ...acc,
+                whatsapp: cleanPrefs.whatsapp,
+                email: cleanPrefs.email,
+                optInWhatsapp: cleanPrefs.optInWhatsapp,
+                optInEmail: cleanPrefs.optInEmail,
+              };
+            }
+            return acc;
+          });
+          window.localStorage.setItem(
+            'buddy_saved_accounts_v1',
+            JSON.stringify(updated)
+          );
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  Object.values(inMemoryCloudState.couriers).forEach((c) => {
+    if (
+      c &&
+      (c.id === params.courierId ||
+        normalizeAccountKey(c.name) === cleanKey)
+    ) {
+      c.whatsapp = cleanPrefs.whatsapp;
+      c.email = cleanPrefs.email;
+      c.optInWhatsapp = cleanPrefs.optInWhatsapp;
+      c.optInEmail = cleanPrefs.optInEmail;
+    }
+  });
+  Object.values(inMemoryCloudState.approvalRequestsMap).forEach((r) => {
+    if (
+      r &&
+      (r.id === params.courierId ||
+        normalizeAccountKey(r.username) === cleanKey)
+    ) {
+      r.whatsapp = cleanPrefs.whatsapp;
+      r.email = cleanPrefs.email;
+      r.optInWhatsapp = cleanPrefs.optInWhatsapp;
+      r.optInEmail = cleanPrefs.optInEmail;
+    }
+  });
+
+  persistAndNotifyCloudState();
+  broadcastLocalStorageAccountsAndProfileNow();
 }
 
 export function broadcastLocalStorageAccountsAndProfileNow(): void {
@@ -1204,6 +1612,7 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
           : parsedProfile.id;
         activeProfileId = resolvedId;
         activeProfileNameKey = normalizeAccountKey(cleanName);
+        const contactPrefs = getCourierContactAndOptInPreferences(cleanName);
 
         void publishCourierPresenceToCloud({
           profile: {
@@ -1214,6 +1623,18 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
           status: parsedProfile.has_order ? 'busy' : 'online',
           approvalStatus: isFounder ? 'approved' : undefined,
         });
+        if (inMemoryCloudState.couriers[resolvedId]) {
+          inMemoryCloudState.couriers[resolvedId].whatsapp =
+            contactPrefs.whatsapp ||
+            inMemoryCloudState.couriers[resolvedId].whatsapp;
+          inMemoryCloudState.couriers[resolvedId].email =
+            contactPrefs.email ||
+            inMemoryCloudState.couriers[resolvedId].email;
+          inMemoryCloudState.couriers[resolvedId].optInWhatsapp =
+            contactPrefs.optInWhatsapp;
+          inMemoryCloudState.couriers[resolvedId].optInEmail =
+            contactPrefs.optInEmail;
+        }
       }
     }
   } catch {
@@ -1227,6 +1648,10 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
         courierId?: string;
         username?: string;
         emailOrPhone?: string;
+        whatsapp?: string;
+        email?: string;
+        optInWhatsapp?: boolean;
+        optInEmail?: boolean;
         vehicle?: CourierRegistrationVehicle;
         platforms?: PlatformName[];
         zone?: AmaranteBaseZoneOption;
@@ -1251,7 +1676,11 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
           void publishAccountRegistrationToCloud({
             id: accId,
             username: cleanName,
-            emailOrPhone: acc.emailOrPhone || cleanName,
+            emailOrPhone: acc.emailOrPhone || acc.whatsapp || acc.email || cleanName,
+            whatsapp: acc.whatsapp,
+            email: acc.email,
+            optInWhatsapp: acc.optInWhatsapp,
+            optInEmail: acc.optInEmail,
             vehicle: acc.vehicle || 'Mota 125cc',
             platforms:
               Array.isArray(acc.platforms) && acc.platforms.length > 0

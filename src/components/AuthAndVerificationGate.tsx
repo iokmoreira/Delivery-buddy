@@ -19,9 +19,13 @@ import {
   findExistingCourierByNameInSupabaseRest,
 } from '../services/geminiAgent';
 import {
+  buildMailtoDeepLink,
+  buildWhatsAppDeepLink,
+  dispatchAdminNotificationEvent,
   FOUNDER_ADMIN_COURIER_ID,
   generateUniqueCourierIdForName,
   isCourierAdminByName,
+  loadAdminNotificationConfig,
   publishAccountRegistrationToCloud,
   publishCourierPresenceToCloud,
   resolveApprovalStatusForCourier,
@@ -34,7 +38,7 @@ import {
   selectBestGeminiLikePtVoice,
 } from '../services/voiceEngine';
 
-export const LOGIN_INTRO_VOICE_RATE = 1.05;
+export const LOGIN_INTRO_VOICE_RATE = 1.0;
 
 export const BUDDY_LOGIN_INTRO_SENTENCES: string[] = [
   'Olá! Sou o Buddy, o seu robozinho e copiloto inteligente de rua, criado para organizar a tua rotina, proteger-te no trânsito e aumentar os teus ganhos reais.',
@@ -49,6 +53,10 @@ export interface SavedLocalAccountRecord {
   role?: 'admin' | 'courier';
   username: string;
   emailOrPhone?: string;
+  whatsapp?: string;
+  email?: string;
+  optInWhatsapp?: boolean;
+  optInEmail?: boolean;
   pinOrPassword: string;
   vehicle: CourierRegistrationVehicle;
   platforms: PlatformName[];
@@ -78,7 +86,7 @@ export function loadSavedAccounts(): SavedLocalAccountRecord[] {
   }
 }
 
-function saveAccountLocally(record: SavedLocalAccountRecord): string {
+export function saveAccountLocally(record: SavedLocalAccountRecord): string {
   const cleanName = record.username.trim();
   const isFounder = isCourierAdminByName(cleanName);
   const allSaved = loadSavedAccounts();
@@ -114,11 +122,24 @@ function saveAccountLocally(record: SavedLocalAccountRecord): string {
         ? 'BLOQUEADO'
         : 'PENDENTE';
 
+  const resolvedWhatsapp =
+    record.whatsapp ?? existingMatch?.whatsapp ?? '';
+  const resolvedEmail =
+    record.email ?? existingMatch?.email ?? '';
+  const resolvedOptInWhatsapp =
+    record.optInWhatsapp ?? existingMatch?.optInWhatsapp ?? true;
+  const resolvedOptInEmail =
+    record.optInEmail ?? existingMatch?.optInEmail ?? true;
+
   const enrichedRecord: SavedLocalAccountRecord = {
     ...record,
     courierId: resolvedCourierId,
     role: isFounder ? 'admin' : 'courier',
     username: cleanName,
+    whatsapp: resolvedWhatsapp,
+    email: resolvedEmail,
+    optInWhatsapp: resolvedOptInWhatsapp,
+    optInEmail: resolvedOptInEmail,
     status: resolvedLocalStatus,
   };
 
@@ -140,7 +161,12 @@ function saveAccountLocally(record: SavedLocalAccountRecord): string {
     void publishAccountRegistrationToCloud({
       id: resolvedCourierId,
       username: cleanName,
-      emailOrPhone: record.emailOrPhone || cleanName,
+      emailOrPhone:
+        record.emailOrPhone || resolvedWhatsapp || resolvedEmail || cleanName,
+      whatsapp: resolvedWhatsapp,
+      email: resolvedEmail,
+      optInWhatsapp: resolvedOptInWhatsapp,
+      optInEmail: resolvedOptInEmail,
       vehicle: record.vehicle,
       platforms: record.platforms,
       zone: record.zone,
@@ -158,6 +184,10 @@ function saveAccountLocally(record: SavedLocalAccountRecord): string {
       approvalStatus: resolvedApproval,
       lat: 41.2704,
       lng: -8.0818,
+      whatsapp: resolvedWhatsapp,
+      email: resolvedEmail,
+      optInWhatsapp: resolvedOptInWhatsapp,
+      optInEmail: resolvedOptInEmail,
       lastSeen: new Date().toISOString(),
     });
   } catch {
@@ -319,7 +349,19 @@ export const RealTimeSupportPanel: React.FC<{
       topicBadge: activeTopic || 'Atendimento em Tempo Real',
     };
     setMessages((prev) => [...prev, userMsg, replyMsg]);
+    void dispatchAdminNotificationEvent({
+      eventType: 'SUPPORT',
+      title: `Pedido de Suporte (${activeTopic || 'Geral'})`,
+      body: clean,
+      senderName: 'Estafeta (Suporte)',
+    });
   };
+
+  const adminNotifyCfg = loadAdminNotificationConfig();
+  const lastUserSupportText =
+    [...messages].reverse().find((m) => m.sender === 'USER')?.text ||
+    draftText.trim() ||
+    'Olá Admin, preciso de apoio técnico na App Delivery Buddy.';
 
   return (
     <div className="space-y-3.5">
@@ -454,6 +496,41 @@ export const RealTimeSupportPanel: React.FC<{
           <span>Enviar</span>
         </button>
       </form>
+
+      {/* 1-Tap Direct Dispatch to Admin via WhatsApp & Email */}
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        <a
+          href={buildWhatsAppDeepLink(
+            adminNotifyCfg.adminWhatsapp,
+            `[Suporte Delivery Buddy] ${lastUserSupportText}`
+          )}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            backgroundColor: '#0B0F17',
+            borderColor: '#00E5FF',
+            color: '#00E5FF',
+          }}
+          className="rounded-xl border py-2 px-2.5 text-[11px] font-extrabold flex items-center justify-center gap-1.5 text-center transition hover:opacity-95"
+        >
+          <span>📲 WhatsApp Admin</span>
+        </a>
+        <a
+          href={buildMailtoDeepLink(
+            adminNotifyCfg.adminEmail,
+            '[Delivery Buddy] Pedido de Suporte Técnico',
+            lastUserSupportText
+          )}
+          style={{
+            backgroundColor: '#0B0F17',
+            borderColor: '#00E5FF',
+            color: '#00E5FF',
+          }}
+          className="rounded-xl border py-2 px-2.5 text-[11px] font-extrabold flex items-center justify-center gap-1.5 text-center transition hover:opacity-95"
+        >
+          <span>✉️ E-mail Admin</span>
+        </a>
+      </div>
     </div>
   );
 };
@@ -472,6 +549,10 @@ export const AuthAndVerificationGate: React.FC = () => {
   >('ENTRAR');
   const [username, setUsername] = useState<string>('');
   const [emailOrPhone, setEmailOrPhone] = useState<string>('');
+  const [regWhatsapp, setRegWhatsapp] = useState<string>('+351');
+  const [regEmail, setRegEmail] = useState<string>('');
+  const [optInWhatsapp, setOptInWhatsapp] = useState<boolean>(true);
+  const [optInEmail, setOptInEmail] = useState<boolean>(true);
   const [pinOrPassword, setPinOrPassword] = useState<string>('');
   const [selectedVehicle, setSelectedVehicle] =
     useState<CourierRegistrationVehicle>('Mota 125cc');
@@ -752,7 +833,12 @@ export const AuthAndVerificationGate: React.FC = () => {
     stopBuddyIntroPresentation(true);
     setErrorMsg(null);
     const cleanName = username.trim();
-    const cleanContact = emailOrPhone.trim();
+    const cleanWhatsapp = regWhatsapp.trim();
+    const cleanEmail = regEmail.trim();
+    const cleanContact =
+      emailOrPhone.trim() ||
+      (cleanWhatsapp && cleanWhatsapp !== '+351' ? cleanWhatsapp : '') ||
+      cleanEmail;
     const cleanPin = pinOrPassword.trim();
 
     if (!cleanName) {
@@ -764,7 +850,7 @@ export const AuthAndVerificationGate: React.FC = () => {
       return;
     }
     if (authMode === 'CRIAR_CONTA' && !cleanContact) {
-      setErrorMsg('Introduza o seu Email ou Número de Telemóvel.');
+      setErrorMsg('Introduza o seu WhatsApp (+351...) ou E-mail.');
       return;
     }
     if (cleanPin.length < 3) {
@@ -844,11 +930,30 @@ export const AuthAndVerificationGate: React.FC = () => {
         courierId: resolvedCourierId,
         username: resolvedName,
         emailOrPhone: cleanContact || cleanName,
+        whatsapp:
+          cleanWhatsapp && cleanWhatsapp !== '+351' ? cleanWhatsapp : undefined,
+        email: cleanEmail || undefined,
+        optInWhatsapp,
+        optInEmail,
         pinOrPassword: cleanPin,
         vehicle: resolvedVehicle,
         platforms: resolvedPlatforms,
         zone: resolvedZone,
       });
+
+      if (authMode === 'CRIAR_CONTA' && !isCourierAdminByName(resolvedName)) {
+        void dispatchAdminNotificationEvent({
+          eventType: 'NEW_USER',
+          title: `Novo Estafeta Registado: ${resolvedName}`,
+          body: `Estafeta: ${resolvedName} | Veículo: ${resolvedVehicle} | Zona: ${resolvedZone} | Plataformas: ${resolvedPlatforms.join(', ')} | WhatsApp: ${cleanWhatsapp || 'N/A'} | E-mail: ${cleanEmail || cleanContact}`,
+          senderName: resolvedName,
+          senderWhatsapp:
+            cleanWhatsapp && cleanWhatsapp !== '+351'
+              ? cleanWhatsapp
+              : undefined,
+          senderEmail: cleanEmail || undefined,
+        });
+      }
 
       await saveAndRegisterRealCourierProfile({
         id: assignedId,
@@ -1154,30 +1259,126 @@ export const AuthAndVerificationGate: React.FC = () => {
             </div>
 
             {authMode === 'CRIAR_CONTA' && (
-              <div>
-                <label
-                  className={`block text-[11px] font-black uppercase tracking-wider mb-1 ${
-                    isDay ? 'text-slate-700' : 'text-zinc-300'
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label
+                      className={`block text-[11px] font-black uppercase tracking-wider mb-1 ${
+                        isDay ? 'text-slate-700' : 'text-zinc-300'
+                      }`}
+                    >
+                      WhatsApp (+351...)
+                    </label>
+                    <input
+                      type="tel"
+                      value={regWhatsapp}
+                      onFocus={() => stopBuddyIntroPresentation(true)}
+                      onChange={(e) => {
+                        stopBuddyIntroPresentation(true);
+                        setRegWhatsapp(e.target.value);
+                        setEmailOrPhone(e.target.value);
+                      }}
+                      placeholder="+351 912 345 678"
+                      autoComplete="tel"
+                      className={`w-full rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none ${
+                        isDay
+                          ? 'bg-slate-50 border-slate-300 text-slate-950 focus:border-emerald-600'
+                          : 'bg-zinc-950 border-zinc-700 text-white focus:border-emerald-500'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      className={`block text-[11px] font-black uppercase tracking-wider mb-1 ${
+                        isDay ? 'text-slate-700' : 'text-zinc-300'
+                      }`}
+                    >
+                      E-mail
+                    </label>
+                    <input
+                      type="email"
+                      value={regEmail}
+                      onFocus={() => stopBuddyIntroPresentation(true)}
+                      onChange={(e) => {
+                        stopBuddyIntroPresentation(true);
+                        setRegEmail(e.target.value);
+                        if (!regWhatsapp || regWhatsapp === '+351') {
+                          setEmailOrPhone(e.target.value);
+                        }
+                      }}
+                      placeholder="estafeta@email.pt"
+                      autoComplete="email"
+                      className={`w-full rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none ${
+                        isDay
+                          ? 'bg-slate-50 border-slate-300 text-slate-950 focus:border-emerald-600'
+                          : 'bg-zinc-950 border-zinc-700 text-white focus:border-emerald-500'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* User Opt-In for Important Alerts via WhatsApp or Email */}
+                <div
+                  className={`rounded-xl border p-2.5 space-y-1.5 ${
+                    isDay
+                      ? 'bg-slate-50 border-slate-200'
+                      : 'bg-zinc-950 border-zinc-800'
                   }`}
                 >
-                  Email ou Telemóvel
-                </label>
-                <input
-                  type="text"
-                  value={emailOrPhone}
-                  onFocus={() => stopBuddyIntroPresentation(true)}
-                  onChange={(e) => {
-                    stopBuddyIntroPresentation(true);
-                    setEmailOrPhone(e.target.value);
-                  }}
-                  placeholder="Ex: 912 345 678 ou estafeta@email.pt"
-                  autoComplete="email"
-                  className={`w-full rounded-xl border px-3.5 py-2 text-sm font-bold focus:outline-none ${
-                    isDay
-                      ? 'bg-slate-50 border-slate-300 text-slate-950 focus:border-emerald-600'
-                      : 'bg-zinc-950 border-zinc-700 text-white focus:border-emerald-500'
-                  }`}
-                />
+                  <span
+                    className={`block text-[11px] font-extrabold ${
+                      isDay ? 'text-slate-800' : 'text-zinc-200'
+                    }`}
+                  >
+                    🔔 Receber alertas e mensagens importantes via:
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setOptInWhatsapp((prev) => !prev)}
+                      style={
+                        optInWhatsapp
+                          ? {
+                              backgroundColor: '#00E5FF',
+                              borderColor: '#00E5FF',
+                              color: '#05070B',
+                            }
+                          : undefined
+                      }
+                      className={`rounded-lg border py-1.5 px-2.5 text-xs font-extrabold cursor-pointer transition ${
+                        optInWhatsapp
+                          ? ''
+                          : isDay
+                            ? 'bg-white border-slate-300 text-slate-600'
+                            : 'bg-zinc-900 border-zinc-700 text-zinc-400'
+                      }`}
+                    >
+                      {optInWhatsapp ? '✓ WhatsApp' : 'WhatsApp'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOptInEmail((prev) => !prev)}
+                      style={
+                        optInEmail
+                          ? {
+                              backgroundColor: '#00E5FF',
+                              borderColor: '#00E5FF',
+                              color: '#05070B',
+                            }
+                          : undefined
+                      }
+                      className={`rounded-lg border py-1.5 px-2.5 text-xs font-extrabold cursor-pointer transition ${
+                        optInEmail
+                          ? ''
+                          : isDay
+                            ? 'bg-white border-slate-300 text-slate-600'
+                            : 'bg-zinc-900 border-zinc-700 text-zinc-400'
+                      }`}
+                    >
+                      {optInEmail ? '✓ E-mail' : 'E-mail'}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1330,6 +1531,43 @@ export const AuthAndVerificationGate: React.FC = () => {
                     : 'Criar Conta e Entrar'}
               </span>
             </button>
+
+            {authMode === 'CRIAR_CONTA' && (() => {
+              const admCfg = loadAdminNotificationConfig();
+              const reqMsg = `[Delivery Buddy] Pedido de Registo: ${username.trim() || 'Novo Estafeta'} | Veículo: ${selectedVehicle} | Zona: ${selectedZone} | WhatsApp: ${regWhatsapp} | E-mail: ${regEmail}`;
+              return (
+                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  <a
+                    href={buildWhatsAppDeepLink(admCfg.adminWhatsapp, reqMsg)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      backgroundColor: '#0B0F17',
+                      borderColor: '#00E5FF',
+                      color: '#00E5FF',
+                    }}
+                    className="rounded-xl border py-2 px-2 text-[11px] font-extrabold flex items-center justify-center gap-1 text-center transition hover:opacity-95"
+                  >
+                    <span>📲 Avisar Admin (WhatsApp)</span>
+                  </a>
+                  <a
+                    href={buildMailtoDeepLink(
+                      admCfg.adminEmail,
+                      `[Delivery Buddy] Novo Registo: ${username.trim() || 'Estafeta'}`,
+                      reqMsg
+                    )}
+                    style={{
+                      backgroundColor: '#0B0F17',
+                      borderColor: '#00E5FF',
+                      color: '#00E5FF',
+                    }}
+                    className="rounded-xl border py-2 px-2 text-[11px] font-extrabold flex items-center justify-center gap-1 text-center transition hover:opacity-95"
+                  >
+                    <span>✉️ Avisar Admin (E-mail)</span>
+                  </a>
+                </div>
+              );
+            })()}
 
             {/* Prominent Option 3 Button at the bottom of Login/Register */}
             <div className="pt-1.5 border-t border-zinc-800/70">

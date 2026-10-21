@@ -68,7 +68,15 @@ import {
   sliceThreePoseMascotSheetFile,
   sliceThreePoseMascotSheetFromDataUrl,
 } from '../utils/buddyMascotEngine';
-import { RealTimeSupportPanel } from './AuthAndVerificationGate';
+import {
+  loadSavedAccounts,
+  RealTimeSupportPanel,
+  saveAccountLocally,
+} from './AuthAndVerificationGate';
+import {
+  getCourierContactAndOptInPreferences,
+  saveCourierContactAndOptInPreferences,
+} from '../services/cloudSync';
 
 const VEHICLE_OPTIONS: CourierRegistrationVehicle[] = [
   'Mota 125cc',
@@ -1584,12 +1592,17 @@ export const MenuMaisHubView: React.FC = () => {
     toggleRainLock,
     crashDetectionEnabled,
     toggleCrashDetection,
+    crashSensitivityLevel,
+    setCrashSensitivityLevel,
     triggerSimulatedCrashTest,
     batterySurvivalMode,
     toggleBatterySurvivalMode,
     batteryLevelPct,
     isBatteryCharging,
+    userBatteryAlertThreshold,
+    setUserBatteryAlertThreshold,
     simulateChargerUnpluggedAlert,
+    cycleDevicePtVoice,
     setIsBubbleMinimized,
     isListeningSpeechRecognition,
     requestOrConfirmSosActivation,
@@ -1806,6 +1819,50 @@ export const MenuMaisHubView: React.FC = () => {
 
   const currentUserName =
     realCourierProfile?.name?.trim() || 'Estafeta';
+
+  const initialContactPrefs =
+    getCourierContactAndOptInPreferences(currentUserName);
+  const [courierWhatsappInput, setCourierWhatsappInput] = useState<string>(
+    initialContactPrefs.whatsapp || '+351'
+  );
+  const [courierEmailInput, setCourierEmailInput] = useState<string>(
+    initialContactPrefs.email || ''
+  );
+  const [courierOptInWhatsapp, setCourierOptInWhatsapp] = useState<boolean>(
+    initialContactPrefs.optInWhatsapp
+  );
+  const [courierOptInEmail, setCourierOptInEmail] = useState<boolean>(
+    initialContactPrefs.optInEmail
+  );
+  const [contactSavedFeedback, setContactSavedFeedback] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    const prefs = getCourierContactAndOptInPreferences(currentUserName);
+    setCourierWhatsappInput(prefs.whatsapp || '+351');
+    setCourierEmailInput(prefs.email || '');
+    setCourierOptInWhatsapp(prefs.optInWhatsapp);
+    setCourierOptInEmail(prefs.optInEmail);
+  }, [currentUserName]);
+
+  const handleSaveCourierContactOptIn = async (
+    nextWa = courierWhatsappInput,
+    nextEmail = courierEmailInput,
+    nextOptWa = courierOptInWhatsapp,
+    nextOptEmail = courierOptInEmail
+  ) => {
+    await saveCourierContactAndOptInPreferences({
+      courierId: realCourierProfile?.id || `courier_${currentUserName}`,
+      courierName: currentUserName,
+      whatsapp: nextWa,
+      email: nextEmail,
+      optInWhatsapp: nextOptWa,
+      optInEmail: nextOptEmail,
+    });
+    setContactSavedFeedback('✓ Preferências WhatsApp & E-mail guardadas!');
+    setTimeout(() => setContactSavedFeedback(null), 3000);
+  };
 
   // 100% Full-Screen Sub-Page View (No Stuck Top Card)
   if (subPage !== 'LISTA_PRINCIPAL') {
@@ -2151,6 +2208,107 @@ export const MenuMaisHubView: React.FC = () => {
               compact
             />
 
+            {/* Optional WhatsApp & E-mail Opt-In Card for Important Fleet Alerts */}
+            <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-extrabold text-zinc-100">
+                  🔔 Receber alertas e mensagens importantes via:
+                </span>
+                {contactSavedFeedback && (
+                  <span className="text-[11px] font-black text-emerald-400">
+                    {contactSavedFeedback}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1">
+                    📲 WhatsApp (Opcional)
+                  </label>
+                  <input
+                    type="tel"
+                    value={courierWhatsappInput}
+                    onChange={(e) => setCourierWhatsappInput(e.target.value)}
+                    placeholder="+351 912 345 678"
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs font-bold text-zinc-100 focus:outline-none focus:border-[#00E5FF]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1">
+                    ✉️ E-mail (Opcional)
+                  </label>
+                  <input
+                    type="email"
+                    value={courierEmailInput}
+                    onChange={(e) => setCourierEmailInput(e.target.value)}
+                    placeholder="estafeta@email.pt"
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs font-bold text-zinc-100 focus:outline-none focus:border-[#00E5FF]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !courierOptInWhatsapp;
+                    setCourierOptInWhatsapp(next);
+                    void handleSaveCourierContactOptIn(
+                      courierWhatsappInput,
+                      courierEmailInput,
+                      next,
+                      courierOptInEmail
+                    );
+                  }}
+                  style={{
+                    backgroundColor: courierOptInWhatsapp
+                      ? 'rgba(0, 229, 255, 0.14)'
+                      : '#090D16',
+                    borderColor: courierOptInWhatsapp ? '#00E5FF' : '#27272a',
+                    color: courierOptInWhatsapp ? '#00E5FF' : '#a1a1aa',
+                  }}
+                  className="rounded-lg border py-1.5 px-2 text-xs font-extrabold cursor-pointer transition"
+                >
+                  {courierOptInWhatsapp ? '✓ WhatsApp' : 'WhatsApp'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !courierOptInEmail;
+                    setCourierOptInEmail(next);
+                    void handleSaveCourierContactOptIn(
+                      courierWhatsappInput,
+                      courierEmailInput,
+                      courierOptInWhatsapp,
+                      next
+                    );
+                  }}
+                  style={{
+                    backgroundColor: courierOptInEmail
+                      ? 'rgba(0, 229, 255, 0.14)'
+                      : '#090D16',
+                    borderColor: courierOptInEmail ? '#00E5FF' : '#27272a',
+                    color: courierOptInEmail ? '#00E5FF' : '#a1a1aa',
+                  }}
+                  className="rounded-lg border py-1.5 px-2 text-xs font-extrabold cursor-pointer transition"
+                >
+                  {courierOptInEmail ? '✓ E-mail' : 'E-mail'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveCourierContactOptIn()}
+                  style={{
+                    backgroundColor: '#00E5FF',
+                    color: '#05070B',
+                  }}
+                  className="rounded-lg py-1.5 px-2 text-xs font-black cursor-pointer transition hover:opacity-95"
+                >
+                  💾 Guardar
+                </button>
+              </div>
+            </div>
+
             {/* Personal, Financial, Theme & Shift Controls inside Perfil */}
             <div className="rounded-xl bg-zinc-900 border border-zinc-800 divide-y divide-zinc-800 overflow-hidden">
               <button
@@ -2349,25 +2507,46 @@ export const MenuMaisHubView: React.FC = () => {
                     >
                       {resolvedPtBrVoiceName}
                     </strong>{' '}
-                    • Pitch 0.95 • Sem Eco
+                    • Pitch 0.80 (Grave Masculino) • Intro 1.0x / App 1.1x
                   </span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    speakTextPt('Uber: 6,20 limpos, 1,55 por km. Vale a pena.')
-                  }
-                  style={{
-                    backgroundColor: '#0B0F17',
-                    borderColor: '#00E5FF',
-                    color: '#00E5FF',
-                  }}
-                  className="rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:opacity-95 shadow-xs shrink-0"
-                >
-                  <Volume2 className="h-3.5 w-3.5" />
-                  <span>🔊 Ouvir Voz ({buddyVoiceRate.toFixed(2)}x)</span>
-                </button>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={cycleDevicePtVoice}
+                    style={{
+                      backgroundColor:
+                        themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#1E293B',
+                      borderColor:
+                        themeMode === 'DAYLIGHT'
+                          ? '#CBD5E1'
+                          : 'rgba(0, 229, 255, 0.35)',
+                      color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                    }}
+                    className="rounded-xl border px-2.5 py-1.5 text-xs font-extrabold flex items-center gap-1 cursor-pointer transition hover:border-[#00E5FF] shadow-xs shrink-0"
+                    title="Alternar entre as vozes portuguesas instaladas no telemóvel"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 text-[#00E5FF]" />
+                    <span>🔄 Alternar Voz</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      speakTextPt('Uber: 6,20 limpos, 1,55 por km. Vale a pena.')
+                    }
+                    style={{
+                      backgroundColor: '#0B0F17',
+                      borderColor: '#00E5FF',
+                      color: '#00E5FF',
+                    }}
+                    className="rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:opacity-95 shadow-xs shrink-0"
+                  >
+                    <Volume2 className="h-3.5 w-3.5" />
+                    <span>🔊 Ouvir Voz ({buddyVoiceRate.toFixed(2)}x)</span>
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center gap-3">
@@ -2377,12 +2556,12 @@ export const MenuMaisHubView: React.FC = () => {
                   }}
                   className="text-xs font-bold"
                 >
-                  1.00x
+                  0.90x
                 </span>
                 <input
                   type="range"
-                  min="1.0"
-                  max="1.5"
+                  min="0.90"
+                  max="1.50"
                   step="0.05"
                   value={buddyVoiceRate}
                   onChange={(e) => setBuddyVoiceRate(Number(e.target.value))}
@@ -2397,10 +2576,10 @@ export const MenuMaisHubView: React.FC = () => {
                 >
                   1.50x
                 </span>
-                {Math.abs(buddyVoiceRate - 1.15) >= 0.01 && (
+                {Math.abs(buddyVoiceRate - 1.1) >= 0.01 && (
                   <button
                     type="button"
-                    onClick={() => setBuddyVoiceRate(1.15)}
+                    onClick={() => setBuddyVoiceRate(1.1)}
                     style={{
                       backgroundColor: '#0B0F17',
                       borderColor: '#00E5FF',
@@ -2408,7 +2587,7 @@ export const MenuMaisHubView: React.FC = () => {
                     }}
                     className="rounded-lg border px-2 py-0.5 text-xs font-bold cursor-pointer"
                   >
-                    Repor 1.15x
+                    Repor 1.10x
                   </button>
                 )}
               </div>
@@ -2832,65 +3011,138 @@ export const MenuMaisHubView: React.FC = () => {
                 </button>
               </div>
 
-              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="text-xs font-extrabold text-zinc-100 block">
-                    🚨 Deteção Automática de Queda (45s)
-                  </span>
-                  <span className="text-[11px] text-zinc-400 block">
-                    Envia Auto-SOS se ficar imóvel após impacto
-                  </span>
+              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="text-xs font-extrabold text-zinc-100 block">
+                      🚨 Deteção Automática de Queda (45s)
+                    </span>
+                    <span className="text-[11px] text-zinc-400 block">
+                      Exige impacto &gt;32 m/s² + 3.5s de imobilidade pós-impacto
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={toggleCrashDetection}
+                      className={`rounded-lg px-2.5 py-1.5 text-xs font-extrabold cursor-pointer ${
+                        crashDetectionEnabled
+                          ? 'bg-emerald-500 text-zinc-950'
+                          : 'bg-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      {crashDetectionEnabled ? 'ON' : 'OFF'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={triggerSimulatedCrashTest}
+                      className="rounded-lg bg-rose-600/20 border border-rose-500/40 text-rose-300 px-2.5 py-1.5 text-xs font-bold cursor-pointer"
+                    >
+                      Testar
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={toggleCrashDetection}
-                    className={`rounded-lg px-2.5 py-1.5 text-xs font-extrabold cursor-pointer ${
-                      crashDetectionEnabled
-                        ? 'bg-emerald-500 text-zinc-950'
-                        : 'bg-zinc-800 text-zinc-400'
-                    }`}
-                  >
-                    {crashDetectionEnabled ? 'ON' : 'OFF'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={triggerSimulatedCrashTest}
-                    className="rounded-lg bg-rose-600/20 border border-rose-500/40 text-rose-300 px-2.5 py-1.5 text-xs font-bold cursor-pointer"
-                  >
-                    Testar
-                  </button>
+
+                {/* 3-Pill Fall Sensor Sensitivity Selector */}
+                <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                  {(
+                    [
+                      {
+                        id: 'TOLERANT',
+                        label: 'Tolerante (Padrão)',
+                      },
+                      {
+                        id: 'MEDIUM',
+                        label: 'Médio',
+                      },
+                      {
+                        id: 'SENSITIVE',
+                        label: 'Sensível',
+                      },
+                    ] as const
+                  ).map((pill) => {
+                    const isActive = crashSensitivityLevel === pill.id;
+                    return (
+                      <button
+                        key={pill.id}
+                        type="button"
+                        onClick={() => setCrashSensitivityLevel(pill.id)}
+                        style={{
+                          backgroundColor: isActive ? '#00E5FF' : '#090D16',
+                          borderColor: isActive ? '#00E5FF' : '#27272a',
+                          color: isActive ? '#05070B' : '#d4d4d8',
+                        }}
+                        className="rounded-lg border py-1.5 px-1.5 text-[11px] font-black cursor-pointer transition text-center truncate"
+                      >
+                        {pill.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="text-xs font-extrabold text-zinc-100 block">
-                    🔋 Modo Sobrevivência (&lt;20%)
-                  </span>
-                  <span className="text-[11px] text-zinc-400 block">
-                    Poupança extrema e alerta de cabo desligado
-                  </span>
+              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="text-xs font-extrabold text-zinc-100 block">
+                      🔋 Modo Sobrevivência (&le;{userBatteryAlertThreshold}%)
+                    </span>
+                    <span className="text-[11px] text-zinc-400 block">
+                      Sem alertas de carregador acima de {userBatteryAlertThreshold}% (Atual: {batteryLevelPct}%{isBatteryCharging ? ' ⚡' : ''})
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={toggleBatterySurvivalMode}
+                      className={`rounded-lg px-2.5 py-1.5 text-xs font-extrabold cursor-pointer ${
+                        batterySurvivalMode
+                          ? 'bg-amber-500 text-zinc-950'
+                          : 'bg-zinc-800 text-zinc-300'
+                      }`}
+                    >
+                      {batterySurvivalMode ? 'ON' : 'Eco'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={simulateChargerUnpluggedAlert}
+                      className="rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2.5 py-1.5 text-xs font-bold cursor-pointer"
+                    >
+                      Cabo
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={toggleBatterySurvivalMode}
-                    className={`rounded-lg px-2.5 py-1.5 text-xs font-extrabold cursor-pointer ${
-                      batterySurvivalMode
-                        ? 'bg-amber-500 text-zinc-950'
-                        : 'bg-zinc-800 text-zinc-300'
-                    }`}
-                  >
-                    {batterySurvivalMode ? 'ON' : 'Eco'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={simulateChargerUnpluggedAlert}
-                    className="rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2.5 py-1.5 text-xs font-bold cursor-pointer"
-                  >
-                    Cabo
-                  </button>
+
+                {/* User-Defined Battery % Alert Threshold Slider (10% to 50%) */}
+                <div className="rounded-lg bg-zinc-950 border border-zinc-800 p-2 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-zinc-300">
+                      Definir % da bateria para começar a receber alertas:
+                    </span>
+                    <span className="rounded bg-[#0B0F17] border border-[#00E5FF] px-2 py-0.5 text-[11px] font-black text-[#00E5FF]">
+                      {userBatteryAlertThreshold}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[10px] font-bold text-zinc-400">
+                      10%
+                    </span>
+                    <input
+                      type="range"
+                      min="10"
+                      max="50"
+                      step="5"
+                      value={userBatteryAlertThreshold}
+                      onChange={(e) =>
+                        setUserBatteryAlertThreshold(Number(e.target.value))
+                      }
+                      aria-label="Limiar de percentagem da bateria para alertas"
+                      className="flex-1 accent-[#00E5FF] cursor-pointer"
+                    />
+                    <span className="text-[10px] font-bold text-zinc-400">
+                      50%
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

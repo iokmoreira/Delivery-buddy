@@ -1677,197 +1677,328 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
         </div>
       )}
 
-      {/* LIVE OPEN-METEO AMARANTE WEATHER MODAL (Full-Height 88vh–92vh + Tap-Anywhere to Mute + Large Fechar Clima) */}
-      {isAmaranteWeatherModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3"
-          onClick={() => {
-            stopBuddySpeech();
-            cancelSpeechNow();
-            setIsAmaranteWeatherModalOpen(false);
-          }}
-        >
+      {/* LIVE OPEN-METEO AMARANTE WEATHER MODAL (Strict Light/Dark Theme Contrast + Tap-Anywhere to Mute) */}
+      {isAmaranteWeatherModalOpen && (() => {
+        const isDaylight = themeMode === 'DAYLIGHT';
+        const modalBg = isDaylight ? '#FFFFFF' : '#05070B';
+        const cardBg = isDaylight ? '#FFFFFF' : '#0B0F17';
+        const pillBg = isDaylight ? '#F8FAFC' : '#111827';
+        const primaryText = isDaylight ? '#090D16' : '#FFFFFF';
+        const secondaryText = isDaylight ? '#475569' : '#94A3B8';
+        const neonAccent = isDaylight ? '#00B8D4' : '#00E5FF';
+        const neonText = isDaylight ? '#00838F' : '#00E5FF';
+        const cardBorder = isDaylight ? '#00B8D4' : '#00E5FF';
+        const subtleBorder = isDaylight ? '#CBD5E1' : 'rgba(0, 229, 255, 0.35)';
+
+        return (
           <div
-            className="w-full max-w-md min-h-[88vh] max-h-[92vh] overflow-y-auto rounded-3xl bg-slate-950 border-2 border-emerald-500/45 p-5 text-white shadow-2xl flex flex-col justify-between gap-4 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
+            style={{ backgroundColor: 'rgba(5, 7, 11, 0.85)' }}
+            className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm p-3"
+            onClick={() => {
               stopBuddySpeech();
               cancelSpeechNow();
+              setIsAmaranteWeatherModalOpen(false);
             }}
-            title="Toque em qualquer área deste quadro para silenciar a voz imediatamente"
           >
-            <div className="space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 text-base font-bold text-emerald-300">
-                    🌦️ Open-Meteo Tempo Real • Amarante
-                  </span>
-                  <h3 className="text-2xl font-extrabold text-white mt-2">
-                    Clima Atual em Amarante
-                  </h3>
-                  <p className="text-base font-medium text-slate-300 mt-0.5">
-                    Atualizado às {amaranteLiveWeather.updatedAt} • Raio 35 km
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    stopBuddySpeech();
-                    cancelSpeechNow();
-                    setIsAmaranteWeatherModalOpen(false);
-                  }}
-                  className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2.5 text-slate-300 cursor-pointer shrink-0"
-                  aria-label="Fechar Clima de Amarante"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Primary Weather Metrics */}
-              <div className="rounded-2xl bg-slate-900/95 border border-emerald-500/35 p-4 flex items-center justify-between shadow-md">
-                <div className="flex items-center gap-3.5">
-                  <span className="text-5xl select-none">
-                    {amaranteLiveWeather.conditionEmoji}
-                  </span>
+            <div
+              style={{
+                backgroundColor: modalBg,
+                borderColor: cardBorder,
+                color: primaryText,
+              }}
+              className="w-full max-w-md min-h-[82vh] max-h-[92vh] overflow-y-auto rounded-3xl border-2 p-5 shadow-2xl flex flex-col justify-between gap-4 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                stopBuddySpeech();
+                cancelSpeechNow();
+              }}
+              title="Toque em qualquer área deste quadro para silenciar a voz imediatamente"
+            >
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-3xl font-extrabold text-white">
-                      {isLoadingAmaranteWeather
-                        ? '...'
-                        : `${amaranteLiveWeather.temperatureC.toFixed(1)} °C`}
-                    </div>
-                    <div className="text-lg font-bold text-emerald-300 mt-0.5">
-                      {amaranteLiveWeather.conditionLabel}
-                    </div>
+                    <span
+                      style={{
+                        backgroundColor: isDaylight ? '#ECFEFF' : '#0B0F17',
+                        borderColor: cardBorder,
+                        color: neonText,
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs sm:text-sm font-extrabold"
+                    >
+                      🌦️ Open-Meteo Tempo Real • Amarante
+                    </span>
+                    <h3
+                      style={{ color: primaryText }}
+                      className="text-2xl font-extrabold mt-2"
+                    >
+                      Clima Atual em Amarante
+                    </h3>
+                    <p
+                      style={{ color: secondaryText }}
+                      className="text-sm sm:text-base font-semibold mt-0.5"
+                    >
+                      Atualizado às {amaranteLiveWeather.updatedAt} • Raio 35 km
+                    </p>
                   </div>
-                </div>
-                <div className="text-right space-y-2">
-                  <div className="rounded-xl bg-slate-950 border border-slate-800 px-3.5 py-2 text-lg font-bold text-sky-300">
-                    💧 Chuva: {amaranteLiveWeather.rainMm.toFixed(1)} mm
-                  </div>
-                  <div className="rounded-xl bg-slate-950 border border-slate-800 px-3.5 py-2 text-lg font-bold text-slate-100">
-                    💨 Vento: {amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h
-                  </div>
-                </div>
-              </div>
-
-              {/* Road & Safety Telemetry for Couriers in Amarante */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3.5">
-                  <span className="text-base font-bold text-slate-300 block">
-                    Estado do Piso (Amarante)
-                  </span>
-                  <span className="text-lg font-extrabold text-white mt-1 block">
-                    {amaranteLiveWeather.rainMm > 0
-                      ? '🌧️ Calçada Molhada / Escorregadia'
-                      : '🛣️ Piso Seco • Aderência Normal'}
-                  </span>
-                </div>
-                <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3.5">
-                  <span className="text-base font-bold text-slate-300 block">
-                    Visibilidade &amp; Vento
-                  </span>
-                  <span className="text-lg font-extrabold text-emerald-400 mt-1 block">
-                    {amaranteLiveWeather.windSpeedKmh > 28
-                      ? '⚠️ Rajadas na Ponte S. Gonçalo'
-                      : '✓ Boa Visibilidade em Rota'}
-                  </span>
-                </div>
-              </div>
-
-              {/* 1-Tap Rain Bonus Toggle in Finanças */}
-              <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-lg font-extrabold text-white">
-                    ☔ Modo Chuva / Bónus de Chuva (Finanças)
-                  </div>
-                  <p className="text-base font-medium text-slate-300 leading-snug mt-1">
-                    Ativa o suplemento de piso molhado nas metas e cálculos de
-                    lucro €/km.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    stopBuddySpeech();
-                    cancelSpeechNow();
-                    toggleRainBonusFinanceActive();
-                  }}
-                  className={`shrink-0 rounded-xl px-4 py-3 text-base font-extrabold transition cursor-pointer border ${
-                    rainBonusFinanceActive
-                      ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-[0_0_15px_rgba(0,229,255,0.5)]'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                  }`}
-                >
-                  {rainBonusFinanceActive ? 'ATIVO (ON)' : 'ATIVAR'}
-                </button>
-              </div>
-
-              {/* Audio & Refresh Actions */}
-              <div className="grid grid-cols-2 gap-3">
-                {isSpeakingTts ? (
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       stopBuddySpeech();
                       cancelSpeechNow();
+                      setIsAmaranteWeatherModalOpen(false);
                     }}
-                    style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
-                    className="rounded-xl border border-red-400 py-3.5 px-3 text-base font-extrabold text-white flex items-center justify-center gap-2 cursor-pointer"
+                    style={{
+                      backgroundColor: pillBg,
+                      borderColor: subtleBorder,
+                      color: primaryText,
+                    }}
+                    className="rounded-xl border p-2.5 cursor-pointer shrink-0 transition hover:opacity-90"
+                    aria-label="Fechar Clima de Amarante"
                   >
-                    <VolumeX className="h-5 w-5" />
-                    <span>🔇 Parar Fala</span>
+                    <X className="h-5 w-5" />
                   </button>
-                ) : (
+                </div>
+
+                {/* Primary Weather Metrics */}
+                <div
+                  style={{
+                    backgroundColor: cardBg,
+                    borderColor: cardBorder,
+                  }}
+                  className="rounded-2xl border-2 p-4 flex items-center justify-between gap-3 shadow-md"
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <span className="text-5xl select-none shrink-0">
+                      {amaranteLiveWeather.conditionEmoji}
+                    </span>
+                    <div className="min-w-0">
+                      <div
+                        style={{ color: primaryText }}
+                        className="text-3xl font-black tracking-tight"
+                      >
+                        {isLoadingAmaranteWeather
+                          ? '...'
+                          : `${amaranteLiveWeather.temperatureC.toFixed(1)} °C`}
+                      </div>
+                      <div
+                        style={{ color: neonText }}
+                        className="text-base sm:text-lg font-extrabold mt-0.5"
+                      >
+                        {amaranteLiveWeather.conditionLabel}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right space-y-2 shrink-0">
+                    <div
+                      style={{
+                        backgroundColor: pillBg,
+                        borderColor: subtleBorder,
+                        color: primaryText,
+                      }}
+                      className="rounded-xl border px-3 py-1.5 text-sm sm:text-base font-extrabold whitespace-nowrap"
+                    >
+                      💧 Chuva:{' '}
+                      <span style={{ color: neonText }}>
+                        {amaranteLiveWeather.rainMm.toFixed(1)} mm
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        backgroundColor: pillBg,
+                        borderColor: subtleBorder,
+                        color: primaryText,
+                      }}
+                      className="rounded-xl border px-3 py-1.5 text-sm sm:text-base font-extrabold whitespace-nowrap"
+                    >
+                      💨 Vento:{' '}
+                      <span style={{ color: primaryText }}>
+                        {amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Road & Safety Telemetry for Couriers in Amarante */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div
+                    style={{
+                      backgroundColor: cardBg,
+                      borderColor: subtleBorder,
+                    }}
+                    className="rounded-2xl border p-3.5"
+                  >
+                    <span
+                      style={{ color: secondaryText }}
+                      className="text-xs sm:text-sm font-extrabold block"
+                    >
+                      Estado do Piso (Amarante)
+                    </span>
+                    <span
+                      style={{ color: primaryText }}
+                      className="text-sm sm:text-base font-black mt-1 block leading-snug"
+                    >
+                      {amaranteLiveWeather.rainMm > 0
+                        ? '🌧️ Calçada Molhada / Escorregadia'
+                        : '🛣️ Piso Seco • Aderência Normal'}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      backgroundColor: cardBg,
+                      borderColor: subtleBorder,
+                    }}
+                    className="rounded-2xl border p-3.5"
+                  >
+                    <span
+                      style={{ color: secondaryText }}
+                      className="text-xs sm:text-sm font-extrabold block"
+                    >
+                      Visibilidade &amp; Vento
+                    </span>
+                    <span
+                      style={{ color: neonText }}
+                      className="text-sm sm:text-base font-black mt-1 block leading-snug"
+                    >
+                      {amaranteLiveWeather.windSpeedKmh > 28
+                        ? '⚠️ Rajadas na Ponte S. Gonçalo'
+                        : '✓ Boa Visibilidade em Rota'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 1-Tap Rain Bonus Toggle in Finanças */}
+                <div
+                  style={{
+                    backgroundColor: cardBg,
+                    borderColor: subtleBorder,
+                  }}
+                  className="rounded-2xl border p-4 flex items-center justify-between gap-3"
+                >
+                  <div>
+                    <div
+                      style={{ color: primaryText }}
+                      className="text-base sm:text-lg font-extrabold"
+                    >
+                      ☔ Modo Chuva / Bónus de Chuva (Finanças)
+                    </div>
+                    <p
+                      style={{ color: secondaryText }}
+                      className="text-xs sm:text-sm font-semibold leading-snug mt-1"
+                    >
+                      Ativa o suplemento de piso molhado nas metas e cálculos de
+                      lucro €/km.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      const rainNote =
-                        amaranteLiveWeather.rainMm > 0
-                          ? ', com chuva'
-                          : ', sem chuva';
-                      speakTextPt(
-                        `Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}${rainNote}.`
-                      );
+                      stopBuddySpeech();
+                      cancelSpeechNow();
+                      toggleRainBonusFinanceActive();
                     }}
-                    className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-3.5 px-3 text-base font-bold text-white flex items-center justify-center gap-2 cursor-pointer"
+                    style={
+                      rainBonusFinanceActive
+                        ? {
+                            backgroundColor: neonAccent,
+                            borderColor: neonAccent,
+                            color: '#05070B',
+                          }
+                        : {
+                            backgroundColor: pillBg,
+                            borderColor: subtleBorder,
+                            color: primaryText,
+                          }
+                    }
+                    className="shrink-0 rounded-xl px-4 py-3 text-sm font-black transition cursor-pointer border shadow-xs"
                   >
-                    <Volume2 className="h-5 w-5 text-emerald-400" />
-                    <span>Ouvir em Voz Alta</span>
+                    {rainBonusFinanceActive ? 'ATIVO (ON)' : 'ATIVAR'}
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void openAndFetchAmaranteWeather(true);
-                  }}
-                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-emerald-500/40 py-3.5 px-3 text-base font-extrabold text-emerald-300 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <span>🔄 Atualizar Agora</span>
-                </button>
-              </div>
-            </div>
+                </div>
 
-            {/* Larger, Ergonomic Bottom Close Button */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                stopBuddySpeech();
-                cancelSpeechNow();
-                setIsAmaranteWeatherModalOpen(false);
-              }}
-              className="py-4 text-lg font-extrabold rounded-2xl w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg cursor-pointer transition active:scale-[0.99]"
-            >
-              Fechar Clima
-            </button>
+                {/* Audio & Refresh Actions */}
+                <div className="grid grid-cols-2 gap-3">
+                  {isSpeakingTts ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        stopBuddySpeech();
+                        cancelSpeechNow();
+                      }}
+                      style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+                      className="rounded-xl border border-red-400 py-3.5 px-3 text-sm sm:text-base font-extrabold text-white flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <VolumeX className="h-5 w-5" />
+                      <span>🔇 Parar Fala</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rainNote =
+                          amaranteLiveWeather.rainMm > 0
+                            ? ', com chuva'
+                            : ', sem chuva';
+                        speakTextPt(
+                          `Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}${rainNote}.`
+                        );
+                      }}
+                      style={{
+                        backgroundColor: pillBg,
+                        borderColor: subtleBorder,
+                        color: primaryText,
+                      }}
+                      className="rounded-xl border py-3.5 px-3 text-sm sm:text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer transition hover:opacity-90"
+                    >
+                      <Volume2
+                        style={{ color: neonText }}
+                        className="h-5 w-5 shrink-0"
+                      />
+                      <span>Ouvir em Voz Alta</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void openAndFetchAmaranteWeather(true);
+                    }}
+                    style={{
+                      backgroundColor: pillBg,
+                      borderColor: cardBorder,
+                      color: neonText,
+                    }}
+                    className="rounded-xl border py-3.5 px-3 text-sm sm:text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer transition hover:opacity-90"
+                  >
+                    <span>🔄 Atualizar Agora</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Larger, Ergonomic Bottom Close Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  stopBuddySpeech();
+                  cancelSpeechNow();
+                  setIsAmaranteWeatherModalOpen(false);
+                }}
+                style={{
+                  backgroundColor: neonAccent,
+                  color: '#05070B',
+                }}
+                className="py-4 text-base sm:text-lg font-black rounded-2xl w-full shadow-lg cursor-pointer transition active:scale-[0.99]"
+              >
+                Fechar Clima
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </>
   );
 };

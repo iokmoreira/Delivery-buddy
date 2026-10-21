@@ -138,6 +138,7 @@ import {
 } from '../services/geminiAgent';
 import {
   CloudSharedStateSnapshot,
+  dispatchAdminNotificationEvent,
   FOUNDER_ADMIN_COURIER_ID,
   generateUniqueCourierIdForName,
   getActiveCloudCourierRows,
@@ -159,6 +160,8 @@ import {
   buildSurgicalMarketQueryStreetTts,
   buildSurgicalOfferStreetTts,
   cancelBuddySpeechNow,
+  cyclePreferredDeviceVoice,
+  DEFAULT_BUDDY_VOICE_PITCH,
   getSavedBuddyVoiceRate,
   playBuddyConfirmationChime,
   playBuddyOpenChime,
@@ -914,6 +917,8 @@ interface EstafetasContextValue {
   toggleRainLock: () => void;
   crashDetectionEnabled: boolean;
   toggleCrashDetection: () => void;
+  crashSensitivityLevel: 'TOLERANT' | 'MEDIUM' | 'SENSITIVE';
+  setCrashSensitivityLevel: (level: 'TOLERANT' | 'MEDIUM' | 'SENSITIVE') => void;
   crashCountdownSeconds: number | null;
   triggerSimulatedCrashTest: () => void;
   cancelCrashCountdown: () => void;
@@ -921,9 +926,13 @@ interface EstafetasContextValue {
   toggleBatterySurvivalMode: () => void;
   batteryLevelPct: number;
   isBatteryCharging: boolean;
+  userBatteryAlertThreshold: number;
+  setUserBatteryAlertThreshold: (pct: number) => void;
   unpluggedChargerAlertActive: boolean;
   dismissUnpluggedChargerAlert: () => void;
+  snoozeUnpluggedChargerAlert: () => void;
   simulateChargerUnpluggedAlert: () => void;
+  cycleDevicePtVoice: () => void;
   // Always-On Wake-Word Watchdog & Live Mic Feedback (4s Persistent Box)
   lastHeardLiveTranscript: string | null;
   lastHeardSpokenText: string | null;
@@ -2916,6 +2925,12 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
       }));
 
       void publishRoadHazardToCloud(newPin);
+      void dispatchAdminNotificationEvent({
+        eventType: 'REPORT',
+        title: `Perigo na Via Reportado: ${hazardType}`,
+        body: `Local: ${newPin.streetLocation} (${cityZone}) | Reportado por: ${newPin.reporterName}`,
+        senderName: newPin.reporterName,
+      });
 
       return newPin;
     },
@@ -3194,7 +3209,7 @@ Solicita-se a revisão imediata do cálculo cartográfico deste trecho e o créd
       speakWithBuddyVoiceEngine({
         text,
         rate: buddyVoiceRate,
-        pitch: 0.95,
+        pitch: DEFAULT_BUDDY_VOICE_PITCH,
         isPaused: state.isAppPaused,
         onStart: () => {
           isSpeakingTtsRef.current = true;
@@ -3213,6 +3228,12 @@ Solicita-se a revisão imediata do cálculo cartográfico deste trecho e o créd
     },
     [state.isAppPaused, buddyVoiceRate]
   );
+
+  const cycleDevicePtVoice = useCallback(() => {
+    const nextLabel = cyclePreferredDeviceVoice();
+    setResolvedPtBrVoiceName(nextLabel);
+    speakTextPt('Voz do Buddy atualizada com timbre masculino.');
+  }, [speakTextPt]);
 
   const toggleTtsVoice = useCallback(() => {
     setState((prev) => {
@@ -3812,11 +3833,18 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         activeSosBeacon: beacon,
         walkieMessages: [...prev.walkieMessages, sosMsg],
       }));
+      void dispatchAdminNotificationEvent({
+        eventType: 'SOS',
+        title: `🚨 SOS DE EMERGÊNCIA: ${emergencyType}`,
+        body: `Estafeta: ${state.verifiedAccount.courierName} | Local: ${exactStreet} (${exactCoords})`,
+        senderName: state.verifiedAccount.courierName,
+      });
     },
     [
       state.vehicleProfile.vehicleType,
       state.userTrustScore,
       state.userPrefs.autoOpenMicOnSos,
+      state.verifiedAccount.courierName,
     ]
   );
 
@@ -7004,7 +7032,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     });
   }, [speakTextPt]);
 
-  // Module 2: Passive Crash Detection Auto-SOS (Accelerometer G-force spike + 45s countdown)
+  // Module 2: Passive Crash Detection Auto-SOS (Tolerant Multi-Axis Spike >32 m/s² + 3.5s Post-Impact Stillness + 60s Cooldown)
   const [crashDetectionEnabled, setCrashDetectionEnabled] = useState<boolean>(
     () => {
       try {
@@ -7014,9 +7042,39 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       }
     }
   );
+  const [crashSensitivityLevel, setCrashSensitivityLevelState] = useState<
+    'TOLERANT' | 'MEDIUM' | 'SENSITIVE'
+  >(() => {
+    try {
+      const saved = localStorage.getItem('buddy_crash_sensitivity_v1');
+      if (saved === 'MEDIUM' || saved === 'SENSITIVE' || saved === 'TOLERANT') {
+        return saved;
+      }
+    } catch {
+      // ignore
+    }
+    return 'TOLERANT';
+  });
+
+  const setCrashSensitivityLevel = useCallback(
+    (level: 'TOLERANT' | 'MEDIUM' | 'SENSITIVE') => {
+      setCrashSensitivityLevelState(level);
+      try {
+        localStorage.setItem('buddy_crash_sensitivity_v1', level);
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
+
   const [crashCountdownSeconds, setCrashCountdownSeconds] = useState<
     number | null
   >(null);
+  const lastCrashDismissedAtRef = useRef<number>(Date.now());
+  const pendingStillnessCheckTimerRef = useRef<number | null>(null);
+  const impactSpikeTimestampRef = useRef<number>(0);
+  const consecutiveImpactSamplesRef = useRef<number>(0);
 
   const toggleCrashDetection = useCallback(() => {
     setCrashDetectionEnabled((prev) => {
@@ -7043,6 +7101,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   }, [speakTextPt]);
 
   const cancelCrashCountdown = useCallback(() => {
+    lastCrashDismissedAtRef.current = Date.now();
+    if (pendingStillnessCheckTimerRef.current !== null) {
+      window.clearTimeout(pendingStillnessCheckTimerRef.current);
+      pendingStillnessCheckTimerRef.current = null;
+    }
     setCrashCountdownSeconds(null);
     speakTextPt('Alerta de queda cancelado. Continuando turno em segurança.');
   }, [speakTextPt]);
@@ -7050,6 +7113,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   useEffect(() => {
     if (crashCountdownSeconds === null) return;
     if (crashCountdownSeconds <= 0) {
+      lastCrashDismissedAtRef.current = Date.now();
       setCrashCountdownSeconds(null);
       triggerSosEmergencyBeacon('Acidente na Via');
       speakTextPt(
@@ -7071,29 +7135,106 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     ) {
       return;
     }
+
+    // Thresholds: require sustained multi-axis impact spike > 32 m/s² (>3.2G)
+    const impactThresholdMs2 =
+      crashSensitivityLevel === 'TOLERANT'
+        ? 38
+        : crashSensitivityLevel === 'MEDIUM'
+          ? 35
+          : 32.5;
+
     const handleMotion = (e: DeviceMotionEvent) => {
+      if (crashCountdownSeconds !== null) return;
+      const now = Date.now();
+
+      // 60-second cooldown after dismissing a fall check or app startup
+      if (now - lastCrashDismissedAtRef.current < 60000) {
+        return;
+      }
+
       const acc = e.accelerationIncludingGravity;
       if (!acc) return;
-      const ax = acc.x ?? 0;
-      const ay = acc.y ?? 0;
-      const az = acc.z ?? 0;
+      const ax = Math.abs(acc.x ?? 0);
+      const ay = Math.abs(acc.y ?? 0);
+      const az = Math.abs(acc.z ?? 0);
       const totalAccel = Math.sqrt(ax * ax + ay * ay + az * az);
-      // > 34 m/s^2 (~3.5G sudden spike) triggers the 45s safety countdown
-      if (totalAccel > 34 && crashCountdownSeconds === null) {
-        setCrashCountdownSeconds(45);
-        speakTextPt(
-          'Impacto forte detetado! A enviar SOS em 45 segundos. Toque em Estou Bem para cancelar.'
-        );
+
+      // Multi-axis check: at least two axes must experience strong acceleration to filter out setting phone on table
+      const axesAbove12 =
+        (ax > 12 ? 1 : 0) + (ay > 12 ? 1 : 0) + (az > 12 ? 1 : 0);
+
+      // If we are currently inside the 3.5-second post-impact stillness verification window:
+      if (pendingStillnessCheckTimerRef.current !== null) {
+        const elapsedSinceSpike = now - impactSpikeTimestampRef.current;
+        // After 700ms of impact settling, if device shows normal movement/handling (> 3.2 m/s² deviation from 1G), cancel false alarm
+        if (
+          elapsedSinceSpike > 700 &&
+          Math.abs(totalAccel - 9.81) > 3.2 &&
+          totalAccel < impactThresholdMs2
+        ) {
+          window.clearTimeout(pendingStillnessCheckTimerRef.current);
+          pendingStillnessCheckTimerRef.current = null;
+          consecutiveImpactSamplesRef.current = 0;
+        }
+        return;
+      }
+
+      if (totalAccel > impactThresholdMs2 && axesAbove12 >= 2) {
+        consecutiveImpactSamplesRef.current += 1;
+        // Require sustained multi-sample impact spike
+        if (consecutiveImpactSamplesRef.current >= 2) {
+          consecutiveImpactSamplesRef.current = 0;
+          impactSpikeTimestampRef.current = now;
+          // Wait 3.5 seconds of post-impact stillness before opening the 45-second pre-alert countdown modal
+          pendingStillnessCheckTimerRef.current = window.setTimeout(() => {
+            pendingStillnessCheckTimerRef.current = null;
+            if (Date.now() - lastCrashDismissedAtRef.current < 60000) return;
+            setCrashCountdownSeconds(45);
+            speakTextPt(
+              'Impacto forte e imobilidade detetados! A enviar SOS em 45 segundos. Toque em Estou Bem para cancelar.'
+            );
+          }, 3500);
+        }
+      } else {
+        consecutiveImpactSamplesRef.current = 0;
       }
     };
-    window.addEventListener('devicemotion', handleMotion);
-    return () => window.removeEventListener('devicemotion', handleMotion);
-  }, [crashDetectionEnabled, crashCountdownSeconds, speakTextPt]);
 
-  // Module 5: Battery Survival Mode & Unplugged Motorcycle Charger Voice Alert
+    window.addEventListener('devicemotion', handleMotion);
+    return () => {
+      window.removeEventListener('devicemotion', handleMotion);
+      if (pendingStillnessCheckTimerRef.current !== null) {
+        window.clearTimeout(pendingStillnessCheckTimerRef.current);
+        pendingStillnessCheckTimerRef.current = null;
+      }
+    };
+  }, [
+    crashDetectionEnabled,
+    crashSensitivityLevel,
+    crashCountdownSeconds,
+    speakTextPt,
+  ]);
+
+  // Module 5: Battery Survival Mode & User-Defined % Threshold Alert (Strictly Silent Above Threshold)
+  const [userBatteryAlertThreshold, setUserBatteryAlertThresholdState] =
+    useState<number>(() => {
+      try {
+        const raw = localStorage.getItem('buddy_battery_alert_threshold_pct_v1');
+        if (raw) {
+          const parsed = Number(raw);
+          if (Number.isFinite(parsed) && parsed >= 10 && parsed <= 50) {
+            return Math.round(parsed);
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return 20;
+    });
+
   const [batterySurvivalMode, setBatterySurvivalMode] = useState<boolean>(() => {
     try {
-      // Clear any stale persisted survival mode so it never triggers falsely above 15%
       localStorage.removeItem('buddy_battery_survival_v1');
     } catch {
       // ignore
@@ -7105,6 +7246,32 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   const [unpluggedChargerAlertActive, setUnpluggedChargerAlertActive] =
     useState<boolean>(false);
   const prevChargingRef = useRef<boolean | null>(null);
+  const batteryAlertSnoozedUntilRef = useRef<number>(0);
+  const hasAlertedLowBatteryCycleRef = useRef<boolean>(false);
+
+  const setUserBatteryAlertThreshold = useCallback((pct: number) => {
+    const clamped = Math.max(10, Math.min(50, Math.round(pct)));
+    setUserBatteryAlertThresholdState(clamped);
+    try {
+      localStorage.setItem(
+        'buddy_battery_alert_threshold_pct_v1',
+        String(clamped)
+      );
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Immediately clear any active battery/charger alert whenever batteryLevelPct > userBatteryAlertThreshold
+  useEffect(() => {
+    if (batteryLevelPct > userBatteryAlertThreshold || isBatteryCharging) {
+      setUnpluggedChargerAlertActive(false);
+      if (batteryLevelPct > userBatteryAlertThreshold) {
+        setBatterySurvivalMode(false);
+        hasAlertedLowBatteryCycleRef.current = false;
+      }
+    }
+  }, [batteryLevelPct, userBatteryAlertThreshold, isBatteryCharging]);
 
   const toggleBatterySurvivalMode = useCallback(() => {
     setBatterySurvivalMode((prev) => {
@@ -7119,14 +7286,29 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   }, [speakTextPt]);
 
   const dismissUnpluggedChargerAlert = useCallback(() => {
+    // Snooze for 30 minutes on dismiss so it is never persistently annoying
+    batteryAlertSnoozedUntilRef.current = Date.now() + 30 * 60 * 1000;
+    setUnpluggedChargerAlertActive(false);
+  }, []);
+
+  const snoozeUnpluggedChargerAlert = useCallback(() => {
+    batteryAlertSnoozedUntilRef.current = Date.now() + 30 * 60 * 1000;
     setUnpluggedChargerAlertActive(false);
   }, []);
 
   const simulateChargerUnpluggedAlert = useCallback(() => {
+    if (batteryLevelPct > userBatteryAlertThreshold) {
+      speakTextPt(
+        `Bateria atual em ${batteryLevelPct} por cento, acima do limite configurado de ${userBatteryAlertThreshold} por cento. Nenhum alerta será exibido acima de ${userBatteryAlertThreshold} por cento.`
+      );
+      return;
+    }
     setIsBatteryCharging(false);
     setUnpluggedChargerAlertActive(true);
-    speakTextPt('Atenção: Carregador desligado na mota!');
-  }, [speakTextPt]);
+    speakTextPt(
+      `Atenção: Bateria em ${batteryLevelPct} por cento e carregador desligado!`
+    );
+  }, [batteryLevelPct, userBatteryAlertThreshold, speakTextPt]);
 
   useEffect(() => {
     if (typeof navigator === 'undefined') return;
@@ -7152,20 +7334,35 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       const charging = Boolean(bat.charging);
       setBatteryLevelPct(pct);
       setIsBatteryCharging(charging);
-      if (level < 0.15 && !charging) {
-        setBatterySurvivalMode(true);
-      } else {
+
+      // STRICT RULE: If battery percentage is ABOVE userBatteryAlertThreshold, NEVER show or speak any charger/battery alert!
+      if (pct > userBatteryAlertThreshold || charging) {
+        setUnpluggedChargerAlertActive(false);
         setBatterySurvivalMode(false);
+        if (pct > userBatteryAlertThreshold || charging) {
+          hasAlertedLowBatteryCycleRef.current = false;
+        }
+        return;
+      }
+
+      // Battery is at or below user's configured threshold while unplugged
+      setBatterySurvivalMode(true);
+      const now = Date.now();
+      if (
+        !hasAlertedLowBatteryCycleRef.current &&
+        now >= batteryAlertSnoozedUntilRef.current
+      ) {
+        hasAlertedLowBatteryCycleRef.current = true;
+        setUnpluggedChargerAlertActive(true);
+        speakTextPt(
+          `Atenção: Bateria em ${pct} por cento sem carregador ligado.`
+        );
       }
     };
 
     const handleChargingChange = () => {
       if (!batteryObj) return;
       const nowCharging = Boolean(batteryObj.charging);
-      if (prevChargingRef.current === true && !nowCharging) {
-        setUnpluggedChargerAlertActive(true);
-        speakTextPt('Atenção: Carregador desligado na mota!');
-      }
       prevChargingRef.current = nowCharging;
       evaluateBatterySurvival(batteryObj);
     };
@@ -7194,7 +7391,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         batteryObj.removeEventListener('levelchange', handleLevelChange);
       }
     };
-  }, [speakTextPt]);
+  }, [userBatteryAlertThreshold, speakTextPt]);
 
   // =========================================================================
   // LIVE OPEN-METEO AMARANTE WEATHER ENGINE & RAIN BONUS TOGGLE
@@ -13339,6 +13536,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         toggleRainLock,
         crashDetectionEnabled,
         toggleCrashDetection,
+        crashSensitivityLevel,
+        setCrashSensitivityLevel,
         crashCountdownSeconds,
         triggerSimulatedCrashTest,
         cancelCrashCountdown,
@@ -13346,9 +13545,13 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         toggleBatterySurvivalMode,
         batteryLevelPct,
         isBatteryCharging,
+        userBatteryAlertThreshold,
+        setUserBatteryAlertThreshold,
         unpluggedChargerAlertActive,
         dismissUnpluggedChargerAlert,
+        snoozeUnpluggedChargerAlert,
         simulateChargerUnpluggedAlert,
+        cycleDevicePtVoice,
         lastHeardLiveTranscript,
         lastHeardSpokenText,
         lastExecutedVoiceActionText,

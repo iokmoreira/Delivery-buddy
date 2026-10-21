@@ -412,7 +412,8 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    private float activeNativeSpeechRate = 1.15f;
+    private float activeNativeSpeechRate = 1.10f;
+    private int customNativeVoiceIndex = -1;
 
     private void applyMalePtBrVoiceAndRate() {
         if (nativeTts == null) return;
@@ -420,27 +421,28 @@ public class MainActivity extends BridgeActivity {
             Locale ptBrLocale = new Locale("pt", "BR");
             nativeTts.setLanguage(ptBrLocale);
 
-            boolean matchedExplicitMale = false;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 Set<Voice> voices = nativeTts.getVoices();
                 if (voices != null) {
+                    java.util.List<Voice> ptBrList = new java.util.ArrayList<>();
+                    java.util.List<Voice> nonFemalePtBrList = new java.util.ArrayList<>();
                     Voice bestMalePtBr = null;
-                    Voice fallbackPtBrNonFemale = null;
-                    Voice fallbackPtBr = null;
                     for (Voice v : voices) {
                         if (v == null || v.getLocale() == null) continue;
                         String lang = v.getLocale().getLanguage().toLowerCase(Locale.US);
                         String country = v.getLocale().getCountry().toLowerCase(Locale.US);
                         String vName = v.getName() != null ? v.getName().toLowerCase(Locale.US) : "";
                         if ("pt".equals(lang) && ("br".equals(country) || vName.contains("pt-br") || vName.contains("pt_br"))) {
-                            if (fallbackPtBr == null) fallbackPtBr = v;
+                            ptBrList.add(v);
                             boolean isKnownMale = vName.contains("pt-br-x-pte")
                                 || vName.contains("pt-br-x-afs")
-                                || vName.contains("pt-br-x-ptd")
+                                || vName.contains("pt-br-x-jfb")
                                 || vName.contains("pte")
                                 || vName.contains("afs")
-                                || vName.contains("ptd")
+                                || vName.contains("jfb")
                                 || vName.contains("male")
+                                || vName.contains("masculin")
+                                || vName.contains("homem")
                                 || vName.contains("antonio")
                                 || vName.contains("daniel")
                                 || vName.contains("fabio")
@@ -448,14 +450,16 @@ public class MainActivity extends BridgeActivity {
                                 || vName.contains("nicolau");
                             boolean isKnownFemale = vName.contains("female")
                                 || vName.contains("ptc")
+                                || vName.contains("ptd")
+                                || vName.contains("pt-br-x-ptd")
                                 || vName.contains("bmg")
                                 || vName.contains("francisca")
                                 || vName.contains("luciana")
                                 || vName.contains("thalita")
                                 || vName.contains("vitoria")
                                 || vName.contains("camila");
-                            if (!isKnownFemale && fallbackPtBrNonFemale == null) {
-                                fallbackPtBrNonFemale = v;
+                            if (!isKnownFemale) {
+                                nonFemalePtBrList.add(v);
                             }
                             if (isKnownMale && !isKnownFemale) {
                                 bestMalePtBr = v;
@@ -465,19 +469,25 @@ public class MainActivity extends BridgeActivity {
                             }
                         }
                     }
-                    if (bestMalePtBr != null) {
+                    if (customNativeVoiceIndex >= 0 && !ptBrList.isEmpty()) {
+                        int safeIdx = customNativeVoiceIndex % ptBrList.size();
+                        nativeTts.setVoice(ptBrList.get(safeIdx));
+                    } else if (bestMalePtBr != null) {
                         nativeTts.setVoice(bestMalePtBr);
-                        matchedExplicitMale = true;
-                    } else if (fallbackPtBrNonFemale != null) {
-                        nativeTts.setVoice(fallbackPtBrNonFemale);
-                    } else if (fallbackPtBr != null) {
-                        nativeTts.setVoice(fallbackPtBr);
+                    } else if (nonFemalePtBrList.size() >= 2) {
+                        nativeTts.setVoice(nonFemalePtBrList.get(1));
+                    } else if (!nonFemalePtBrList.isEmpty()) {
+                        nativeTts.setVoice(nonFemalePtBrList.get(0));
+                    } else if (ptBrList.size() >= 2) {
+                        nativeTts.setVoice(ptBrList.get(1));
+                    } else if (!ptBrList.isEmpty()) {
+                        nativeTts.setVoice(ptBrList.get(0));
                     }
                 }
             }
 
-            // Force Male Brazilian Portuguese (pt-BR) timbre (0.92f pitch) and snappy 1.30x speed
-            nativeTts.setPitch(matchedExplicitMale ? 0.95f : 0.90f);
+            // Force unmistakable Male Brazilian Portuguese (pt-BR) timbre (0.80f pitch)
+            nativeTts.setPitch(0.80f);
             nativeTts.setSpeechRate(activeNativeSpeechRate);
         } catch (Exception ignored) {
         }
@@ -1578,7 +1588,7 @@ public class MainActivity extends BridgeActivity {
             mainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    float clamped = Math.max(1.0f, Math.min(1.5f, rate));
+                    float clamped = Math.max(0.90f, Math.min(1.50f, rate));
                     activeNativeSpeechRate = clamped;
                     if (nativeTts != null && nativeTtsReady) {
                         try {
@@ -1588,6 +1598,26 @@ public class MainActivity extends BridgeActivity {
                     }
                 }
             });
+        }
+
+        @JavascriptInterface
+        public String cycleNativePtVoice() {
+            if (customNativeVoiceIndex < -1) {
+                customNativeVoiceIndex = -1;
+            }
+            customNativeVoiceIndex = customNativeVoiceIndex + 1;
+            if (customNativeVoiceIndex > 4) {
+                customNativeVoiceIndex = -1;
+            }
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    applyMalePtBrVoiceAndRate();
+                }
+            });
+            return customNativeVoiceIndex == -1
+                ? "Auto: Voz Masculina PT-BR (Pitch 0.80)"
+                : "Voz Dispositivo #" + (customNativeVoiceIndex + 1) + " (Pitch 0.80)";
         }
 
         @JavascriptInterface

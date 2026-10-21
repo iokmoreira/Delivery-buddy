@@ -54,12 +54,18 @@ import {
   SupportChatMessage,
 } from './AuthAndVerificationGate';
 import {
+  AdminNotificationConfig,
+  AdminNotificationEvent,
+  buildMailtoDeepLink,
+  buildWhatsAppDeepLink,
   CloudApprovalRequest,
   isCourierAdminByName,
+  loadAdminNotificationConfig,
   loadCloudSharedState,
   publishAccountRegistrationToCloud,
   publishAdminApprovalDecisionToCloud,
   publishCourierPresenceToCloud,
+  saveAdminNotificationConfig,
   subscribeToCloudSharedState,
   syncCloudStateNow,
 } from '../services/cloudSync';
@@ -146,10 +152,32 @@ export const AdminBackofficeModule: React.FC = () => {
   );
   const [adminReplyText, setAdminReplyText] = useState<string>('');
 
+  // Admin WhatsApp & E-mail Receiving Channels Config + Live Notification Events
+  const [adminNotifyConfig, setAdminNotifyConfig] =
+    useState<AdminNotificationConfig>(() => loadAdminNotificationConfig());
+  const [adminNotifySavedBadge, setAdminNotifySavedBadge] =
+    useState<boolean>(false);
+  const [adminNotifications, setAdminNotifications] = useState<
+    AdminNotificationEvent[]
+  >(() => loadCloudSharedState().adminNotifications || []);
+  const [importantAlertMessage, setImportantAlertMessage] = useState<string>(
+    '📢 Alerta Importante Delivery Buddy Amarante: Nova atualização / aviso operacional disponível na App.'
+  );
+
+  const handleSaveAdminNotifyConfig = async () => {
+    await saveAdminNotificationConfig(adminNotifyConfig);
+    setAdminNotifySavedBadge(true);
+    window.setTimeout(() => setAdminNotifySavedBadge(false), 3000);
+  };
+
   useEffect(() => {
     void syncCloudStateNow();
     const unsub = subscribeToCloudSharedState((snap) => {
       setCloudRequests(snap.approvalRequests || []);
+      setAdminNotifications(snap.adminNotifications || []);
+      if (snap.adminConfig) {
+        setAdminNotifyConfig(snap.adminConfig);
+      }
     });
     const syncAdminInbox = () => {
       setLocalAccounts(loadSavedAccounts());
@@ -430,6 +458,10 @@ export const AdminBackofficeModule: React.FC = () => {
         byKey.set(key, {
           ...existing,
           courierId: req.id || existing.courierId,
+          whatsapp: req.whatsapp || existing.whatsapp,
+          email: req.email || existing.email,
+          optInWhatsapp: req.optInWhatsapp ?? existing.optInWhatsapp ?? true,
+          optInEmail: req.optInEmail ?? existing.optInEmail ?? true,
           status:
             existing.status === 'APROVADO' || cloudStatus === 'APROVADO'
               ? 'APROVADO'
@@ -442,7 +474,11 @@ export const AdminBackofficeModule: React.FC = () => {
           courierId: req.id,
           role: isFounder ? 'admin' : 'courier',
           username: req.username.trim(),
-          emailOrPhone: req.emailOrPhone || 'Sincronizado via Cloud Realtime',
+          emailOrPhone: req.emailOrPhone || req.whatsapp || req.email || 'Sincronizado via Cloud Realtime',
+          whatsapp: req.whatsapp,
+          email: req.email,
+          optInWhatsapp: req.optInWhatsapp ?? true,
+          optInEmail: req.optInEmail ?? true,
           pinOrPassword: '••••',
           vehicle: (req.vehicle as CourierRegistrationVehicle) || 'Mota 125cc',
           platforms:
@@ -1944,6 +1980,171 @@ export const AdminBackofficeModule: React.FC = () => {
                 )}
               </form>
             )}
+
+            {/* 📲 Canais de Recebimento do Admin (WhatsApp & E-mail) */}
+            <div className="rounded-xl bg-zinc-950 border border-[#00E5FF]/40 p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <span className="text-xs sm:text-sm font-extrabold text-white block">
+                    📲 Canais de Recebimento do Admin (WhatsApp &amp; E-mail)
+                  </span>
+                  <span className="text-[11px] text-zinc-400 block">
+                    Receba requisições de novos estafetas, reclamações, suporte e alertas SOS no seu WhatsApp e E-mail.
+                  </span>
+                </div>
+                {adminNotifySavedBadge && (
+                  <span className="rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300 px-2.5 py-0.5 text-[10px] font-extrabold">
+                    ✓ Canais Guardados
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1">
+                    📲 WhatsApp do Admin (+351...)
+                  </label>
+                  <input
+                    type="tel"
+                    value={adminNotifyConfig.adminWhatsapp}
+                    onChange={(e) =>
+                      setAdminNotifyConfig((prev) => ({
+                        ...prev,
+                        adminWhatsapp: e.target.value,
+                      }))
+                    }
+                    placeholder="+351 912 345 678"
+                    className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-[#00E5FF]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1">
+                    ✉️ E-mail do Admin
+                  </label>
+                  <input
+                    type="email"
+                    value={adminNotifyConfig.adminEmail}
+                    onChange={(e) =>
+                      setAdminNotifyConfig((prev) => ({
+                        ...prev,
+                        adminEmail: e.target.value,
+                      }))
+                    }
+                    placeholder="admin@deliverybuddy.pt"
+                    className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-[#00E5FF]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAdminNotifyConfig((prev) => ({
+                        ...prev,
+                        autoNotifyNewUsers: !prev.autoNotifyNewUsers,
+                      }))
+                    }
+                    style={{
+                      backgroundColor: adminNotifyConfig.autoNotifyNewUsers
+                        ? 'rgba(0, 229, 255, 0.14)'
+                        : '#090D16',
+                      borderColor: adminNotifyConfig.autoNotifyNewUsers
+                        ? '#00E5FF'
+                        : '#27272a',
+                      color: adminNotifyConfig.autoNotifyNewUsers
+                        ? '#00E5FF'
+                        : '#a1a1aa',
+                    }}
+                    className="rounded-lg border px-2.5 py-1 text-[11px] font-extrabold cursor-pointer"
+                  >
+                    {adminNotifyConfig.autoNotifyNewUsers ? '✓' : '○'} Novos Registos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAdminNotifyConfig((prev) => ({
+                        ...prev,
+                        autoNotifyReportsAndSos: !prev.autoNotifyReportsAndSos,
+                      }))
+                    }
+                    style={{
+                      backgroundColor: adminNotifyConfig.autoNotifyReportsAndSos
+                        ? 'rgba(0, 229, 255, 0.14)'
+                        : '#090D16',
+                      borderColor: adminNotifyConfig.autoNotifyReportsAndSos
+                        ? '#00E5FF'
+                        : '#27272a',
+                      color: adminNotifyConfig.autoNotifyReportsAndSos
+                        ? '#00E5FF'
+                        : '#a1a1aa',
+                    }}
+                    className="rounded-lg border px-2.5 py-1 text-[11px] font-extrabold cursor-pointer"
+                  >
+                    {adminNotifyConfig.autoNotifyReportsAndSos ? '✓' : '○'} Reclamações / Suporte / SOS
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void handleSaveAdminNotifyConfig()}
+                  style={{
+                    backgroundColor: '#00E5FF',
+                    color: '#05070B',
+                  }}
+                  className="rounded-lg px-3 py-1.5 text-xs font-black cursor-pointer transition hover:opacity-95"
+                >
+                  💾 Guardar Canais Admin
+                </button>
+              </div>
+
+              {adminNotifications.length > 0 && (
+                <div className="space-y-1.5 pt-1 border-t border-zinc-800 max-h-48 overflow-y-auto">
+                  <span className="text-[11px] font-extrabold text-[#00E5FF] block">
+                    🔔 Últimos Pedidos &amp; Alertas Recebidos ({adminNotifications.length}):
+                  </span>
+                  {adminNotifications.slice(0, 8).map((ev) => (
+                    <div
+                      key={ev.id}
+                      className="rounded-lg bg-zinc-900 border border-zinc-800 p-2 flex items-center justify-between gap-2 flex-wrap"
+                    >
+                      <div className="min-w-0">
+                        <span className="text-xs font-extrabold text-white block truncate">
+                          {ev.title}
+                        </span>
+                        <span className="text-[11px] text-zinc-400 block truncate">
+                          {ev.body}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <a
+                          href={buildWhatsAppDeepLink(
+                            ev.senderWhatsapp || adminNotifyConfig.adminWhatsapp,
+                            `${ev.title}\n${ev.body}`
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 px-2 py-1 text-[10px] font-extrabold no-underline"
+                        >
+                          📲 Receber / Enviar no WhatsApp
+                        </a>
+                        <a
+                          href={buildMailtoDeepLink(
+                            ev.senderEmail || adminNotifyConfig.adminEmail,
+                            `[Delivery Buddy] ${ev.title}`,
+                            ev.body
+                          )}
+                          className="rounded-lg bg-sky-500/20 border border-sky-400/60 text-sky-300 px-2 py-1 text-[10px] font-extrabold no-underline"
+                        >
+                          ✉️ Enviar por E-mail
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Local & Cloud Synced Registered Accounts */}
@@ -1999,9 +2200,19 @@ export const AdminBackofficeModule: React.FC = () => {
                             ☁️ Telemóvel Remoto
                           </span>
                         )}
+                        {acc.optInWhatsapp !== false && (
+                          <span className="rounded bg-emerald-500/15 border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+                            🔔 WhatsApp
+                          </span>
+                        )}
+                        {acc.optInEmail !== false && (
+                          <span className="rounded bg-sky-500/15 border border-sky-500/40 px-1.5 py-0.5 text-[9px] font-bold text-sky-300">
+                            🔔 E-mail
+                          </span>
+                        )}
                       </div>
                       <span className="text-xs text-zinc-400 block">
-                        {acc.emailOrPhone || 'Sem contacto'} • {acc.vehicle} •{' '}
+                        {acc.whatsapp || acc.email || acc.emailOrPhone || 'Sem contacto'} • {acc.vehicle} •{' '}
                         {acc.zone}
                       </span>
                       {Array.isArray(acc.platforms) && acc.platforms.length > 0 && (
@@ -2017,7 +2228,34 @@ export const AdminBackofficeModule: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                      <a
+                        href={buildWhatsAppDeepLink(
+                          acc.whatsapp || acc.emailOrPhone || adminNotifyConfig.adminWhatsapp,
+                          `Olá ${acc.username}! A tua conta no Delivery Buddy Amarante está ${
+                            status === 'APROVADO' ? 'APROVADA ✓' : 'registada'
+                          }.`
+                        )}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-xl bg-emerald-500/15 border border-emerald-500/50 text-emerald-300 px-2.5 py-1.5 text-[11px] font-extrabold no-underline"
+                        title="Enviar confirmação ou mensagem por WhatsApp"
+                      >
+                        📲 WhatsApp
+                      </a>
+                      <a
+                        href={buildMailtoDeepLink(
+                          acc.email || adminNotifyConfig.adminEmail,
+                          `Delivery Buddy Amarante — Conta ${acc.username}`,
+                          `Olá ${acc.username},\nA tua conta no Delivery Buddy Amarante está ${
+                            status === 'APROVADO' ? 'APROVADA ✓' : 'em validação'
+                          }.`
+                        )}
+                        className="rounded-xl bg-sky-500/15 border border-sky-500/50 text-sky-300 px-2.5 py-1.5 text-[11px] font-extrabold no-underline"
+                        title="Enviar confirmação ou mensagem por E-mail"
+                      >
+                        ✉️ E-mail
+                      </a>
                       <button
                         type="button"
                         onClick={() =>
@@ -2065,6 +2303,105 @@ export const AdminBackofficeModule: React.FC = () => {
               })}
             </div>
           )}
+
+          {/* 📢 Enviar Alerta Importante (WhatsApp / E-mail) para Estafetas Opt-In */}
+          <div className="rounded-xl bg-zinc-950 border border-[#00E5FF]/40 p-3 space-y-2.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <span className="text-xs sm:text-sm font-extrabold text-white block">
+                  📢 Enviar Alerta Importante (WhatsApp / E-mail)
+                </span>
+                <span className="text-[11px] text-zinc-400 block">
+                  Envia comunicados urgentes diretamente para o WhatsApp ou E-mail dos estafetas que autorizaram receber alertas.
+                </span>
+              </div>
+              <span className="rounded bg-[#0B0F17] border border-[#00E5FF] px-2 py-0.5 text-[10px] font-black text-[#00E5FF]">
+                {
+                  unifiedCloudAndLocalAccounts.filter(
+                    (a) => a.optInWhatsapp !== false || a.optInEmail !== false
+                  ).length
+                }{' '}
+                Estafetas Opt-In
+              </span>
+            </div>
+
+            <input
+              type="text"
+              value={importantAlertMessage}
+              onChange={(e) => setImportantAlertMessage(e.target.value)}
+              placeholder="Escreva a mensagem importante para enviar via WhatsApp / E-mail..."
+              className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs font-semibold text-white focus:outline-none focus:border-[#00E5FF]"
+            />
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <a
+                href={buildMailtoDeepLink(
+                  adminNotifyConfig.adminEmail,
+                  '📢 Alerta Importante — Delivery Buddy Amarante',
+                  importantAlertMessage,
+                  unifiedCloudAndLocalAccounts
+                    .filter((a) => a.optInEmail !== false && a.email && a.email.includes('@'))
+                    .map((a) => a.email as string)
+                )}
+                className="rounded-xl bg-sky-500/20 border border-sky-400 text-sky-200 px-3 py-1.5 text-xs font-extrabold no-underline"
+              >
+                ✉️ Disparar E-mail para Todos Opt-In
+              </a>
+              <a
+                href={buildWhatsAppDeepLink('', importantAlertMessage)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-200 px-3 py-1.5 text-xs font-extrabold no-underline"
+              >
+                📲 Partilhar Alerta no WhatsApp
+              </a>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              {unifiedCloudAndLocalAccounts
+                .filter((a) => a.optInWhatsapp !== false || a.optInEmail !== false)
+                .map((acc) => (
+                  <div
+                    key={`optin-${acc.courierId || acc.username}`}
+                    className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 flex items-center justify-between gap-2 flex-wrap"
+                  >
+                    <span className="text-xs font-bold text-zinc-200">
+                      {acc.username}{' '}
+                      <span className="text-[10px] text-zinc-400">
+                        ({acc.whatsapp || acc.email || acc.emailOrPhone || 'Contacto na Conta'})
+                      </span>
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {acc.optInWhatsapp !== false && (
+                        <a
+                          href={buildWhatsAppDeepLink(
+                            acc.whatsapp || acc.emailOrPhone || '',
+                            importantAlertMessage
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 px-2 py-0.5 text-[10px] font-extrabold no-underline"
+                        >
+                          📲 Enviar WhatsApp
+                        </a>
+                      )}
+                      {acc.optInEmail !== false && (
+                        <a
+                          href={buildMailtoDeepLink(
+                            acc.email || '',
+                            '📢 Alerta Importante — Delivery Buddy',
+                            importantAlertMessage
+                          )}
+                          className="rounded bg-sky-500/20 border border-sky-400/60 text-sky-300 px-2 py-0.5 text-[10px] font-extrabold no-underline"
+                        >
+                          ✉️ Enviar E-mail
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
 
           {/* Supabase Realtime Couriers (Deduplicated against Local Registered Accounts) */}
           {deduplicatedAdminCouriers.length > 0 && (
