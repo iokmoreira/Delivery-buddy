@@ -59,6 +59,7 @@ jobs:
           mkdir -p android/app/src/main/res/xml
           cp -f android-native-template/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           cp -f android-native-template/BuddyOverlayService.java android/app/src/main/java/com/pbg/deliverybuddy/BuddyOverlayService.java
+          cp -f android-native-template/BuddyAccessibilityService.java android/app/src/main/java/com/pbg/deliverybuddy/BuddyAccessibilityService.java
           cp -f android-native-template/BuddyOfferDetectorService.java android/app/src/main/java/com/pbg/deliverybuddy/BuddyOfferDetectorService.java
           cp -f android-native-template/MainActivity.java android/app/src/main/java/com/pbg/deliverybuddy/MainActivity.java
           cp -f android-native-template/accessibility_service_config.xml android/app/src/main/res/xml/accessibility_service_config.xml

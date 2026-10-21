@@ -228,6 +228,16 @@ import {
   buildEndOfDeliveryRealitySummary,
   saveCustomTaughtCrosswalk,
 } from '../utils/amaranteCopilotTelemetry';
+import {
+  matchPhoneticWakeWord,
+  PHONETIC_BUDDY_WAKE_VARIANTS,
+} from '../services/voiceTrigger';
+import {
+  executeCustomerChatVoiceMacro,
+  parseOrderScreenText,
+  TrafficLightVerdict,
+  triggerNativeOrderButtonClick,
+} from '../services/orderScreenLearner';
 
 const STORAGE_KEY = 'delivery_buddy_v19_gemini_pro_supabase';
 
@@ -937,11 +947,15 @@ interface EstafetasContextValue {
   lastHeardLiveTranscript: string | null;
   lastHeardSpokenText: string | null;
   lastExecutedVoiceActionText: string | null;
+  isTwoStepWakeActive: boolean;
+  twoStepWakeSecondsLeft: number;
   toggleVoiceMicListening: () => void;
   startContinuousVoiceMic: () => void;
   stopContinuousVoiceMic: () => void;
   // Automatic Incoming Order Detection & Instant Calculation
   autoOfferDetectorEnabled: boolean;
+  isAccessibilityDiagnosticOpen: boolean;
+  setIsAccessibilityDiagnosticOpen: (open: boolean) => void;
   lastAutoDetectedOfferBanner: AutoDetectedOfferBannerState | null;
   dismissAutoDetectedOfferBanner: () => void;
   openAndroidAccessibilitySettings: () => void;
@@ -1018,8 +1032,11 @@ export interface AutoDetectedOfferBannerState {
   platform: PlatformName;
   grossEur: number;
   realKm: number;
+  estimatedMinutes?: number;
   netProfitEur: number;
   netEurPerKm: number;
+  netEurPerHour?: number;
+  trafficLight?: TrafficLightVerdict;
   verdictLabel: 'COMPENSA ACEITAR' | 'RECUSAR OFERTA';
   passes: boolean;
   spokenSummary: string;
@@ -2089,6 +2106,12 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
   );
   const [lastExecutedVoiceActionText, setLastExecutedVoiceActionText] =
     useState<string | null>(null);
+  const [isTwoStepWakeActive, setIsTwoStepWakeActive] =
+    useState<boolean>(false);
+  const [twoStepWakeSecondsLeft, setTwoStepWakeSecondsLeft] =
+    useState<number>(0);
+  const isTwoStepWakeActiveRef = useRef<boolean>(false);
+  const twoStepWakeTimerRef = useRef<number | null>(null);
   const lastHeardTranscriptTimerRef = useRef<number | null>(null);
   const startContinuousRecognitionInstanceRef = useRef<() => void>(() => {});
   const [scannerActiveMainView, setScannerActiveMainView] = useState<
@@ -2096,9 +2119,46 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
   >('OFERTA_ATUAL');
   const [autoOfferDetectorEnabled, setAutoOfferDetectorEnabled] =
     useState<boolean>(true);
+  const [isAccessibilityDiagnosticOpen, setIsAccessibilityDiagnosticOpen] =
+    useState<boolean>(false);
   const [lastAutoDetectedOfferBanner, setLastAutoDetectedOfferBanner] =
     useState<AutoDetectedOfferBannerState | null>(null);
   const autoOfferBannerTimerRef = useRef<number | null>(null);
+
+  const activateTwoStepWakeWindow = useCallback((durationSeconds = 6) => {
+    if (twoStepWakeTimerRef.current !== null) {
+      window.clearInterval(twoStepWakeTimerRef.current);
+      twoStepWakeTimerRef.current = null;
+    }
+    isTwoStepWakeActiveRef.current = true;
+    setIsTwoStepWakeActive(true);
+    setTwoStepWakeSecondsLeft(durationSeconds);
+    let secsLeft = durationSeconds;
+    twoStepWakeTimerRef.current = window.setInterval(() => {
+      secsLeft -= 1;
+      if (secsLeft <= 0) {
+        if (twoStepWakeTimerRef.current !== null) {
+          window.clearInterval(twoStepWakeTimerRef.current);
+          twoStepWakeTimerRef.current = null;
+        }
+        isTwoStepWakeActiveRef.current = false;
+        setIsTwoStepWakeActive(false);
+        setTwoStepWakeSecondsLeft(0);
+      } else {
+        setTwoStepWakeSecondsLeft(secsLeft);
+      }
+    }, 1000);
+  }, []);
+
+  const clearTwoStepWakeWindow = useCallback(() => {
+    if (twoStepWakeTimerRef.current !== null) {
+      window.clearInterval(twoStepWakeTimerRef.current);
+      twoStepWakeTimerRef.current = null;
+    }
+    isTwoStepWakeActiveRef.current = false;
+    setIsTwoStepWakeActive(false);
+    setTwoStepWakeSecondsLeft(0);
+  }, []);
 
   const [isTranslatorModalOpen, setIsTranslatorModalOpen] =
     useState<boolean>(false);
@@ -8305,6 +8365,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const openAndroidAccessibilitySettings = useCallback(() => {
     setAutoOfferDetectorEnabled(true);
+    setIsAccessibilityDiagnosticOpen(true);
     if (typeof window !== 'undefined') {
       const winAny = window as unknown as {
         BuddyNativeOverlay?: {
@@ -8318,7 +8379,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         try {
           winAny.BuddyNativeOverlay.openAccessibilitySettings();
           speakTextPt(
-            'A abrir definições de Acessibilidade do Android. Ative o Auto-Detetor Delivery Buddy.'
+            'A abrir definições de Acessibilidade do Android e painel de calibração do Auto-Detetor.'
           );
           return;
         } catch {
@@ -8327,7 +8388,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       }
     }
     speakTextPt(
-      'Auto-Detetor de Pedidos Uber e Glovo ativo em segundo plano.'
+      'Painel de diagnóstico e aprendizagem de tela do Auto-Detetor aberto.'
     );
   }, [speakTextPt]);
 
@@ -8346,14 +8407,26 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           ? 'Bolt Food'
           : 'Glovo';
 
+      const estimatedMinutes = Math.max(6, Math.round(safeKm * 3.8 + 4));
       // Fuel + wear + tax/fleet cost so 5.50€ for 3.1km yields ~4.70€ net (1.51€/km)
       const effectiveCostPerKm = Math.max(0.258, totalCostPerKm);
       const netProfitEur = Number(
         Math.max(0.2, safeEuros - safeKm * effectiveCostPerKm).toFixed(2)
       );
       const netEurPerKm = Number((netProfitEur / safeKm).toFixed(2));
+      const netEurPerHour = Number(
+        ((netProfitEur / estimatedMinutes) * 60).toFixed(2)
+      );
+
+      let trafficLight: TrafficLightVerdict = 'RED_DECLINE';
+      if (netEurPerKm >= 1.2 && netEurPerHour >= 14.0) {
+        trafficLight = 'GREEN_ACCEPT';
+      } else if (netEurPerKm >= 0.9) {
+        trafficLight = 'YELLOW_EVALUATE';
+      }
+
       const minTargetPerKm = Math.max(
-        1.0,
+        0.9,
         state.userPrefs.minNetProfitPerKmEur || 1.15
       );
       const minTargetGross = Math.max(
@@ -8361,7 +8434,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         state.userPrefs.minGrossOrderValueEur || 4.0
       );
       const passes =
-        netEurPerKm >= minTargetPerKm && safeEuros >= minTargetGross;
+        trafficLight === 'GREEN_ACCEPT' ||
+        (netEurPerKm >= minTargetPerKm && safeEuros >= minTargetGross);
       const verdictLabel: 'COMPENSA ACEITAR' | 'RECUSAR OFERTA' = passes
         ? 'COMPENSA ACEITAR'
         : 'RECUSAR OFERTA';
@@ -8378,9 +8452,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       const netSpoken = netProfitEur.toFixed(2).replace('.', ',');
       const perKmSpoken = netEurPerKm.toFixed(2).replace('.', ',');
 
-      const spokenSummary = `Nova oferta ${spokenPlat}: ${eurosSpoken}€ para ${kmSpoken} km. Lucro líquido: ${netSpoken}€ (${perKmSpoken}€/km). ${
-        passes ? 'Compensa aceitar!' : 'Abaixo da meta, recusar!'
-      }`;
+      const verdictVoiceText =
+        trafficLight === 'GREEN_ACCEPT'
+          ? 'Sinal verde, compensa aceitar!'
+          : trafficLight === 'YELLOW_EVALUATE'
+            ? 'Sinal amarelo, avaliar pedido.'
+            : 'Sinal vermelho, abaixo da meta, recusar!';
+
+      const spokenSummary = `Novo pedido ${spokenPlat}: ${eurosSpoken}€ para ${kmSpoken} km. Lucro líquido: ${netSpoken}€ (${perKmSpoken}€/km). ${verdictVoiceText} Diz Buddy aceitar pedido ou Buddy recusar pedido.`;
 
       const nowTime = new Date().toLocaleTimeString('pt-PT', {
         hour: '2-digit',
@@ -8397,7 +8476,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         platform: normalizedPlatform,
         grossAmountEur: safeEuros,
         appAnnouncedKm: safeKm,
-        estimatedMinutes: Math.max(6, Math.round(safeKm * 3.8)),
+        estimatedMinutes,
         originName: `${normalizedPlatform} • Amarante Centro`,
         destinationName: 'Cliente Amarante (Deteção Automática)',
         segmentText: `${normalizedPlatform} (${safeEuros.toFixed(2)} € / ${safeKm.toFixed(1)} km)`,
@@ -8408,8 +8487,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         platform: normalizedPlatform,
         grossEur: safeEuros,
         realKm: safeKm,
+        estimatedMinutes,
         netProfitEur,
         netEurPerKm,
+        netEurPerHour,
+        trafficLight,
         verdictLabel,
         passes,
         spokenSummary,
@@ -8422,12 +8504,19 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       autoOfferBannerTimerRef.current = window.setTimeout(() => {
         setLastAutoDetectedOfferBanner(null);
         autoOfferBannerTimerRef.current = null;
-      }, 9500);
+      }, 11000);
+
+      const trafficBadge =
+        trafficLight === 'GREEN_ACCEPT'
+          ? '🟢 ACEITAR'
+          : trafficLight === 'YELLOW_EVALUATE'
+            ? '🟡 AVALIAR'
+            : '🔴 RECUSAR';
 
       showLiveMicTranscriptFeedback(
-        `⚡ Auto-Oferta ${normalizedPlatform}: ${safeEuros.toFixed(2)}€ / ${safeKm.toFixed(1)}km → Líq: ${netProfitEur.toFixed(2)}€ (${netEurPerKm.toFixed(2)}€/km)`,
+        `⚡ Auto-Oferta ${normalizedPlatform}: ${safeEuros.toFixed(2)}€ / ${safeKm.toFixed(1)}km → ${trafficBadge} (${netProfitEur.toFixed(2)}€ líq. • ${netEurPerKm.toFixed(2)}€/km)`,
         `Oferta ${normalizedPlatform} (${safeEuros.toFixed(2)}€ • ${safeKm.toFixed(1)} km)`,
-        `${verdictLabel} • Lucro Líquido: +${netProfitEur.toFixed(2)}€ (${netEurPerKm.toFixed(2)}€/km)`
+        `${trafficBadge} • Lucro Líquido: +${netProfitEur.toFixed(2)}€ (${netEurPerKm.toFixed(2)}€/km • ${netEurPerHour.toFixed(0)}€/h)`
       );
 
       speakTextPt(spokenSummary);
@@ -8441,7 +8530,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     ]
   );
 
-  // Register global window.onAutoOfferDetected(euros, km, platform) from Android AccessibilityService / Screenshot Watcher
+  // Register global window.onAutoOfferDetected(euros, km, platform) & window.onNativeAccessibilityOrderScreen from Android AccessibilityService
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const winAny = window as unknown as {
@@ -8449,6 +8538,10 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         euros: number,
         km: number,
         platform: string
+      ) => void;
+      onNativeAccessibilityOrderScreen?: (
+        rawText: string,
+        pkgName?: string
       ) => void;
     };
     winAny.onAutoOfferDetected = (
@@ -8458,12 +8551,32 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     ) => {
       triggerAutoDetectedOffer(euros, km, platform);
     };
+    winAny.onNativeAccessibilityOrderScreen = (
+      rawText: string,
+      pkgName?: string
+    ) => {
+      const parsed = parseOrderScreenText(
+        rawText,
+        pkgName,
+        Math.max(0.258, totalCostPerKm)
+      );
+      if (parsed) {
+        triggerAutoDetectedOffer(
+          parsed.grossEur,
+          parsed.distanceKm,
+          parsed.platform
+        );
+      }
+    };
     return () => {
       if (winAny.onAutoOfferDetected) {
         delete winAny.onAutoOfferDetected;
       }
+      if (winAny.onNativeAccessibilityOrderScreen) {
+        delete winAny.onNativeAccessibilityOrderScreen;
+      }
     };
-  }, [triggerAutoDetectedOffer]);
+  }, [triggerAutoDetectedOffer, totalCostPerKm]);
 
   // =========================================================================
   // STEP 12 & 13 COMPLETE VOICE COMMAND TREE ("COMANDOS BUDDY" VS "COMANDOS UBER / GLOVO / BOLT")
@@ -8485,16 +8598,17 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '');
 
-      // Normalize custom trigger word & Portuguese/Android phonetic aliases ("badi", "budi", "body", "bady", "bode", "bad", "bade", "bud", "bandi", "buney", "buni", "boni", "bunny", "bani", "bari", "pare") to "buddy"
+      // Normalize custom trigger word & Portuguese/Android phonetic aliases ("badi", "body", "buri", "bady", "bode", "bad", "barry", "pari", "buddy") to "buddy"
       let lower =
         triggerLower && triggerLower !== 'buddy' && rawLower.includes(triggerLower)
           ? rawLower.replace(triggerLower, 'buddy')
           : rawLower;
+      const phoneticPattern = new RegExp(
+        `\\b(${PHONETIC_BUDDY_WAKE_VARIANTS.join('|')})\\b`,
+        'gi'
+      );
       lower = lower
-        .replace(
-          /\b(badi|budi|body|bady|bode|bad|bade|bud|bandi|buney|buni|boni|bunny|bani|bari|pare)\b/gi,
-          'buddy'
-        )
+        .replace(phoneticPattern, 'buddy')
         .replace(/\bminimizer\b/gi, 'minimizar')
         .replace(/\bmaximizer\b/gi, 'maximizar');
 
@@ -9658,45 +9772,96 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         actionSummary = nextPaused
           ? 'Aplicativo colocado em Pausa de Turno.'
           : 'Turno retomado!';
+      } else if (
+        lower.includes('avisar cliente cheguei') ||
+        lower.includes('cliente cheguei') ||
+        lower.includes('cheguei ao cliente') ||
+        lower.includes('cheguei a porta')
+      ) {
+        commandMatched = '"Buddy, avisar cliente cheguei"';
+        const chatMsg = executeCustomerChatVoiceMacro('CHEGUEI');
+        const tts =
+          'Mensagem de chegada copiada e pronta para enviar ao cliente.';
+        triggerEphemeralOverlayCard({
+          cardCategory: 'MENSAGEM_AMIZADE',
+          commandSpoken: '"Buddy, avisar cliente cheguei"',
+          title: `Auto-Chat Cliente • ${activeScannedOffer.platform}`,
+          subtitle: 'Copiado para Área de Transferência + Injetado no Chat',
+          primaryMetricLabel: 'Mensagem Pronta',
+          primaryMetricValue: chatMsg,
+          secondaryDetails: [
+            'Colado automaticamente na caixa de mensagem do cliente',
+            'Zero digitação manual na chuva ou em andamento',
+          ],
+          spokenTextPtBr: tts,
+        });
+        actionSummary = `${tts} ("${chatMsg}")`;
+      } else if (
+        lower.includes('avisar cliente a caminho') ||
+        lower.includes('cliente a caminho') ||
+        lower.includes('estou a caminho')
+      ) {
+        commandMatched = '"Buddy, avisar cliente a caminho"';
+        const chatMsg = executeCustomerChatVoiceMacro('A_CAMINHO');
+        const tts =
+          'Mensagem a caminho copiada e pronta para enviar ao cliente.';
+        triggerEphemeralOverlayCard({
+          cardCategory: 'MENSAGEM_AMIZADE',
+          commandSpoken: '"Buddy, avisar cliente a caminho"',
+          title: `Auto-Chat Cliente • ${activeScannedOffer.platform}`,
+          subtitle: 'Copiado para Área de Transferência + Injetado no Chat',
+          primaryMetricLabel: 'Mensagem Pronta',
+          primaryMetricValue: chatMsg,
+          secondaryDetails: [
+            'Colado automaticamente na caixa de mensagem do cliente',
+            'Zero digitação manual na chuva ou em andamento',
+          ],
+          spokenTextPtBr: tts,
+        });
+        actionSummary = `${tts} ("${chatMsg}")`;
       } else if (lower.includes('aceitar')) {
-        commandMatched = '"Aceitar pedido"';
+        commandMatched = '"Buddy, aceitar pedido"';
         const gross = activeScannedOffer.grossAmountEur;
         const km = Math.max(0.1, activeScannedOffer.appAnnouncedKm);
         const net = Number(Math.max(0.5, gross - km * totalCostPerKm).toFixed(2));
         const netPerKm = Number((net / km).toFixed(2));
+        triggerNativeOrderButtonClick('ACCEPT', activeScannedOffer.platform);
+        dismissAutoDetectedOfferBanner();
         recordOfferDecision(activeScannedOffer, km, net, netPerKm, 'ACEITE');
-        const tts = `Corrida da ${activeScannedOffer.platform} aceita com sucesso. Cronômetro de coleta na loja iniciado.`;
+        const tts = `Pedido da ${activeScannedOffer.platform} aceite com sucesso. Cronómetro de recolha na loja iniciado.`;
         triggerEphemeralOverlayCard({
           cardCategory: 'STATUS_PEDIDO',
-          commandSpoken: '"Aceitar pedido"',
-          title: `Pedido Aceite • ${activeScannedOffer.platform}`,
+          commandSpoken: '"Buddy, aceitar pedido"',
+          title: `🟢 Pedido Aceite • ${activeScannedOffer.platform}`,
           subtitle: `${activeScannedOffer.originName} → ${activeScannedOffer.destinationName}`,
           primaryMetricLabel: 'Lucro Limpo Estimado',
           primaryMetricValue: `+${net.toFixed(2)} € (${netPerKm.toFixed(2)} €/km)`,
           secondaryDetails: [
+            'Auto-Click nativo executado no botão Aceitar',
             'Etapa 1 iniciada: Aguardar Recolha (Na Loja)',
-            'Estado alterado para: ● Ocupado (Com Pedido)',
           ],
           spokenTextPtBr: tts,
         });
         actionSummary = tts;
       } else if (lower.includes('recusar') || lower.includes('rejeitar')) {
-        commandMatched = '"Recusar pedido"';
+        commandMatched = '"Buddy, recusar pedido"';
         const gross = activeScannedOffer.grossAmountEur;
         const km = Math.max(0.1, activeScannedOffer.appAnnouncedKm);
         const net = Number(Math.max(0.5, gross - km * totalCostPerKm).toFixed(2));
         const netPerKm = Number((net / km).toFixed(2));
+        triggerNativeOrderButtonClick('DECLINE', activeScannedOffer.platform);
+        dismissAutoDetectedOfferBanner();
         recordOfferDecision(activeScannedOffer, km, net, netPerKm, 'RECUSADA');
-        const tts = `Corrida de ${activeScannedOffer.originName} recusada sem tocar na tela.`;
+        const tts = `Pedido de ${activeScannedOffer.originName} recusado sem tocar no ecrã.`;
         triggerEphemeralOverlayCard({
           cardCategory: 'STATUS_PEDIDO',
-          commandSpoken: '"Recusar pedido"',
-          title: `Oferta Recusada • ${activeScannedOffer.platform}`,
+          commandSpoken: '"Buddy, recusar pedido"',
+          title: `🔴 Oferta Recusada • ${activeScannedOffer.platform}`,
           subtitle: activeScannedOffer.originName,
-          primaryMetricLabel: 'Ação Hands-Free',
-          primaryMetricValue: 'Recusada (Toque X Simulado)',
+          primaryMetricLabel: 'Ação Mãos-Livres',
+          primaryMetricValue: 'Recusado (Auto-Click Nativo no Botão X / Recusar)',
           secondaryDetails: [
-            'Você permanece Disponível (Livre) para a próxima oferta',
+            'Permaneces Disponível (Livre) para a próxima oferta',
           ],
           spokenTextPtBr: tts,
         });
@@ -9823,15 +9988,37 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         });
         actionSummary = `${chosen.label} (${chosen.touch})`;
       } else if (
-        lower.includes('aprender tarefa') ||
         lower.includes('ensinar caminho') ||
+        lower.includes('gravar caminho') ||
+        lower.includes('ensinar entrada') ||
+        lower.includes('marcar entrada')
+      ) {
+        commandMatched = '"Buddy, ensinar caminho" (Gravação GPS até à Porta)';
+        setIsBubbleMinimized(false);
+        setCourierWorkspaceSection('AREA_PUBLICA_SOCIAL');
+        setActiveTab('radar');
+        if (typeof window !== 'undefined') {
+          window.setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent('buddy-start-live-path-teaching', {
+                detail: { phrase: clean },
+              })
+            );
+          }, 120);
+        }
+        const tts =
+          'Modo ensinar caminho ativado no Mapa. Conduz até à porta e toca em Concluir e Guardar Caminho.';
+        speakTextPt(tts);
+        actionSummary = tts;
+      } else if (
+        lower.includes('aprender tarefa') ||
         lower.includes('ensinar skill') ||
         lower.includes('aprender skill')
       ) {
-        commandMatched = '"Buddy, aprender tarefa / ensinar caminho" (Modo Gravação IA)';
+        commandMatched = '"Buddy, aprender tarefa / ensinar skill" (Modo Gravação IA)';
         const extractedTask = clean
           .replace(/^(ei\s+)?buddy[,:\s]*/i, '')
-          .replace(/^(aprender\s+tarefa|ensinar\s+caminho|ensinar\s+skill|aprender\s+skill)[:\s]*/i, '')
+          .replace(/^(aprender\s+tarefa|ensinar\s+skill|aprender\s+skill)[:\s]*/i, '')
           .trim();
         const taskTitle =
           extractedTask ||
@@ -9958,10 +10145,16 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         lower === 'oi buddy' ||
         lower === 'ola buddy'
       ) {
-        commandMatched = '"Buddy" (Escuta Mãos-Livres Ativa)';
+        commandMatched = '"Buddy" (Escuta em 2 Passos Ativa — 6s)';
+        playBuddyOpenChime();
+        activateTwoStepWakeWindow(6);
         const tts =
-          'Estou na escuta. Diga clima, minimizar, dividir pedido ou finanças.';
-        speakTextPt(tts);
+          'Estou a ouvir. Diga aceitar pedido, recusar pedido, clima, mapa ou ensinar caminho.';
+        showLiveMicTranscriptFeedback(
+          '🎙️ Estou a ouvir... (6s) — Diga o comando agora!',
+          'Buddy',
+          tts
+        );
         actionSummary = tts;
       } else {
         setEphemeralVoiceOverlay(null);
@@ -10043,13 +10236,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       amaranteLiveWeather.rainMm,
       amaranteLiveWeather.windSpeedKmh,
       triggerAutoDetectedOffer,
+      activateTwoStepWakeWindow,
+      dismissAutoDetectedOfferBanner,
     ]
   );
 
   // =========================================================================
-  // NATIVE ANDROID SPEECH RECOGNIZER BRIDGE + CLEAN WEB SPEECH FALLBACK
-  // Zero getUserMedia hardware mic lock! Uses window.BuddyNativeOverlay.startNativeVoice()
-  // inside the Android .APK and forwards partial/final transcripts via window.onBuddyNativeTranscript.
+  // NATIVE ANDROID SPEECH RECOGNIZER BRIDGE + ALWAYS-ON PHONETIC WAKE-WORD ENGINE
+  // Continuous Auto-Restart Watchdog Loop (120ms restart + 4000ms watchdog)
   // =========================================================================
   const isInputOrModalPausedRef = useRef<boolean>(false);
 
@@ -10093,7 +10287,33 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           : null
       );
 
-      // 2. Normalize transcript (lowercase + strip accents)
+      // 2. Phonetic Wake-Word Matching ("badi", "body", "buri", "bady", "bode", "bad", "barry", "pari", "buddy")
+      const wakeMatch = matchPhoneticWakeWord(
+        latestRaw,
+        state.voiceActivationConfig.customTriggerWord
+      );
+
+      if (wakeMatch.isWakeWordOnly) {
+        const nowWakeMs = Date.now();
+        const lastExec = lastExecutedVoicePhraseRef.current;
+        if (lastExec.phrase === '__wake_only__' && nowWakeMs - lastExec.ts < 1800) {
+          return false;
+        }
+        lastExecutedVoicePhraseRef.current = {
+          phrase: '__wake_only__',
+          ts: nowWakeMs,
+        };
+        playBuddyOpenChime();
+        activateTwoStepWakeWindow(6);
+        showLiveMicTranscriptFeedback(
+          '🎙️ Estou a ouvir... (6s) — Diga o comando agora!',
+          `Wake: "${wakeMatch.matchedVariant || 'Buddy'}"`,
+          'Diga: "Aceitar pedido", "Recusar pedido", "Clima", "Mapa" ou "Ensinar caminho"'
+        );
+        return false;
+      }
+
+      // 3. Normalize transcript (lowercase + strip accents)
       const norm = latestRaw
         .toLowerCase()
         .normalize('NFD')
@@ -10101,7 +10321,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         .trim();
 
       const directInstantIntentRegex =
-        /clima|tempo|chuva|meteorologia|temperatura|graus|minimiz|fechar|esconder|bolinha|maximiz|abrir|mostrar|voltar|ecra|tela|dividir|peso|pesado|quilos|\bkg\b|suporte|finan|ganho|lucro|dinheiro|mapa|zona|onde|radar|comunidade|colega|ajust|config|defin|inicio|home|oferta|noturno|escuro|noite|claro|dia|\bsos\b|emerg|socorro|ajuda|acidente|aceitar|recusar|rejeitar/;
+        /clima|tempo|chuva|meteorologia|temperatura|graus|minimiz|fechar|esconder|bolinha|maximiz|abrir|mostrar|voltar|ecra|tela|dividir|peso|pesado|quilos|\bkg\b|suporte|finan|ganho|lucro|dinheiro|mapa|zona|onde|radar|comunidade|colega|ajust|config|defin|inicio|home|oferta|noturno|escuro|noite|claro|dia|\bsos\b|emerg|socorro|ajuda|acidente|aceitar|recusar|rejeitar|ensinar|caminho|cliente|cheguei|passadeira/;
 
       const hasInstantKeyword = directInstantIntentRegex.test(norm);
       const hasSpokenNumbers =
@@ -10109,7 +10329,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
       const shouldExecuteNow =
         isFinal ||
-        (hasInstantKeyword && norm.length >= 4 && !norm.endsWith('buddy')) ||
+        (hasInstantKeyword &&
+          norm.length >= 4 &&
+          !wakeMatch.isWakeWordOnly) ||
+        (isTwoStepWakeActiveRef.current &&
+          hasInstantKeyword &&
+          norm.length >= 3) ||
         (hasSpokenNumbers && isFinal);
 
       if (shouldExecuteNow) {
@@ -10119,33 +10344,42 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           return false;
         }
         lastExecutedVoicePhraseRef.current = { phrase: norm, ts: nowMs };
-        // Single-shot command recognition: immediately close and release the microphone hardware!
-        keepVoiceListeningRef.current = false;
-        setIsListeningSpeechRecognition(false);
-        if (typeof window !== 'undefined') {
-          const winAny = window as unknown as {
-            BuddyNativeOverlay?: {
-              stopNativeVoice?: () => void;
-              setBubbleListeningState?: (listening: boolean) => void;
+        clearTwoStepWakeWindow();
+
+        const keepAlwaysOn = Boolean(
+          state.voiceActivationConfig.triggerWordEnabled
+        );
+        if (!keepAlwaysOn) {
+          keepVoiceListeningRef.current = false;
+          setIsListeningSpeechRecognition(false);
+          if (typeof window !== 'undefined') {
+            const winAny = window as unknown as {
+              BuddyNativeOverlay?: {
+                stopNativeVoice?: () => void;
+                setBubbleListeningState?: (listening: boolean) => void;
+              };
             };
-          };
-          try {
-            winAny.BuddyNativeOverlay?.stopNativeVoice?.();
-            winAny.BuddyNativeOverlay?.setBubbleListeningState?.(false);
-          } catch {
-            // ignore
+            try {
+              winAny.BuddyNativeOverlay?.stopNativeVoice?.();
+              winAny.BuddyNativeOverlay?.setBubbleListeningState?.(false);
+            } catch {
+              // ignore
+            }
           }
         }
         executeVoiceCommandPt(latestRaw);
         return true;
       }
-      if (isFinal) {
-        keepVoiceListeningRef.current = false;
-        setIsListeningSpeechRecognition(false);
-      }
       return false;
     },
-    [executeVoiceCommandPt, showLiveMicTranscriptFeedback]
+    [
+      activateTwoStepWakeWindow,
+      clearTwoStepWakeWindow,
+      executeVoiceCommandPt,
+      showLiveMicTranscriptFeedback,
+      state.voiceActivationConfig.customTriggerWord,
+      state.voiceActivationConfig.triggerWordEnabled,
+    ]
   );
 
   // Register global window.onBuddyNativeTranscript callback for Native Android SpeechRecognizer
@@ -10183,6 +10417,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const stopContinuousVoiceMic = useCallback(() => {
     keepVoiceListeningRef.current = false;
+    clearTwoStepWakeWindow();
     if (watchdogRestartTimerRef.current !== null) {
       window.clearTimeout(watchdogRestartTimerRef.current);
       watchdogRestartTimerRef.current = null;
@@ -10203,7 +10438,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       }
     }
     setIsListeningSpeechRecognition(false);
-  }, [abortActiveSpeechRecOnly]);
+  }, [abortActiveSpeechRecOnly, clearTwoStepWakeWindow]);
 
   const startContinuousRecognitionInstance = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -10218,8 +10453,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     }
 
     // 1. When window.BuddyNativeOverlay is available (Native Android .APK),
-    // NEVER start webkitSpeechRecognition (which causes a microphone lock conflict).
-    // Route 100% of in-app "🎙️ Falar" taps exclusively through window.BuddyNativeOverlay!
+    // route through window.BuddyNativeOverlay!
     const winAny = window as unknown as {
       BuddyNativeOverlay?: {
         startSingleShotVoice?: () => void;
@@ -10236,7 +10470,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     ) {
       abortActiveSpeechRecOnly();
       try {
-        if (typeof winAny.BuddyNativeOverlay.startSingleShotVoice === 'function') {
+        if (state.voiceActivationConfig.triggerWordEnabled && typeof winAny.BuddyNativeOverlay.startNativeVoice === 'function') {
+          winAny.BuddyNativeOverlay.startNativeVoice();
+        } else if (typeof winAny.BuddyNativeOverlay.startSingleShotVoice === 'function') {
           winAny.BuddyNativeOverlay.startSingleShotVoice();
         } else if (typeof winAny.BuddyNativeOverlay.startNativeVoice === 'function') {
           winAny.BuddyNativeOverlay.startNativeVoice();
@@ -10249,7 +10485,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       return;
     }
 
-    // 2. Web SpeechRecognition (ONLY when running in a standard browser outside the Native APK):
+    // 2. Web SpeechRecognition with Continuous Auto-Restart Watchdog Loop (120ms restart + continuous = true):
     if (activeSpeechRecRef.current) {
       return;
     }
@@ -10259,7 +10495,6 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
 
     if (!SpeechRec || typeof SpeechRec !== 'function') {
-      // Last-resort fallback to legacy startNativeVoice if Web Speech unavailable
       if (typeof winAny.BuddyNativeOverlay?.startNativeVoice === 'function') {
         try {
           winAny.BuddyNativeOverlay.startNativeVoice();
@@ -10297,10 +10532,31 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       })();
 
       recognition.lang = 'pt-PT';
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
       activeSpeechRecRef.current = recognition;
       setIsListeningSpeechRecognition(true);
+
+      const scheduleAutoRestart120ms = () => {
+        if (!keepVoiceListeningRef.current) {
+          setIsListeningSpeechRecognition(false);
+          return;
+        }
+        if (watchdogRestartTimerRef.current !== null) {
+          window.clearTimeout(watchdogRestartTimerRef.current);
+        }
+        watchdogRestartTimerRef.current = window.setTimeout(() => {
+          watchdogRestartTimerRef.current = null;
+          if (
+            keepVoiceListeningRef.current &&
+            !state.isAppPaused &&
+            !isInputOrModalPausedRef.current &&
+            !isSpeakingTtsRef.current
+          ) {
+            startContinuousRecognitionInstanceRef.current();
+          }
+        }, 120);
+      };
 
       recognition.onstart = () => {
         setIsListeningSpeechRecognition(true);
@@ -10316,7 +10572,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         const isFinal = Boolean(latestItem?.isFinal);
 
         const executed = processIncomingVoiceTranscript(latestRaw, isFinal);
-        if (executed) {
+        if (executed && !state.voiceActivationConfig.triggerWordEnabled) {
           keepVoiceListeningRef.current = false;
           setIsListeningSpeechRecognition(false);
           activeSpeechRecRef.current = null;
@@ -10330,52 +10586,80 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
       recognition.onerror = (errEvent) => {
         const errCode = errEvent?.error || '';
-        keepVoiceListeningRef.current = false;
         activeSpeechRecRef.current = null;
-        setIsListeningSpeechRecognition(false);
-        if (
-          (errCode === 'not-allowed' || errCode === 'service-not-allowed') &&
-          typeof winAny.BuddyNativeOverlay?.startNativeVoice === 'function'
-        ) {
-          try {
-            winAny.BuddyNativeOverlay.startNativeVoice();
-            winAny.BuddyNativeOverlay.setBubbleListeningState?.(true);
-            setIsListeningSpeechRecognition(true);
-            return;
-          } catch {
-            // ignore
-          }
-        }
         if (errCode === 'not-allowed' || errCode === 'service-not-allowed') {
+          keepVoiceListeningRef.current = false;
+          setIsListeningSpeechRecognition(false);
+          if (typeof winAny.BuddyNativeOverlay?.startNativeVoice === 'function') {
+            try {
+              winAny.BuddyNativeOverlay.startNativeVoice();
+              winAny.BuddyNativeOverlay.setBubbleListeningState?.(true);
+              setIsListeningSpeechRecognition(true);
+              return;
+            } catch {
+              // ignore
+            }
+          }
           showLiveMicTranscriptFeedback(
             'Microfone bloqueado pelo navegador — permita o acesso no cadeado'
           );
+          return;
         }
+        scheduleAutoRestart120ms();
       };
 
       recognition.onend = () => {
-        keepVoiceListeningRef.current = false;
         activeSpeechRecRef.current = null;
-        setIsListeningSpeechRecognition(false);
+        if (keepVoiceListeningRef.current) {
+          scheduleAutoRestart120ms();
+        } else {
+          setIsListeningSpeechRecognition(false);
+        }
       };
 
       recognition.start();
     } catch {
-      keepVoiceListeningRef.current = false;
       activeSpeechRecRef.current = null;
-      setIsListeningSpeechRecognition(false);
+      if (!keepVoiceListeningRef.current) {
+        setIsListeningSpeechRecognition(false);
+      }
     }
   }, [
+    abortActiveSpeechRecOnly,
     isCourierRegistrationModalOpen,
     processIncomingVoiceTranscript,
     showLiveMicTranscriptFeedback,
     state.isAppPaused,
+    state.voiceActivationConfig.triggerWordEnabled,
   ]);
 
   useEffect(() => {
     startContinuousRecognitionInstanceRef.current =
       startContinuousRecognitionInstance;
   }, [startContinuousRecognitionInstance]);
+
+  // 4000ms Watchdog Interval: revives SpeechRecognition if Android paused it while Escuta Ativa is ON
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const watchdogInterval = window.setInterval(() => {
+      if (
+        keepVoiceListeningRef.current &&
+        !activeSpeechRecRef.current &&
+        !state.isAppPaused &&
+        !isInputOrModalPausedRef.current &&
+        !isSpeakingTtsRef.current
+      ) {
+        try {
+          startContinuousRecognitionInstanceRef.current();
+        } catch {
+          // ignore
+        }
+      }
+    }, 4000);
+    return () => {
+      window.clearInterval(watchdogInterval);
+    };
+  }, [state.isAppPaused]);
 
   const startContinuousVoiceMic = useCallback(() => {
     hasUnlockedMicOnFirstTouchRef.current = true;
@@ -10994,16 +11278,59 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const updateVoiceActivationConfig = useCallback(
     (patch: Partial<VoiceActivationConfig>) => {
-      setState((prev) => ({
-        ...prev,
-        voiceActivationConfig: {
+      setState((prev) => {
+        const nextConfig = {
           ...prev.voiceActivationConfig,
           ...patch,
-        },
-      }));
+        };
+        if (nextConfig.triggerWordEnabled) {
+          keepVoiceListeningRef.current = true;
+          window.setTimeout(() => {
+            startContinuousRecognitionInstanceRef.current();
+          }, 100);
+        } else if (patch.triggerWordEnabled === false) {
+          keepVoiceListeningRef.current = false;
+        }
+        return {
+          ...prev,
+          voiceActivationConfig: nextConfig,
+        };
+      });
     },
     []
   );
+
+  // Automatically arm the Always-On Phonetic Trigger Word Engine ("Buddy") when triggerWordEnabled is ON
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!state.isAuthenticated || state.isAppPaused) return;
+    if (!state.voiceActivationConfig.triggerWordEnabled) return;
+
+    keepVoiceListeningRef.current = true;
+    startContinuousRecognitionInstanceRef.current();
+
+    const unlockOnTouch = () => {
+      if (
+        state.voiceActivationConfig.triggerWordEnabled &&
+        !state.isAppPaused &&
+        !activeSpeechRecRef.current
+      ) {
+        keepVoiceListeningRef.current = true;
+        startContinuousRecognitionInstanceRef.current();
+      }
+    };
+    window.addEventListener('pointerdown', unlockOnTouch, {
+      passive: true,
+      once: true,
+    });
+    return () => {
+      window.removeEventListener('pointerdown', unlockOnTouch);
+    };
+  }, [
+    state.isAuthenticated,
+    state.isAppPaused,
+    state.voiceActivationConfig.triggerWordEnabled,
+  ]);
 
   const startPttHold = useCallback(() => {
     setIsPttActive(true);
@@ -13498,10 +13825,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         lastHeardLiveTranscript,
         lastHeardSpokenText,
         lastExecutedVoiceActionText,
+        isTwoStepWakeActive,
+        twoStepWakeSecondsLeft,
         toggleVoiceMicListening,
         startContinuousVoiceMic,
         stopContinuousVoiceMic,
         autoOfferDetectorEnabled,
+        isAccessibilityDiagnosticOpen,
+        setIsAccessibilityDiagnosticOpen,
         lastAutoDetectedOfferBanner,
         dismissAutoDetectedOfferBanner,
         openAndroidAccessibilitySettings,

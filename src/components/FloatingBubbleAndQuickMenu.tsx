@@ -160,6 +160,8 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
     lastHeardLiveTranscript,
     lastHeardSpokenText,
     lastExecutedVoiceActionText,
+    isTwoStepWakeActive,
+    twoStepWakeSecondsLeft,
     lastAutoDetectedOfferBanner,
     dismissAutoDetectedOfferBanner,
     speakTextPt,
@@ -610,27 +612,59 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
           </div>
         )}
 
-        {/* High-Contrast Auto-Detected Offer Verdict Toast / Banner */}
+        {/* Floating Two-Step Wake Pill ("🎙️ Estou a ouvir...") */}
+        {isTwoStepWakeActive && (
+          <div
+            role="status"
+            aria-live="assertive"
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-full bg-[#090d16]/95 border-2 border-[#00E5FF] px-4 py-1.5 text-xs font-extrabold text-[#00E5FF] shadow-[0_0_24px_rgba(0,229,255,0.65)] flex items-center gap-2 pointer-events-none"
+          >
+            <span className="h-2.5 w-2.5 rounded-full bg-[#00E5FF] animate-ping shrink-0" />
+            <span>
+              🎙️ Estou a ouvir... ({twoStepWakeSecondsLeft}s) • Diga o comando!
+            </span>
+          </div>
+        )}
+
+        {/* High-Contrast Auto-Detected Offer Verdict Toast / Banner (Traffic-Light Verdict 🟢 / 🟡 / 🔴) */}
         {lastAutoDetectedOfferBanner && (
           <div
             role="alert"
             aria-live="assertive"
             className={`fixed top-14 left-1/2 -translate-x-1/2 z-50 w-[94%] max-w-[410px] rounded-2xl p-3.5 shadow-[0_14px_38px_rgba(0,0,0,0.75)] border-2 backdrop-blur-md transition-all ${
-              lastAutoDetectedOfferBanner.passes
+              lastAutoDetectedOfferBanner.trafficLight === 'GREEN_ACCEPT' ||
+              (lastAutoDetectedOfferBanner.passes &&
+                !lastAutoDetectedOfferBanner.trafficLight)
                 ? 'bg-emerald-950/95 border-emerald-400 text-white'
-                : 'bg-rose-950/95 border-rose-400 text-white'
+                : lastAutoDetectedOfferBanner.trafficLight === 'YELLOW_EVALUATE'
+                  ? 'bg-amber-950/95 border-amber-400 text-white'
+                  : 'bg-rose-950/95 border-rose-400 text-white'
             }`}
           >
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <div className="flex items-center gap-1.5">
                 <span
                   className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${
-                    lastAutoDetectedOfferBanner.passes
+                    lastAutoDetectedOfferBanner.trafficLight ===
+                      'GREEN_ACCEPT' ||
+                    (lastAutoDetectedOfferBanner.passes &&
+                      !lastAutoDetectedOfferBanner.trafficLight)
                       ? 'bg-emerald-400 text-slate-950'
-                      : 'bg-rose-400 text-slate-950'
+                      : lastAutoDetectedOfferBanner.trafficLight ===
+                          'YELLOW_EVALUATE'
+                        ? 'bg-amber-400 text-slate-950'
+                        : 'bg-rose-400 text-slate-950'
                   }`}
                 >
-                  ⚡ {lastAutoDetectedOfferBanner.verdictLabel}
+                  {lastAutoDetectedOfferBanner.trafficLight === 'GREEN_ACCEPT'
+                    ? '🟢 ACEITAR'
+                    : lastAutoDetectedOfferBanner.trafficLight ===
+                        'YELLOW_EVALUATE'
+                      ? '🟡 AVALIAR'
+                      : lastAutoDetectedOfferBanner.trafficLight ===
+                          'RED_DECLINE'
+                        ? '🔴 RECUSAR'
+                        : `⚡ ${lastAutoDetectedOfferBanner.verdictLabel}`}
                 </span>
                 <span className="text-[11px] font-extrabold text-zinc-200">
                   {lastAutoDetectedOfferBanner.platform} •{' '}
@@ -681,8 +715,27 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                 </p>
                 <p className="text-sm font-black text-amber-300">
                   {lastAutoDetectedOfferBanner.netEurPerKm.toFixed(2)} €/km
+                  {lastAutoDetectedOfferBanner.netEurPerHour
+                    ? ` • ${lastAutoDetectedOfferBanner.netEurPerHour.toFixed(0)}€/h`
+                    : ''}
                 </p>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => executeVoiceCommandPt('Buddy aceitar pedido')}
+                className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-1.5 px-2.5 text-[11px] font-black cursor-pointer transition"
+              >
+                🟢 Aceitar (&ldquo;Buddy aceitar&rdquo;)
+              </button>
+              <button
+                type="button"
+                onClick={() => executeVoiceCommandPt('Buddy recusar pedido')}
+                className="rounded-xl bg-rose-600 hover:bg-rose-500 text-white py-1.5 px-2.5 text-[11px] font-black cursor-pointer transition"
+              >
+                🔴 Recusar (&ldquo;Buddy recusar&rdquo;)
+              </button>
             </div>
           </div>
         )}
@@ -1374,8 +1427,8 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
           {renderEphemeralVoiceOverlayCard()}
         </div>
 
-        {/* Live Transcript Feedback Pill near the Floating DB Bubble */}
-        {lastHeardLiveTranscript && (
+        {/* Live Transcript Feedback Pill or Two-Step Wake Pill near the Floating DB Bubble */}
+        {(isTwoStepWakeActive || lastHeardLiveTranscript) && (
           <div
             style={{
               top: `${Math.max(12, bubblePositions.logo.y - 44)}px`,
@@ -1388,7 +1441,9 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
           >
             <span className="h-2 w-2 rounded-full bg-[#00E5FF] animate-ping shrink-0" />
             <span className="truncate">
-              🎙️ Ouvido: &ldquo;{lastHeardLiveTranscript}&rdquo;
+              {isTwoStepWakeActive
+                ? `🎙️ Estou a ouvir... (${twoStepWakeSecondsLeft}s)`
+                : `🎙️ Ouvido: "${lastHeardLiveTranscript}"`}
             </span>
           </div>
         )}

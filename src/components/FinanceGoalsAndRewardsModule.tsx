@@ -15,6 +15,8 @@ import {
 import { useEstafetas } from '../context/EstafetasContext';
 import { PlatformFilterScope, PlatformName } from '../types/models';
 import { insertAiSkillLogToSupabaseRest } from '../services/geminiAgent';
+import { learnFromScannedOrderSample } from '../services/orderScreenLearner';
+import { publishLearnedOrderTemplateToCloud } from '../services/cloudSync';
 
 export interface ArchivedCompleteDeliveryRecord {
   id: string;
@@ -533,8 +535,21 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
             'Pizzaria Tâmega Amarante • Cliente: Ref. #4829'
           );
         }
+        const updatedTemplates = learnFromScannedOrderSample({
+          platform: targetPlatformForManualLog,
+          grossEur: parseFloat(manualGrossEur) || 5.5,
+          distanceKm: parseFloat(manualDistanceKm) || 2.8,
+          estimatedMinutes: parseInt(manualMinutes, 10) || 15,
+          originName: manualRestaurant.trim() || 'Pizzaria Tâmega Amarante',
+          destinationName:
+            manualFullAddress.trim() || 'Av. General Silveira, Amarante',
+        });
+        const learnedTpl = updatedTemplates[targetPlatformForManualLog];
+        if (learnedTpl) {
+          void publishLearnedOrderTemplateToCloud(learnedTpl);
+        }
         setOcrStatusNotice(
-          '✨ Foto/Print anexada! Dados de morada, restaurante e valores pré-preenchidos (pode editar abaixo).'
+          '✨ Foto/Print calibrada no Buddy! Dados de morada, restaurante e valores pré-preenchidos e template sincronizado.'
         );
       };
       img.src = rawDataUrl;

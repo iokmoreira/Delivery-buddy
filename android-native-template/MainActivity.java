@@ -1050,6 +1050,16 @@ public class MainActivity extends BridgeActivity {
             || norm.contains("onde")
             || norm.contains("radar")
             || norm.contains("buddy")
+            || norm.contains("badi")
+            || norm.contains("body")
+            || norm.contains("buri")
+            || norm.contains("bady")
+            || norm.contains("bode")
+            || norm.contains("barry")
+            || norm.contains("pari")
+            || norm.contains("ensinar caminho")
+            || norm.contains("avisar cliente")
+            || norm.contains("estatisticas")
             || norm.contains("comunidade")
             || norm.contains("colega")
             || norm.contains("ajust")
@@ -1701,7 +1711,18 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public boolean isAutoOfferDetectorEnabled() {
-            return BuddyOfferDetectorService.isServiceRunning();
+            return BuddyAccessibilityService.isServiceRunning()
+                || BuddyOfferDetectorService.isServiceRunning();
+        }
+
+        @JavascriptInterface
+        public boolean performNativeOrderAction(final String action, final int xPct, final int yPct) {
+            return BuddyAccessibilityService.performOrderActionStatic(action, xPct, yPct);
+        }
+
+        @JavascriptInterface
+        public boolean injectCustomerChatMessage(final String message) {
+            return BuddyAccessibilityService.injectCustomerChatMessageStatic(MainActivity.this, message);
         }
 
         @JavascriptInterface

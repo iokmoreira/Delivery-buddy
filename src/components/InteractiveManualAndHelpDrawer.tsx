@@ -75,8 +75,13 @@ import {
 } from './AuthAndVerificationGate';
 import {
   getCourierContactAndOptInPreferences,
+  publishLearnedOrderTemplateToCloud,
   saveCourierContactAndOptInPreferences,
 } from '../services/cloudSync';
+import {
+  learnFromScannedOrderSample,
+  loadLearnedPlatformTemplates,
+} from '../services/orderScreenLearner';
 
 const VEHICLE_OPTIONS: CourierRegistrationVehicle[] = [
   'Mota 125cc',
@@ -1616,7 +1621,38 @@ export const MenuMaisHubView: React.FC = () => {
     bubbleRestingPreset,
     setBubbleRestingPreset,
     aiAgentConfig,
+    isAccessibilityDiagnosticOpen,
+    setIsAccessibilityDiagnosticOpen,
+    triggerAutoDetectedOffer,
   } = useEstafetas();
+
+  const [learnedTemplatesState, setLearnedTemplatesState] = useState(() =>
+    loadLearnedPlatformTemplates()
+  );
+  const [calibPlatform, setCalibPlatform] = useState<PlatformName>('Glovo');
+  const [calibAcceptYRatio, setCalibAcceptYRatio] = useState<number>(0.88);
+  const [calibRejectYRatio, setCalibRejectYRatio] = useState<number>(0.14);
+  const [calibStatusMsg, setCalibStatusMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const refreshTemplates = () => {
+      const latest = loadLearnedPlatformTemplates();
+      setLearnedTemplatesState(latest);
+      if (latest[calibPlatform]?.acceptButtonBounds) {
+        setCalibAcceptYRatio(latest[calibPlatform].acceptButtonBounds.yRatio);
+      }
+      if (latest[calibPlatform]?.rejectButtonBounds) {
+        setCalibRejectYRatio(latest[calibPlatform].rejectButtonBounds.yRatio);
+      }
+    };
+    refreshTemplates();
+    window.addEventListener('buddy-order-template-updated', refreshTemplates);
+    return () =>
+      window.removeEventListener(
+        'buddy-order-template-updated',
+        refreshTemplates
+      );
+  }, [calibPlatform, isAccessibilityDiagnosticOpen]);
 
   const mascotFileInputRef = useRef<HTMLInputElement | null>(null);
   const chromeBridgeAnchorRef = useRef<HTMLAnchorElement | null>(null);
@@ -3183,6 +3219,7 @@ export const MenuMaisHubView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
+                  setIsAccessibilityDiagnosticOpen(true);
                   const winAny = window as unknown as {
                     BuddyNativeOverlay?: {
                       openAccessibilitySettings?: () => void;
@@ -3193,19 +3230,15 @@ export const MenuMaisHubView: React.FC = () => {
                     'function'
                   ) {
                     winAny.BuddyNativeOverlay.openAccessibilitySettings();
-                  } else {
-                    speakTextPt(
-                      'Ative o serviço Delivery Buddy nas definições de Acessibilidade do Android para leitura automática de pedidos.'
-                    );
                   }
                 }}
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
                 <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                  📱 Auto-Detetor de Pedidos
+                  📱 Auto-Detetor de Pedidos (Glovo / Uber / Bolt)
                 </span>
                 <span className="rounded bg-emerald-500/15 border border-emerald-500/35 px-2 py-0.5 text-xs font-bold text-emerald-300 shrink-0">
-                  Configurar
+                  Configurar &amp; Calibrar
                 </span>
               </button>
 
@@ -3310,6 +3343,220 @@ export const MenuMaisHubView: React.FC = () => {
         isOpen={isHubSelectorModalOpen}
         onClose={() => setIsHubSelectorModalOpen(false)}
       />
+
+      {/* INTERACTIVE ACCESSIBILITY ORDER READER & SELF-LEARNING CALIBRATION MODAL */}
+      {isAccessibilityDiagnosticOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs overflow-y-auto"
+          onClick={() => setIsAccessibilityDiagnosticOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+              borderColor: '#00E5FF',
+              color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+            }}
+            className="w-full max-w-md rounded-3xl border-2 p-5 shadow-2xl space-y-3.5 my-auto"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider text-[#00E5FF] block">
+                  AccessibilityService + Self-Learning
+                </span>
+                <h3
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                  }}
+                  className="text-base font-black tracking-tight mt-0.5"
+                >
+                  📱 Auto-Detetor &amp; Calibração de Ecrã
+                </h3>
+                <p
+                  style={{
+                    color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+                  }}
+                  className="text-xs font-bold mt-0.5"
+                >
+                  Monitoriza <code className="text-[#00B8D4]">Glovo Rider</code>,{' '}
+                  <code className="text-[#00B8D4]">Uber Driver</code> e{' '}
+                  <code className="text-[#00B8D4]">Bolt Food</code> em Portugal
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAccessibilityDiagnosticOpen(false)}
+                className="h-8 w-8 rounded-full border border-[#00E5FF]/40 flex items-center justify-center cursor-pointer shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* 1. Open Native Android Accessibility Settings */}
+            <button
+              type="button"
+              onClick={() => {
+                const winAny = window as unknown as {
+                  BuddyNativeOverlay?: {
+                    openAccessibilitySettings?: () => void;
+                  };
+                };
+                if (
+                  typeof winAny.BuddyNativeOverlay?.openAccessibilitySettings ===
+                  'function'
+                ) {
+                  winAny.BuddyNativeOverlay.openAccessibilitySettings();
+                } else {
+                  setCalibStatusMsg(
+                    'ℹ️ Em telemóvel Android (.APK instalado), este botão abre diretamente Definições → Acessibilidade → Delivery Buddy.'
+                  );
+                }
+              }}
+              className="w-full rounded-2xl bg-[#00E5FF] text-[#090D16] py-3 px-4 text-xs font-black flex items-center justify-between cursor-pointer shadow-md"
+            >
+              <span>⚙️ Abrir Acessibilidade do Android (Ativar Serviço)</span>
+              <ChevronRight className="h-4 w-4 text-[#090D16]" />
+            </button>
+
+            {/* 2. Platform Selector & Pre-Trained / Self-Learned Templates */}
+            <div
+              style={{
+                backgroundColor:
+                  themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#090D16',
+                borderColor: 'rgba(0, 229, 255, 0.35)',
+              }}
+              className="rounded-2xl border p-3.5 space-y-2.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-black text-[#00E5FF]">
+                  🧠 Ensinar Tela / Calibrar Botões por App
+                </span>
+                <span className="text-[10px] font-extrabold text-emerald-400">
+                  {learnedTemplatesState[calibPlatform]?.learnedSamplesCount ||
+                    1}{' '}
+                  amostras
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['Glovo', 'Uber Eats', 'Bolt Food'] as PlatformName[]).map(
+                  (plat) => {
+                    const active = calibPlatform === plat;
+                    return (
+                      <button
+                        key={plat}
+                        type="button"
+                        onClick={() => setCalibPlatform(plat)}
+                        style={{
+                          backgroundColor: active ? '#00E5FF' : '#111827',
+                          borderColor: active ? '#00E5FF' : '#27272a',
+                          color: active ? '#090D16' : '#E2E8F0',
+                        }}
+                        className="rounded-xl border py-1.5 px-2 text-xs font-black cursor-pointer transition"
+                      >
+                        {plat}
+                      </button>
+                    );
+                  }
+                )}
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <div>
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span>
+                      Posição Vertical Botão &ldquo;Aceitar&rdquo; (Auto-Click):
+                    </span>
+                    <span className="text-[#00E5FF] font-black">
+                      {Math.round(calibAcceptYRatio * 100)}% do ecrã
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.65"
+                    max="0.96"
+                    step="0.01"
+                    value={calibAcceptYRatio}
+                    onChange={(e) =>
+                      setCalibAcceptYRatio(Number(e.target.value))
+                    }
+                    className="w-full accent-[#00E5FF] cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span>
+                      Posição Vertical Botão &ldquo;Recusar&rdquo; (Auto-Click):
+                    </span>
+                    <span className="text-rose-400 font-black">
+                      {Math.round(calibRejectYRatio * 100)}% do ecrã
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.06"
+                    max="0.45"
+                    step="0.01"
+                    value={calibRejectYRatio}
+                    onChange={(e) =>
+                      setCalibRejectYRatio(Number(e.target.value))
+                    }
+                    className="w-full accent-rose-500 cursor-pointer"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = learnFromScannedOrderSample({
+                      platform: calibPlatform,
+                      grossEur: 6.4,
+                      distanceKm: 2.3,
+                      estimatedMinutes: 14,
+                      acceptButtonXY: { xRatio: 0.5, yRatio: calibAcceptYRatio },
+                      rejectButtonXY: {
+                        xRatio: 0.84,
+                        yRatio: calibRejectYRatio,
+                      },
+                    });
+                    setLearnedTemplatesState(updated);
+                    if (updated[calibPlatform]) {
+                      void publishLearnedOrderTemplateToCloud(
+                        updated[calibPlatform]
+                      );
+                    }
+                    setCalibStatusMsg(
+                      `✅ Calibração de ${calibPlatform} guardada e sincronizada na Cloud!`
+                    );
+                  }}
+                  className="w-full rounded-xl border border-[#00E5FF] bg-[#00E5FF]/15 text-[#00E5FF] py-2 text-xs font-black cursor-pointer"
+                >
+                  💾 Guardar Calibração de {calibPlatform} na Cloud
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Test Real-Time Order Screen Reader & Traffic-Light Verdict */}
+            <button
+              type="button"
+              onClick={() => {
+                triggerAutoDetectedOffer(6.8, 2.4, calibPlatform);
+                setIsAccessibilityDiagnosticOpen(false);
+              }}
+              className="w-full rounded-2xl border-2 border-emerald-400 bg-emerald-500/20 text-emerald-300 py-2.5 px-3 text-xs font-black cursor-pointer text-center"
+            >
+              ⚡ Testar Leitura &amp; Veredito Semáforo (🟢 ACEITAR / 🟡 / 🔴)
+            </button>
+
+            {calibStatusMsg && (
+              <p className="text-[11px] font-extrabold text-[#00E5FF] text-center">
+                {calibStatusMsg}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

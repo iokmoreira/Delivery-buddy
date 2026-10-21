@@ -10,6 +10,27 @@ export interface AmaranteCrosswalkPoint {
   createdAtIso?: string;
 }
 
+export interface AmaranteLearnedPath {
+  id: string;
+  streetOrBuildingLabel?: string;
+  addressTitle?: string;
+  addressLabel?: string;
+  entranceNote: string;
+  breadcrumbs: Array<{ lat: number; lng: number }>;
+  entryLat?: number;
+  entryLng?: number;
+  doorLat?: number;
+  doorLng?: number;
+  entranceLat?: number;
+  entranceLng?: number;
+  lat?: number;
+  lng?: number;
+  taughtByCallsign?: string;
+  taughtByCourierName?: string;
+  taughtBy?: string;
+  createdAtIso: string;
+}
+
 export interface DeliverySpeedRealitySummary {
   id: string;
   platform: string;
@@ -43,7 +64,70 @@ export interface LiveCopilotSpeedState {
 const CUSTOM_CROSSWALKS_STORAGE_KEY = 'buddy_amarante_custom_crosswalks_v1';
 const OVERPASS_CROSSWALKS_CACHE_KEY = 'buddy_amarante_overpass_crosswalks_v1';
 const DELETED_CROSSWALKS_STORAGE_KEY = 'buddy_amarante_deleted_crosswalk_ids_v1';
+const LEARNED_PATHS_STORAGE_KEY = 'buddy_amarante_learned_paths_v1';
 const LAST_DELIVERY_REALITY_SUMMARY_KEY = 'buddy_last_delivery_reality_summary_v1';
+
+export const SEED_AMARANTE_LEARNED_PATHS: AmaranteLearnedPath[] = [
+  {
+    id: 'path-amarante-tamega-1',
+    streetOrBuildingLabel: 'Condomínio Rio Tâmega / Av. General Silveira',
+    addressTitle: 'Condomínio Rio Tâmega / Av. General Silveira',
+    addressLabel: 'Condomínio Rio Tâmega / Av. General Silveira',
+    entranceNote: 'Entrada pelo portão lateral junto ao Rio Tâmega (campainha no pilar direito).',
+    breadcrumbs: [
+      { lat: 41.2694, lng: -8.0789 },
+      { lat: 41.2691, lng: -8.0785 },
+      { lat: 41.2689, lng: -8.0782 },
+    ],
+    entryLat: 41.2694,
+    entryLng: -8.0789,
+    doorLat: 41.2689,
+    doorLng: -8.0782,
+    entranceLat: 41.2689,
+    entranceLng: -8.0782,
+    lat: 41.2689,
+    lng: -8.0782,
+    taughtByCallsign: 'Presidente',
+    taughtByCourierName: 'Presidente',
+    taughtBy: 'Presidente',
+    createdAtIso: '2026-10-20T18:00:00.000Z',
+  },
+];
+
+export const loadLearnedAmarantePaths = (): AmaranteLearnedPath[] => {
+  try {
+    const raw = localStorage.getItem(LEARNED_PATHS_STORAGE_KEY);
+    if (!raw) return SEED_AMARANTE_LEARNED_PATHS;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return SEED_AMARANTE_LEARNED_PATHS;
+    const combined = [...parsed];
+    SEED_AMARANTE_LEARNED_PATHS.forEach((seed) => {
+      if (!combined.some((p) => p && p.id === seed.id)) {
+        combined.push(seed);
+      }
+    });
+    return combined;
+  } catch {
+    return SEED_AMARANTE_LEARNED_PATHS;
+  }
+};
+
+export const saveLearnedAmarantePath = (
+  pathItem: AmaranteLearnedPath
+): AmaranteLearnedPath[] => {
+  const existing = loadLearnedAmarantePaths();
+  const filtered = existing.filter((p) => p.id !== pathItem.id);
+  const next = [pathItem, ...filtered].slice(0, 60);
+  try {
+    localStorage.setItem(LEARNED_PATHS_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('buddy-learned-paths-updated'));
+  }
+  return next;
+};
 
 // Built-in seed list of key Amarante pedestrian crosswalks (Av. General Silveira, São Gonçalo, Santa Luzia, Freixo de Cima, EN15)
 export const SEED_AMARANTE_CROSSWALKS: AmaranteCrosswalkPoint[] = [

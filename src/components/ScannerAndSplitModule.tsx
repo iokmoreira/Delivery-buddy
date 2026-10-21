@@ -24,6 +24,8 @@ import {
   buildSurgicalOfferStreetTts,
   stopBuddySpeech,
 } from '../services/voiceEngine';
+import { learnFromScannedOrderSample } from '../services/orderScreenLearner';
+import { publishLearnedOrderTemplateToCloud } from '../services/cloudSync';
 
 export const ScannerAndSplitModule: React.FC = () => {
   const {
@@ -526,6 +528,21 @@ export const ScannerAndSplitModule: React.FC = () => {
       id: `UPLOAD-${Date.now()}`,
     };
     selectOfferPreset(uploadedOffer);
+
+    // Self-Learning Visual Calibration: train platform template and sync to Amarante cloud
+    const updatedTemplates = learnFromScannedOrderSample({
+      platform: uploadedOffer.platform,
+      grossEur: uploadedOffer.grossAmountEur,
+      distanceKm: uploadedOffer.appAnnouncedKm,
+      estimatedMinutes: uploadedOffer.estimatedMinutes,
+      originName: uploadedOffer.originName,
+      destinationName: uploadedOffer.destinationName,
+    });
+    const learnedTemplate = updatedTemplates[uploadedOffer.platform];
+    if (learnedTemplate) {
+      void publishLearnedOrderTemplateToCloud(learnedTemplate);
+    }
+
     const netProfit = Math.max(
       0.4,
       uploadedOffer.grossAmountEur - uploadedOffer.appAnnouncedKm * 0.16

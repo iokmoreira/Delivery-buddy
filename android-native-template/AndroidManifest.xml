@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Required on Android 11-16 (API 30+) so SpeechRecognizer and TextToSpeech can bind to system services -->
+    <!-- Required on Android 11-16 (API 30+) so SpeechRecognizer, TextToSpeech and AccessibilityService can bind to target courier apps -->
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
@@ -12,10 +12,13 @@
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
-        <package android:name="com.ubercab.driver" />
+        <package android:name="com.glovo.rider" />
+        <package android:name="com.glovoapp.rider" />
         <package android:name="com.glovo.courier" />
         <package android:name="com.glovo" />
+        <package android:name="com.ubercab.driver" />
         <package android:name="ee.mtakso.driver" />
+        <package android:name="com.bolt.delivery" />
     </queries>
 
     <!-- Network & WebView OTA -->
@@ -26,7 +29,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.REORDER_TASKS" />
 
-    <!-- On-Demand Microphone & Native SpeechRecognizer ("Buddy...") -->
+    <!-- On-Demand & Trigger-Word Microphone & Native SpeechRecognizer ("Buddy...") -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
@@ -73,12 +76,27 @@
             android:exported="false"
             android:foregroundServiceType="location|microphone" />
 
-        <!-- Native Automatic Incoming Offer Detector (Uber Eats / Glovo / Bolt Food) -->
+        <!-- Primary Native AccessibilityService: Pre-Trained & Self-Learning Order Reader + Auto-Clicker (Glovo / Uber / Bolt) -->
+        <service
+            android:name=".BuddyAccessibilityService"
+            android:enabled="true"
+            android:exported="true"
+            android:label="Delivery Buddy — Auto-Leitor &amp; Copiloto de Pedidos"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Legacy Alias Service for Backward Compatibility -->
         <service
             android:name=".BuddyOfferDetectorService"
             android:enabled="true"
             android:exported="true"
-            android:label="Delivery Buddy — Auto-Detetor de Ofertas"
+            android:label="Delivery Buddy — Detetor Secundário"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

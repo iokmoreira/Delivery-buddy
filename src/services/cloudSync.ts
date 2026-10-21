@@ -8,7 +8,16 @@ import {
   WalkieChannelId,
   WalkieMessage,
 } from '../types/models';
-import { AmaranteCrosswalkPoint } from '../utils/amaranteCopilotTelemetry';
+import {
+  AmaranteCrosswalkPoint,
+  AmaranteLearnedPath,
+  saveLearnedAmarantePath,
+} from '../utils/amaranteCopilotTelemetry';
+import {
+  PlatformScreenTemplate,
+  loadLearnedPlatformTemplates,
+  saveLearnedPlatformTemplates,
+} from './orderScreenLearner';
 
 export const FLEET_SYNC_TOPIC = 'db_amarante_fleet_v3';
 export const LIVE_SYNC_TOPIC = 'db_amarante_fleet_v3';
@@ -122,7 +131,9 @@ type CloudPacketType =
   | 'ROAD_HAZARD'
   | 'COURIER_LOGOUT'
   | 'ADMIN_NOTIFICATION'
-  | 'ADMIN_CONFIG_SYNC';
+  | 'ADMIN_CONFIG_SYNC'
+  | 'LEARNED_PATH_TAUGHT'
+  | 'ORDER_TEMPLATE_TAUGHT';
 
 interface CloudSyncEnvelope {
   v?: 2;
@@ -833,6 +844,46 @@ export function removeCrosswalkFromCloud(crosswalkId: string): void {
   }
 }
 
+export async function publishLearnedPathToCloud(
+  learnedPath: AmaranteLearnedPath,
+  senderId = 'local_device'
+): Promise<void> {
+  if (!learnedPath || !learnedPath.id) return;
+  saveLearnedAmarantePath(learnedPath);
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
+    v: 2,
+    type: 'LEARNED_PATH_TAUGHT',
+    senderId,
+    ts: Date.now(),
+    timestamp: Date.now(),
+    payload: {
+      ...learnedPath,
+      breadcrumbs: Array.isArray(learnedPath.breadcrumbs)
+        ? learnedPath.breadcrumbs.slice(-28)
+        : [],
+    },
+  });
+}
+
+export async function publishLearnedOrderTemplateToCloud(
+  template: PlatformScreenTemplate,
+  senderId = 'local_device'
+): Promise<void> {
+  if (!template || !template.platform) return;
+  const templates = loadLearnedPlatformTemplates();
+  templates[template.platform] = template;
+  saveLearnedPlatformTemplates(templates);
+
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
+    v: 2,
+    type: 'ORDER_TEMPLATE_TAUGHT',
+    senderId,
+    ts: Date.now(),
+    timestamp: Date.now(),
+    payload: template,
+  });
+}
+
 export async function publishWalkieMessageToCloud(
   msg: WalkieMessage,
   senderId = 'local_device'
@@ -1210,6 +1261,40 @@ function ingestEnvelope(
         !inMemoryCloudState.crosswalks[cw.id]
       ) {
         inMemoryCloudState.crosswalks[cw.id] = cw;
+        stateChanged = true;
+      }
+      break;
+    }
+
+    case 'LEARNED_PATH_TAUGHT': {
+      const path = envelope.payload as AmaranteLearnedPath;
+      if (
+        path &&
+        path.id &&
+        typeof path.entranceLat === 'number' &&
+        typeof path.entranceLng === 'number'
+      ) {
+        saveLearnedAmarantePath(path);
+        if (typeof window !== 'undefined') {
+          try {
+            window.dispatchEvent(
+              new CustomEvent('buddy-learned-path-synced', { detail: path })
+            );
+          } catch {
+            // ignore
+          }
+        }
+        stateChanged = true;
+      }
+      break;
+    }
+
+    case 'ORDER_TEMPLATE_TAUGHT': {
+      const tpl = envelope.payload as PlatformScreenTemplate;
+      if (tpl && tpl.platform) {
+        const templates = loadLearnedPlatformTemplates();
+        templates[tpl.platform] = tpl;
+        saveLearnedPlatformTemplates(templates);
         stateChanged = true;
       }
       break;

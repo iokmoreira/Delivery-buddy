@@ -18,6 +18,7 @@ import {
 import { useEstafetas } from '../context/EstafetasContext';
 import {
   AmaranteCrosswalkPoint,
+  AmaranteLearnedPath,
   computeBearingDegrees,
   computeHaversineMeters,
   deleteCrosswalkById,
@@ -25,15 +26,18 @@ import {
   fetchAmaranteCrosswalksFromOverpass,
   getAllAmaranteCrosswalks,
   getAngleDifferenceDeg,
+  loadLearnedAmarantePaths,
   recordLiveSpeedSampleForDelivery,
   resolveRoadSpeedLimitAtCoords,
   saveCustomTaughtCrosswalk,
+  saveLearnedAmarantePath,
 } from '../utils/amaranteCopilotTelemetry';
 import { playBuddyOpenChime } from '../services/voiceEngine';
 import {
   CloudApprovalRequest,
   computeSameLocationPinOffset,
   loadCloudSharedState,
+  publishLearnedPathToCloud,
   publishTaughtCrosswalkToCloud,
   removeCrosswalkFromCloud,
   subscribeToCloudSharedState,
@@ -746,6 +750,24 @@ export const ShiftRadarModule: React.FC = () => {
   const [isMarkMapModalOpen, setIsMarkMapModalOpen] = useState<boolean>(false);
   const [selectedCrosswalkForInspect, setSelectedCrosswalkForInspect] =
     useState<AmaranteCrosswalkPoint | null>(null);
+  const [learnedPaths, setLearnedPaths] = useState<AmaranteLearnedPath[]>(() =>
+    loadLearnedAmarantePaths()
+  );
+  const [isRecordingLearnedPath, setIsRecordingLearnedPath] =
+    useState<boolean>(false);
+  const isRecordingLearnedPathRef = useRef<boolean>(false);
+  const [recordedPathBreadcrumbs, setRecordedPathBreadcrumbs] = useState<
+    Array<{ lat: number; lng: number }>
+  >([]);
+  const [isSaveLearnedPathModalOpen, setIsSaveLearnedPathModalOpen] =
+    useState<boolean>(false);
+  const [learnedPathAddressInput, setLearnedPathAddressInput] =
+    useState<string>('');
+  const [learnedPathNoteInput, setLearnedPathNoteInput] = useState<string>(
+    'Entrada pelo portão lateral junto ao Rio Tâmega'
+  );
+  const [selectedLearnedPathForInspect, setSelectedLearnedPathForInspect] =
+    useState<AmaranteLearnedPath | null>(null);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
@@ -757,6 +779,8 @@ export const ShiftRadarModule: React.FC = () => {
     Map<string, { marker: L.Marker; signature: string }>
   >(new Map());
   const crosswalksLayerRef = useRef<L.LayerGroup | null>(null);
+  const learnedPathsLayerRef = useRef<L.LayerGroup | null>(null);
+  const learnedPathAlertCooldownRef = useRef<Record<string, number>>({});
   const isAutoFollowRef = useRef<boolean>(true);
   const hasCenteredOnFirstFixRef = useRef<boolean>(false);
   const hasHighAccuracyFixRef = useRef<boolean>(false);
@@ -1022,10 +1046,168 @@ export const ShiftRadarModule: React.FC = () => {
         computedBearing
       );
 
+      // If recording a learned GPS path ("Buddy, ensinar caminho"), append breadcrumb
+      if (isRecordingLearnedPathRef.current) {
+        setRecordedPathBreadcrumbs((prevCrumbs) => {
+          const lastPt = prevCrumbs[prevCrumbs.length - 1];
+          if (
+            lastPt &&
+            computeHaversineMeters(
+              lastPt.lat,
+              lastPt.lng,
+              nextCoords.lat,
+              nextCoords.lng
+            ) < 4
+          ) {
+            return prevCrumbs;
+          }
+          return [...prevCrumbs.slice(-45), nextCoords];
+        });
+      }
+
+      // Check proximity (<= 60m) to any learned entrance path in Amarante
+      const nowPathMs = Date.now();
+      for (const path of learnedPaths) {
+        const pLat = path.entranceLat ?? path.doorLat ?? path.lat ?? 41.2689;
+        const pLng = path.entranceLng ?? path.doorLng ?? path.lng ?? -8.0782;
+        const pTitle =
+          path.addressTitle ||
+          path.addressLabel ||
+          path.streetOrBuildingLabel ||
+          'Morada Amarante';
+        const distToDoor = computeHaversineMeters(
+          nextCoords.lat,
+          nextCoords.lng,
+          pLat,
+          pLng
+        );
+        if (distToDoor <= 60) {
+          const lastSpoken = learnedPathAlertCooldownRef.current[path.id] || 0;
+          if (nowPathMs - lastSpoken > 180000) {
+            learnedPathAlertCooldownRef.current[path.id] = nowPathMs;
+            setCrosswalkFeedbackBanner(
+              `🚪 ${pTitle}: ${path.entranceNote}`
+            );
+            window.setTimeout(() => {
+              setCrosswalkFeedbackBanner(null);
+            }, 6500);
+            speakTextPt(
+              `Entrada ensinada para ${pTitle}: ${path.entranceNote}`
+            );
+          }
+          break;
+        }
+      }
+
       return nextCoords;
     },
-    [animateMarkerGlideTo, evaluateCrosswalkProximity]
+    [
+      animateMarkerGlideTo,
+      evaluateCrosswalkProximity,
+      learnedPaths,
+      speakTextPt,
+    ]
   );
+
+  const handleStartLearnedPathRecording = useCallback(() => {
+    const startPt =
+      lastAcceptedCoordsRef.current ||
+      localLiveCoords || {
+        lat: AMARANTE_INITIAL_VIEW_CENTER.lat,
+        lng: AMARANTE_INITIAL_VIEW_CENTER.lng,
+      };
+    isRecordingLearnedPathRef.current = true;
+    setIsRecordingLearnedPath(true);
+    setRecordedPathBreadcrumbs([startPt]);
+    setIsMarkMapModalOpen(false);
+    setLearnedPathAddressInput(roadNameLabel || 'Amarante Centro');
+    setLearnedPathNoteInput('Entrada pelo portão lateral junto ao Rio Tâmega');
+    setCrosswalkFeedbackBanner(
+      '🧭 A gravar caminho GPS até à porta... Conduz até à entrada e toca em Concluir!'
+    );
+  }, [localLiveCoords, roadNameLabel]);
+
+  const handleOpenSaveLearnedPathModal = useCallback(() => {
+    const endPt =
+      lastAcceptedCoordsRef.current ||
+      localLiveCoords || {
+        lat: AMARANTE_INITIAL_VIEW_CENTER.lat,
+        lng: AMARANTE_INITIAL_VIEW_CENTER.lng,
+      };
+    setRecordedPathBreadcrumbs((prev) =>
+      prev.length > 0 ? [...prev, endPt] : [endPt]
+    );
+    if (!learnedPathAddressInput.trim()) {
+      setLearnedPathAddressInput(roadNameLabel || 'Amarante Centro');
+    }
+    setIsSaveLearnedPathModalOpen(true);
+  }, [learnedPathAddressInput, localLiveCoords, roadNameLabel]);
+
+  const handleSaveLearnedPathNow = useCallback(() => {
+    const endPt =
+      lastAcceptedCoordsRef.current ||
+      localLiveCoords || {
+        lat: AMARANTE_INITIAL_VIEW_CENTER.lat,
+        lng: AMARANTE_INITIAL_VIEW_CENTER.lng,
+      };
+    const courierName = (realCourierProfile?.name || 'Buddy Amarante').trim();
+    const cleanTitle = (learnedPathAddressInput || roadNameLabel || 'Amarante')
+      .trim();
+    const cleanNote =
+      learnedPathNoteInput.trim() ||
+      'Entrada pelo portão lateral junto ao Rio Tâmega';
+
+    const newPath: AmaranteLearnedPath = {
+      id: `path-amarante-${Date.now()}`,
+      addressTitle: cleanTitle,
+      entranceNote: cleanNote,
+      entranceLat: Number(endPt.lat.toFixed(6)),
+      entranceLng: Number(endPt.lng.toFixed(6)),
+      breadcrumbs:
+        recordedPathBreadcrumbs.length > 0
+          ? recordedPathBreadcrumbs
+          : [
+              {
+                lat: Number((endPt.lat - 0.0003).toFixed(6)),
+                lng: Number((endPt.lng - 0.0003).toFixed(6)),
+              },
+              {
+                lat: Number(endPt.lat.toFixed(6)),
+                lng: Number(endPt.lng.toFixed(6)),
+              },
+            ],
+      taughtByCallsign: courierName,
+      createdAtIso: new Date().toISOString(),
+    };
+
+    const updatedList = saveLearnedAmarantePath(newPath);
+    setLearnedPaths(updatedList);
+    void publishLearnedPathToCloud(newPath, realCourierProfile?.id || 'local');
+    awardBuddyRewardTask('ALERTAR_ANOMALIA_MAPA_15');
+
+    isRecordingLearnedPathRef.current = false;
+    setIsRecordingLearnedPath(false);
+    setIsSaveLearnedPathModalOpen(false);
+    setCrosswalkFeedbackBanner(
+      `✓ Caminho e entrada guardados: ${cleanTitle} (+15 Coins • Sincronizado na Cloud)`
+    );
+    window.setTimeout(() => {
+      setCrosswalkFeedbackBanner(null);
+    }, 5500);
+    speakTextPt(
+      `Caminho e entrada para ${cleanTitle} guardados e sincronizados com todos os Buddys de Amarante.`
+    );
+  }, [
+    awardBuddyRewardTask,
+    learnedPathAddressInput,
+    learnedPathNoteInput,
+    localLiveCoords,
+    realCourierProfile?.id,
+    realCourierProfile?.name,
+    recordedPathBreadcrumbs,
+    roadNameLabel,
+    speakTextPt,
+  ]);
 
   // Load Amarante crosswalks (Seed + Overpass API + Custom Taught)
   useEffect(() => {
@@ -1168,17 +1350,44 @@ export const ShiftRadarModule: React.FC = () => {
     const onVoiceMarkCrosswalk = () => {
       setIsMarkMapModalOpen(true);
     };
+    const onStartLivePathTeaching = () => {
+      handleStartLearnedPathRecording();
+    };
+    const onLearnedPathsSynced = () => {
+      setLearnedPaths(loadLearnedAmarantePaths());
+    };
     window.addEventListener(
       'buddy-voice-mark-crosswalk',
       onVoiceMarkCrosswalk
+    );
+    window.addEventListener(
+      'buddy-start-live-path-teaching',
+      onStartLivePathTeaching
+    );
+    window.addEventListener('buddy-learned-path-synced', onLearnedPathsSynced);
+    window.addEventListener(
+      'buddy-learned-paths-updated',
+      onLearnedPathsSynced
     );
     return () => {
       window.removeEventListener(
         'buddy-voice-mark-crosswalk',
         onVoiceMarkCrosswalk
       );
+      window.removeEventListener(
+        'buddy-start-live-path-teaching',
+        onStartLivePathTeaching
+      );
+      window.removeEventListener(
+        'buddy-learned-path-synced',
+        onLearnedPathsSynced
+      );
+      window.removeEventListener(
+        'buddy-learned-paths-updated',
+        onLearnedPathsSynced
+      );
     };
-  }, []);
+  }, [handleStartLearnedPathRecording]);
 
   // Strict 20-Second Continuous Over-Speed Monitor (> roadLimit + 10 km/h)
   // Resets immediately to 0s if speed drops below roadLimit + 10 km/h (freedom for overtakes)
@@ -1525,6 +1734,7 @@ export const ShiftRadarModule: React.FC = () => {
     }).addTo(map);
 
     const crosswalksLayer = L.layerGroup().addTo(map);
+    const learnedPathsLayer = L.layerGroup().addTo(map);
     const peerLayer = L.layerGroup().addTo(map);
 
     // Immediately pause auto-follow on any user touch/drag/zoom so the map NEVER snaps back while panning
@@ -1559,6 +1769,7 @@ export const ShiftRadarModule: React.FC = () => {
     leafletMapRef.current = map;
     tileLayerRef.current = tileLayer;
     crosswalksLayerRef.current = crosswalksLayer;
+    learnedPathsLayerRef.current = learnedPathsLayer;
     peerMarkersLayerRef.current = peerLayer;
     setMapZoom(map.getZoom());
 
@@ -1588,6 +1799,7 @@ export const ShiftRadarModule: React.FC = () => {
       selfMarkerRef.current = null;
       selfAccuracyCircleRef.current = null;
       crosswalksLayerRef.current = null;
+      learnedPathsLayerRef.current = null;
       peerMarkersLayerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1689,6 +1901,89 @@ export const ShiftRadarModule: React.FC = () => {
       marker.addTo(cwLayer);
     });
   }, [amaranteCrosswalks, mapZoom]);
+
+  // Render Learned Amarante Shortcuts & Entrance Paths + Live Recording Breadcrumbs
+  useEffect(() => {
+    const lpLayer = learnedPathsLayerRef.current;
+    if (!lpLayer) return;
+    lpLayer.clearLayers();
+
+    // Render live recording breadcrumbs if active
+    if (isRecordingLearnedPath && recordedPathBreadcrumbs.length > 0) {
+      if (recordedPathBreadcrumbs.length >= 2) {
+        L.polyline(
+          recordedPathBreadcrumbs.map((pt) => [pt.lat, pt.lng] as [number, number]),
+          {
+            color: '#00E5FF',
+            weight: 4,
+            dashArray: '6 4',
+            opacity: 0.95,
+          }
+        ).addTo(lpLayer);
+      }
+      const latestPt = recordedPathBreadcrumbs[recordedPathBreadcrumbs.length - 1];
+      const recIcon = L.divIcon({
+        className: 'buddy-learned-rec-pin',
+        html: `<div style="transform:translate(-50%,-50%);background:#090D16;color:#00E5FF;border:2px solid #00E5FF;border-radius:9999px;padding:2px 7px;font-size:10px;font-weight:900;white-space:nowrap;box-shadow:0 0 12px rgba(0,229,255,0.6);">🧭 A gravar (${recordedPathBreadcrumbs.length} pts)</div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+      L.marker([latestPt.lat, latestPt.lng], { icon: recIcon }).addTo(lpLayer);
+    }
+
+    if (mapZoom < 15) return;
+
+    learnedPaths.forEach((path) => {
+      if (Array.isArray(path.breadcrumbs) && path.breadcrumbs.length >= 2) {
+        L.polyline(
+          path.breadcrumbs.map((pt) => [pt.lat, pt.lng] as [number, number]),
+          {
+            color: '#00B8D4',
+            weight: 3,
+            dashArray: '5 5',
+            opacity: 0.85,
+          }
+        ).addTo(lpLayer);
+      }
+
+      const pLat = path.entranceLat ?? path.doorLat ?? path.lat ?? 41.2689;
+      const pLng = path.entranceLng ?? path.doorLng ?? path.lng ?? -8.0782;
+      const pLabel =
+        path.addressLabel ||
+        path.addressTitle ||
+        path.streetOrBuildingLabel ||
+        'Morada Ensinada';
+      const pTeacher =
+        path.taughtBy || path.taughtByCallsign || path.taughtByCourierName || 'Buddy';
+
+      const pathIcon = L.divIcon({
+        className: 'buddy-learned-path-pin',
+        html: `<div title="${pLabel}: ${path.entranceNote}" style="display:flex;align-items:center;gap:4px;transform:translate(-50%,-50%);background:#090D16;color:#00E5FF;border:1.5px solid #00E5FF;border-radius:9999px;padding:2px 7px;font-size:10px;font-weight:900;white-space:nowrap;box-shadow:0 0 10px rgba(0,229,255,0.45);cursor:pointer;">
+          <span>🧭</span>
+          <span style="max-width:110px;overflow:hidden;text-overflow:ellipsis;">${pLabel}</span>
+        </div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      const marker = L.marker([pLat, pLng], { icon: pathIcon });
+      marker.on('click', () => {
+        setCrosswalkFeedbackBanner(
+          `🧭 ${pLabel}: "${path.entranceNote}" (por ${pTeacher})`
+        );
+        speakTextPt(
+          `Acesso ensinado em ${pLabel}: ${path.entranceNote}`
+        );
+      });
+      marker.addTo(lpLayer);
+    });
+  }, [
+    learnedPaths,
+    mapZoom,
+    isRecordingLearnedPath,
+    recordedPathBreadcrumbs,
+    speakTextPt,
+  ]);
 
   // Update logged-in user's real GPS marker with the Dynamic 3-State Robot Mascot, Heading Cone & Gliding
   useEffect(() => {
@@ -2377,6 +2672,42 @@ export const ShiftRadarModule: React.FC = () => {
           </div>
         )}
 
+        {/* LIVE GPS PATH LEARNING RECORDING HUD BAR ("Buddy, ensinar caminho") */}
+        {isRecordingLearnedPath && (
+          <div className="absolute top-14 left-3 right-16 z-[460] flex flex-wrap items-center justify-between gap-2 rounded-2xl border-2 border-[#00E5FF] bg-[#090D16]/95 px-3.5 py-2.5 text-white shadow-[0_0_22px_rgba(0,229,255,0.55)]">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#00E5FF] animate-ping shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-black text-[#00E5FF] truncate">
+                  🧭 A Gravar Caminho GPS ({recordedPathBreadcrumbs.length} pts)
+                </p>
+                <p className="text-[10px] font-bold text-zinc-300 truncate">
+                  Conduz até à entrada certa e toca em Guardar
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleOpenSaveLearnedPathModal}
+                className="rounded-xl bg-[#00E5FF] text-[#090D16] px-3 py-1.5 text-[11px] font-black cursor-pointer shadow-md"
+              >
+                💾 Guardar Caminho
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRecordingLearnedPath(false);
+                  setRecordedPathBreadcrumbs([]);
+                }}
+                className="rounded-xl border border-rose-500/60 bg-rose-950/60 text-rose-200 px-2.5 py-1.5 text-[11px] font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* WAZE-STYLE SPEEDOMETER & ROAD LIMIT HUD (Positioned cleanly at bottom: 20px inside map container) */}
         <div
           style={{ bottom: '20px', left: '12px' }}
@@ -2558,7 +2889,24 @@ export const ShiftRadarModule: React.FC = () => {
                   </span>
                 </button>
 
-                {/* Option 2: Report Road Hazard */}
+                {/* Option 2: Live Route & Entrance Learning ("Buddy, ensinar caminho") */}
+                <button
+                  type="button"
+                  onClick={handleStartLearnedPathRecording}
+                  style={{
+                    backgroundColor: isDaylight ? '#ECFEFF' : '#091520',
+                    borderColor: '#00E5FF',
+                    color: isDaylight ? '#090D16' : '#00E5FF',
+                  }}
+                  className="w-full rounded-2xl border-2 px-4 py-3 text-left font-black text-xs flex items-center justify-between cursor-pointer transition active:scale-98"
+                >
+                  <span>🧭 Ensinar Caminho / Entrada GPS (&quot;Buddy, ensinar caminho&quot;)</span>
+                  <span className="text-[11px] font-extrabold bg-[#00E5FF]/20 px-2 py-0.5 rounded-full">
+                    +25 Coins
+                  </span>
+                </button>
+
+                {/* Option 3: Report Road Hazard */}
                 <button
                   type="button"
                   onClick={handleReportRoadHazardHere}
@@ -2572,7 +2920,7 @@ export const ShiftRadarModule: React.FC = () => {
                   <span>⚠️ Reportar Perigo na Via (Obras / Buraco / Acidente)</span>
                 </button>
 
-                {/* Option 3: Delete Last Crosswalk Marked by Mistake */}
+                {/* Option 4: Delete Last Crosswalk Marked by Mistake */}
                 <button
                   type="button"
                   onClick={handleDeleteLatestCrosswalk}
@@ -2586,7 +2934,7 @@ export const ShiftRadarModule: React.FC = () => {
                   <span>🗑️ Apagar Última Passadeira Marcada por Engano</span>
                 </button>
 
-                {/* Option 4: Cancel */}
+                {/* Option 5: Cancel */}
                 <button
                   type="button"
                   onClick={() => setIsMarkMapModalOpen(false)}
@@ -2598,6 +2946,124 @@ export const ShiftRadarModule: React.FC = () => {
                 >
                   ✕ Cancelar
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SAVE LEARNED GPS PATH & ENTRANCE NOTE MODAL */}
+        {isSaveLearnedPathModalOpen && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs"
+            onClick={() => setIsSaveLearnedPathModalOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: isDaylight ? '#FFFFFF' : '#0B0F17',
+                borderColor: '#00E5FF',
+                color: isDaylight ? '#090D16' : '#FFFFFF',
+              }}
+              className="w-full max-w-sm rounded-3xl border-2 p-5 shadow-2xl space-y-3.5"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3
+                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
+                    className="text-base font-black tracking-tight"
+                  >
+                    🧭 Guardar Caminho & Entrada
+                  </h3>
+                  <p
+                    style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
+                    className="text-xs font-bold mt-0.5"
+                  >
+                    Partilhado na Cloud com todos os estafetas de Amarante
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSaveLearnedPathModalOpen(false)}
+                  className="h-8 w-8 rounded-full border border-[#00E5FF]/40 flex items-center justify-center cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-wider text-[#00B8D4] block mb-1">
+                    Morada / Condomínio / Restaurante
+                  </label>
+                  <input
+                    type="text"
+                    value={learnedPathAddressInput}
+                    onChange={(e) => setLearnedPathAddressInput(e.target.value)}
+                    placeholder="Ex: Urb. Quinta de S. Gonçalo Bloco C"
+                    style={{
+                      backgroundColor: isDaylight ? '#F8FAFC' : '#090D16',
+                      borderColor: '#00E5FF',
+                      color: isDaylight ? '#090D16' : '#FFFFFF',
+                    }}
+                    className="w-full rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-wider text-[#00B8D4] block mb-1">
+                    Nota de Entrada / Atalho (Falada pelo Buddy)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={learnedPathNoteInput}
+                    onChange={(e) => setLearnedPathNoteInput(e.target.value)}
+                    placeholder="Ex: Entrada pelo portão lateral junto ao Rio Tâmega. Campainha à direita."
+                    style={{
+                      backgroundColor: isDaylight ? '#F8FAFC' : '#090D16',
+                      borderColor: '#00E5FF',
+                      color: isDaylight ? '#090D16' : '#FFFFFF',
+                    }}
+                    className="w-full rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Entrada pelo portão lateral junto ao Rio Tâmega',
+                    'Entrar pelas traseiras (rampa de garagem)',
+                    'Subir escadas laterais para evitar rua bloqueada',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setLearnedPathNoteInput(preset)}
+                      className="rounded-lg border border-[#00E5FF]/40 bg-[#00E5FF]/10 px-2 py-1 text-[10px] font-bold text-[#00B8D4] cursor-pointer text-left"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSaveLearnedPathNow}
+                    className="flex-1 rounded-2xl bg-[#00E5FF] text-[#090D16] py-2.5 text-xs font-black cursor-pointer shadow-md"
+                  >
+                    💾 Guardar & Sincronizar (+25 Coins)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsSaveLearnedPathModalOpen(false)}
+                    style={{
+                      backgroundColor: isDaylight ? '#F1F5F9' : '#1E293B',
+                      color: isDaylight ? '#334155' : '#CBD5E1',
+                    }}
+                    className="rounded-2xl px-4 py-2.5 text-xs font-black cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
             </div>
           </div>
