@@ -1621,6 +1621,8 @@ export const MenuMaisHubView: React.FC = () => {
     bubbleRestingPreset,
     setBubbleRestingPreset,
     aiAgentConfig,
+    autoOfferDetectorEnabled,
+    toggleAutoOfferDetectorEnabled,
     isAccessibilityDiagnosticOpen,
     setIsAccessibilityDiagnosticOpen,
     triggerAutoDetectedOffer,
@@ -3219,26 +3221,28 @@ export const MenuMaisHubView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setIsAccessibilityDiagnosticOpen(true);
-                  const winAny = window as unknown as {
-                    BuddyNativeOverlay?: {
-                      openAccessibilitySettings?: () => void;
-                    };
-                  };
-                  if (
-                    typeof winAny.BuddyNativeOverlay?.openAccessibilitySettings ===
-                    'function'
-                  ) {
-                    winAny.BuddyNativeOverlay.openAccessibilitySettings();
+                  if (!autoOfferDetectorEnabled) {
+                    toggleAutoOfferDetectorEnabled();
                   }
+                  setIsAccessibilityDiagnosticOpen(true);
+                  speakTextPt(
+                    'Auto-Detetor de Pedidos ativo para Uber Eats, Glovo e Bolt Food.'
+                  );
                 }}
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                  📱 Auto-Detetor de Pedidos (Glovo / Uber / Bolt)
-                </span>
-                <span className="rounded bg-emerald-500/15 border border-emerald-500/35 px-2 py-0.5 text-xs font-bold text-emerald-300 shrink-0">
-                  Configurar &amp; Calibrar
+                <div className="flex flex-col">
+                  <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
+                    📱 Auto-Detetor de Pedidos (Acessibilidade)
+                  </span>
+                  <span className="text-[11px] font-bold text-emerald-400">
+                    {autoOfferDetectorEnabled
+                      ? 'Estado: ATIVO 🟢 (Uber, Glovo & Bolt)'
+                      : 'Estado: INATIVO ⚪ — Toque para ativar'}
+                  </span>
+                </div>
+                <span className="rounded bg-[#00E5FF] px-2.5 py-1 text-xs font-black text-slate-950 shrink-0 shadow-xs">
+                  Configurar
                 </span>
               </button>
 
@@ -3361,8 +3365,10 @@ export const MenuMaisHubView: React.FC = () => {
           >
             <div className="flex items-start justify-between gap-2">
               <div>
-                <span className="text-[11px] font-black uppercase tracking-wider text-[#00E5FF] block">
-                  AccessibilityService + Self-Learning
+                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400 block">
+                  {autoOfferDetectorEnabled
+                    ? 'Estado: ATIVO 🟢 • Multi-Modo Embutido'
+                    : 'Estado: PAUSADO ⚪'}
                 </span>
                 <h3
                   style={{
@@ -3370,7 +3376,7 @@ export const MenuMaisHubView: React.FC = () => {
                   }}
                   className="text-base font-black tracking-tight mt-0.5"
                 >
-                  📱 Auto-Detetor &amp; Calibração de Ecrã
+                  📱 Auto-Detetor de Pedidos: Uber, Glovo &amp; Bolt
                 </h3>
                 <p
                   style={{
@@ -3392,31 +3398,108 @@ export const MenuMaisHubView: React.FC = () => {
               </button>
             </div>
 
-            {/* 1. Open Native Android Accessibility Settings */}
+            {/* Toggle Switch: Deteção Automática em Tempo Real: ON 🟢 */}
+            <button
+              type="button"
+              onClick={toggleAutoOfferDetectorEnabled}
+              style={{
+                backgroundColor:
+                  themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#090D16',
+                borderColor: autoOfferDetectorEnabled ? '#10B981' : '#475569',
+              }}
+              className="w-full rounded-2xl border-2 p-3.5 flex items-center justify-between gap-2 cursor-pointer transition"
+            >
+              <div className="text-left">
+                <div className="text-xs font-black">
+                  Deteção Automática em Tempo Real:{' '}
+                  <span
+                    className={
+                      autoOfferDetectorEnabled
+                        ? 'text-emerald-400'
+                        : 'text-slate-400'
+                    }
+                  >
+                    {autoOfferDetectorEnabled ? 'ON 🟢' : 'OFF ⚪'}
+                  </span>
+                </div>
+                <div className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                  Lê valor (€), km e calcula lucro limpo + semáforo em{' '}
+                  {'<100ms'}
+                </div>
+              </div>
+              <span
+                className={`rounded-xl px-3 py-1 text-xs font-black shrink-0 ${
+                  autoOfferDetectorEnabled
+                    ? 'bg-emerald-500 text-slate-950'
+                    : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                {autoOfferDetectorEnabled ? 'ON 🟢' : 'OFF'}
+              </span>
+            </button>
+
+            {/* Button 1: ⚡ Simular Pedido Agora (Teste Real) */}
             <button
               type="button"
               onClick={() => {
-                const winAny = window as unknown as {
-                  BuddyNativeOverlay?: {
-                    openAccessibilitySettings?: () => void;
-                  };
-                };
-                if (
-                  typeof winAny.BuddyNativeOverlay?.openAccessibilitySettings ===
-                  'function'
-                ) {
-                  winAny.BuddyNativeOverlay.openAccessibilitySettings();
-                } else {
-                  setCalibStatusMsg(
-                    'ℹ️ Em telemóvel Android (.APK instalado), este botão abre diretamente Definições → Acessibilidade → Delivery Buddy.'
-                  );
+                if (!autoOfferDetectorEnabled) {
+                  toggleAutoOfferDetectorEnabled();
                 }
+                triggerAutoDetectedOffer(6.8, 2.4, calibPlatform);
+                setIsAccessibilityDiagnosticOpen(false);
               }}
-              className="w-full rounded-2xl bg-[#00E5FF] text-[#090D16] py-3 px-4 text-xs font-black flex items-center justify-between cursor-pointer shadow-md"
+              className="w-full rounded-2xl border-2 border-emerald-400 bg-emerald-500 text-slate-950 py-3 px-4 text-xs font-black cursor-pointer text-center shadow-[0_6px_20px_rgba(16,185,129,0.35)]"
             >
-              <span>⚙️ Abrir Acessibilidade do Android (Ativar Serviço)</span>
-              <ChevronRight className="h-4 w-4 text-[#090D16]" />
+              ⚡ Simular Pedido Agora (Teste Real • 🟢 ACEITAR + Voz 1.1x)
             </button>
+
+            {/* Button 2: ⚙️ Abrir Acessibilidade do Android + 2-Line Samsung Restricted Settings Tip */}
+            <div
+              style={{
+                backgroundColor:
+                  themeMode === 'DAYLIGHT' ? '#F8FAFC' : '#090D16',
+                borderColor: 'rgba(0, 229, 255, 0.35)',
+              }}
+              className="rounded-2xl border p-3 space-y-2"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  const winAny = window as unknown as {
+                    BuddyNativeOverlay?: {
+                      openAccessibilitySettings?: () => void;
+                    };
+                  };
+                  if (
+                    typeof winAny.BuddyNativeOverlay
+                      ?.openAccessibilitySettings === 'function'
+                  ) {
+                    winAny.BuddyNativeOverlay.openAccessibilitySettings();
+                  } else {
+                    setCalibStatusMsg(
+                      'ℹ️ Em telemóvel Android (.APK instalado), este botão abre diretamente Definições → Acessibilidade → Aplicações instaladas → Delivery Buddy.'
+                    );
+                  }
+                }}
+                className="w-full rounded-xl bg-[#00E5FF] text-[#090D16] py-2.5 px-3.5 text-xs font-black flex items-center justify-between cursor-pointer shadow-sm"
+              >
+                <span>⚙️ Abrir Acessibilidade do Android</span>
+                <ChevronRight className="h-4 w-4 text-[#090D16]" />
+              </button>
+              <p
+                style={{
+                  color: themeMode === 'DAYLIGHT' ? '#334155' : '#CBD5E1',
+                }}
+                className="text-[11px] font-bold leading-snug"
+              >
+                💡 <strong>No Samsung:</strong> Definições &rarr; Aplicações
+                &rarr; Delivery Buddy &rarr; 3 pontos no topo &rarr;{' '}
+                <span className="text-[#00E5FF] font-black">
+                  Permitir definições restritas
+                </span>
+                .
+              </p>
+            </div>
 
             {/* 2. Platform Selector & Pre-Trained / Self-Learned Templates */}
             <div

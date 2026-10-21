@@ -518,11 +518,26 @@ export const AdminBackofficeModule: React.FC = () => {
     return true;
   });
 
-  const liveOnlineCount = Math.max(
-    1,
-    onlineDirectoryCouriers.length,
-    unifiedCloudAndLocalAccounts.length + deduplicatedAdminCouriers.length
-  );
+  const liveOnlineCount = React.useMemo(() => {
+    const nowMs = Date.now();
+    const activeNames = new Set<string>();
+    if (realCourierProfile?.name?.trim()) {
+      activeNames.add(normalizeCourierNameKey(realCourierProfile.name));
+    }
+    onlineDirectoryCouriers.forEach((c) => {
+      const k = normalizeCourierNameKey(c.callsign);
+      if (!k) return;
+      if (c.isSelfProfile) {
+        activeNames.add(k);
+        return;
+      }
+      const seenMs = c.updatedAtIso ? Date.parse(c.updatedAtIso) : 0;
+      if (seenMs > 0 && nowMs - seenMs <= 90 * 1000) {
+        activeNames.add(k);
+      }
+    });
+    return Math.max(1, activeNames.size);
+  }, [onlineDirectoryCouriers, realCourierProfile?.name]);
   const totalRegisteredCount = Math.max(
     1,
     unifiedCloudAndLocalAccounts.length + deduplicatedAdminCouriers.length

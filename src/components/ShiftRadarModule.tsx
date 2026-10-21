@@ -794,6 +794,12 @@ export const ShiftRadarModule: React.FC = () => {
     localLiveCoords
   );
   const currentSpeedRef = useRef<number>(0);
+  const lastMovingSpeedKmhRef = useRef<number>(0);
+  const lastMovingSpeedAtMsRef = useRef<number>(0);
+  const lastSpecificRoadNameRef = useRef<{ name: string; atMs: number }>({
+    name: '',
+    atMs: 0,
+  });
   const roadLimitRef = useRef<30 | 50 | 70 | 90>(50);
   const consecutiveOverSecRef = useRef<number>(0);
   const lastSpeedVoiceAlertMsRef = useRef<number>(0);
@@ -968,10 +974,16 @@ export const ShiftRadarModule: React.FC = () => {
           lat,
           lng
         );
-        const dtSec = Math.max(0.5, (nowMs - lastFixTimestampMsRef.current) / 1000);
+        const dtSec = Math.max(
+          0.4,
+          (nowMs - lastFixTimestampMsRef.current) / 1000
+        );
 
-        if (distMeters >= 3 && dtSec <= 25) {
-          computedDeltaKmh = Math.min(135, Math.round((distMeters / dtSec) * 3.6));
+        if (distMeters >= 2 && dtSec <= 25) {
+          computedDeltaKmh = Math.min(
+            135,
+            Math.round((distMeters / dtSec) * 3.6)
+          );
           if (computedBearing === null) {
             computedBearing = Math.round(
               computeBearingDegrees(prev.lat, prev.lng, lat, lng)
@@ -979,16 +991,32 @@ export const ShiftRadarModule: React.FC = () => {
           }
         }
 
-        // 6-meter minimum movement filter (deadband) to prevent stationary pin jitter
-        if (!forceAccept && distMeters < 6) {
-          if (
+        // Minimum movement deadband to prevent stationary pin jitter while preserving 4-second speed hold
+        if (!forceAccept && distMeters < 4) {
+          const rawGpsKmh =
             typeof rawSpeedMetersPerSec === 'number' &&
             Number.isFinite(rawSpeedMetersPerSec) &&
-            rawSpeedMetersPerSec >= 0
-          ) {
-            const gpsKmh = Math.round(rawSpeedMetersPerSec * 3.6);
-            currentSpeedRef.current = gpsKmh < 3 ? 0 : gpsKmh;
-            setCurrentSpeedKmh(currentSpeedRef.current);
+            rawSpeedMetersPerSec > 0
+              ? Math.round(rawSpeedMetersPerSec * 3.6)
+              : 0;
+          if (rawGpsKmh >= 3) {
+            const smoothed =
+              lastMovingSpeedKmhRef.current > 3
+                ? Math.round(
+                    0.65 * rawGpsKmh + 0.35 * lastMovingSpeedKmhRef.current
+                  )
+                : rawGpsKmh;
+            lastMovingSpeedKmhRef.current = smoothed;
+            lastMovingSpeedAtMsRef.current = nowMs;
+            currentSpeedRef.current = smoothed;
+            setCurrentSpeedKmh(smoothed);
+          } else if (nowMs - lastMovingSpeedAtMsRef.current < 4000) {
+            // 4-Second Speed Hold: never drop to 0 KM/H on intermediate GPS ticks while driving!
+            currentSpeedRef.current = lastMovingSpeedKmhRef.current;
+            setCurrentSpeedKmh(lastMovingSpeedKmhRef.current);
+          } else {
+            currentSpeedRef.current = 0;
+            setCurrentSpeedKmh(0);
           }
           return null;
         }
@@ -996,16 +1024,44 @@ export const ShiftRadarModule: React.FC = () => {
 
       lastFixTimestampMsRef.current = nowMs;
 
-      const resolvedSpeedKmh =
+      const rawSensorKmh =
         typeof rawSpeedMetersPerSec === 'number' &&
         Number.isFinite(rawSpeedMetersPerSec) &&
-        rawSpeedMetersPerSec >= 0
+        rawSpeedMetersPerSec > 0
           ? Math.round(rawSpeedMetersPerSec * 3.6)
-          : computedDeltaKmh !== null
-            ? computedDeltaKmh
-            : currentSpeedRef.current;
+          : 0;
 
-      const cleanSpeedKmh = resolvedSpeedKmh < 3 ? 0 : resolvedSpeedKmh;
+      // Combine native coords.speed with Haversine velocity fallback (distanceMeters / elapsedSeconds * 3.6)
+      const candidateMovingKmh =
+        rawSensorKmh >= 3
+          ? computedDeltaKmh !== null && computedDeltaKmh > rawSensorKmh * 1.35
+            ? Math.round(0.6 * rawSensorKmh + 0.4 * computedDeltaKmh)
+            : rawSensorKmh
+          : computedDeltaKmh !== null && computedDeltaKmh >= 3
+            ? computedDeltaKmh
+            : 0;
+
+      let cleanSpeedKmh = 0;
+      if (candidateMovingKmh >= 3) {
+        cleanSpeedKmh =
+          lastMovingSpeedKmhRef.current > 3 &&
+          nowMs - lastMovingSpeedAtMsRef.current < 6000
+            ? Math.round(
+                0.7 * candidateMovingKmh + 0.3 * lastMovingSpeedKmhRef.current
+              )
+            : candidateMovingKmh;
+        lastMovingSpeedKmhRef.current = cleanSpeedKmh;
+        lastMovingSpeedAtMsRef.current = nowMs;
+      } else if (
+        lastMovingSpeedKmhRef.current > 3 &&
+        nowMs - lastMovingSpeedAtMsRef.current < 4000
+      ) {
+        // Hold last moving speed for 4 full seconds before decaying to 0 KM/H
+        cleanSpeedKmh = lastMovingSpeedKmhRef.current;
+      } else {
+        cleanSpeedKmh = 0;
+      }
+
       currentSpeedRef.current = cleanSpeedKmh;
       setCurrentSpeedKmh(cleanSpeedKmh);
 
@@ -1029,12 +1085,34 @@ export const ShiftRadarModule: React.FC = () => {
         setLiveAccuracyMeters(Math.min(80, Math.max(6, accuracy)));
       }
 
-      // Query dynamic road speed limit (Overpass maxspeed + Amarante urban/EN15 heuristic)
+      // Query dynamic road speed limit (Overpass maxspeed + Amarante urban/EN15/N312 heuristic)
+      // Protect locked street name (e.g. EM 312 / N312) from generic fallback overwrites while driving
       void resolveRoadSpeedLimitAtCoords(nextCoords.lat, nextCoords.lng).then(
         (res) => {
-          roadLimitRef.current = res.limit;
-          setRoadLimitKmh(res.limit);
-          setRoadNameLabel(res.roadName);
+          const isGenericFallback =
+            !res.roadName ||
+            res.roadName === 'Amarante Centro Urbano' ||
+            res.roadName.startsWith('Amarante Centro');
+          if (!isGenericFallback) {
+            lastSpecificRoadNameRef.current = {
+              name: res.roadName,
+              atMs: Date.now(),
+            };
+            roadLimitRef.current = res.limit;
+            setRoadLimitKmh(res.limit);
+            setRoadNameLabel(res.roadName);
+          } else if (
+            lastSpecificRoadNameRef.current.name &&
+            (currentSpeedRef.current > 5 ||
+              Date.now() - lastSpecificRoadNameRef.current.atMs < 30000)
+          ) {
+            // Keep locked road name (e.g. EM 312 / N312) while moving
+            setRoadNameLabel(lastSpecificRoadNameRef.current.name);
+          } else {
+            roadLimitRef.current = res.limit;
+            setRoadLimitKmh(res.limit);
+            setRoadNameLabel(res.roadName);
+          }
         }
       );
 
@@ -1389,10 +1467,22 @@ export const ShiftRadarModule: React.FC = () => {
     };
   }, [handleStartLearnedPathRecording]);
 
-  // Strict 20-Second Continuous Over-Speed Monitor (> roadLimit + 10 km/h)
+  // Strict 20-Second Continuous Over-Speed Monitor (> roadLimit + 10 km/h) + 4-Second Stationary Speed Decay
   // Resets immediately to 0s if speed drops below roadLimit + 10 km/h (freedom for overtakes)
   useEffect(() => {
     const ticker = window.setInterval(() => {
+      const nowMs = Date.now();
+      // Decay speed to 0 KM/H ONLY after 4 full seconds (4000ms) with no movement (< 2m)
+      if (
+        currentSpeedRef.current > 0 &&
+        lastMovingSpeedAtMsRef.current > 0 &&
+        nowMs - lastMovingSpeedAtMsRef.current >= 4000
+      ) {
+        currentSpeedRef.current = 0;
+        lastMovingSpeedKmhRef.current = 0;
+        setCurrentSpeedKmh(0);
+      }
+
       const spd = currentSpeedRef.current;
       const lim = roadLimitRef.current;
 
@@ -1438,9 +1528,11 @@ export const ShiftRadarModule: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync from context when real device GPS updates (through 10m deadband filter)
+  // Seed initial position from context ONLY if no direct GPS fix has been accepted yet
+  // (Never let context updates without speed overwrite live moving speed or road name!)
   useEffect(() => {
     if (
+      !lastAcceptedCoordsRef.current &&
       realCourierProfile?.gpsSource === 'LIVE_GPS' &&
       Number.isFinite(realCourierProfile.lat) &&
       Number.isFinite(realCourierProfile.lng)
@@ -1620,10 +1712,11 @@ export const ShiftRadarModule: React.FC = () => {
     };
   }, []);
 
-  // Show all active peer couriers (within last 2 hours, excluding only self UUID and legacy mock rows)
+  // Show ONLY truly active online peer couriers (strict 90-second heartbeat TTL, never offline accounts)
   const activePeerCouriers = useMemo(() => {
     const nowMs = Date.now();
     const myId = realCourierProfile?.id || '';
+    const cloudSnap = loadCloudSharedState();
 
     return onlineDirectoryCouriers.filter((c) => {
       if (c.isSelfProfile || (myId && c.id === myId)) return false;
@@ -1636,11 +1729,20 @@ export const ShiftRadarModule: React.FC = () => {
       ) {
         return false;
       }
+      const cloudEntry = cloudSnap.couriers?.[c.id];
+      if (cloudEntry?.status === 'offline') {
+        return false;
+      }
       if (!c.updatedAtIso) return false;
-      const updatedMs = Date.parse(c.updatedAtIso);
+      const updatedMs =
+        typeof cloudEntry?.heartbeatAt === 'number' &&
+        cloudEntry.heartbeatAt > 0
+          ? cloudEntry.heartbeatAt
+          : Date.parse(c.updatedAtIso);
       if (
         !Number.isFinite(updatedMs) ||
-        nowMs - updatedMs > 2 * 60 * 60 * 1000
+        updatedMs <= 0 ||
+        nowMs - updatedMs > 90 * 1000
       ) {
         return false;
       }
@@ -1652,7 +1754,7 @@ export const ShiftRadarModule: React.FC = () => {
         getDistanceKmFromAmaranteHub(c.lat, c.lng) <= 35
       );
     });
-  }, [onlineDirectoryCouriers, realCourierProfile?.id]);
+  }, [onlineDirectoryCouriers, realCourierProfile?.id, cloudApprovalRequests]);
 
   const totalOnlineCouriersCount = useMemo(() => {
     const selfCount = !isAppPaused ? 1 : 0;

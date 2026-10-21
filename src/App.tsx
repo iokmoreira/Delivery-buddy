@@ -107,6 +107,9 @@ const AppCockpitShell: React.FC = () => {
     speakTextPt,
     realCourierProfile,
     verifiedAccount,
+    isLogoutSweepModalOpen,
+    logoutSweepProgressPct,
+    logoutSweepCompleted,
   } = useEstafetas();
 
   const isFounderAdmin = isCourierAdminByName(
@@ -660,6 +663,68 @@ const AppCockpitShell: React.FC = () => {
           </div>
         )}
 
+        {/* Safe Disconnect & Pre-Logout Full Data Sweep Modal */}
+        {isLogoutSweepModalOpen && (
+          <div className="fixed inset-0 z-[290] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-5">
+            <div
+              style={{
+                backgroundColor:
+                  themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#05070B',
+                borderColor: '#00E5FF',
+                color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                boxShadow: '0 24px 60px rgba(0, 229, 255, 0.25)',
+              }}
+              className="w-full max-w-md rounded-3xl border-2 p-6 space-y-4 text-center"
+            >
+              <div className="mx-auto h-14 w-14 rounded-2xl bg-[#00E5FF]/15 border border-[#00E5FF] flex items-center justify-center text-2xl shadow-[0_0_20px_rgba(0,229,255,0.3)]">
+                {logoutSweepCompleted ? '✅' : '🔄'}
+              </div>
+              <h3
+                style={{
+                  color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
+                }}
+                className="text-base font-black tracking-tight"
+              >
+                {logoutSweepCompleted
+                  ? '✓ Todos os dados salvos com segurança!'
+                  : '🔄 A Guardar Dados do Turno na Nuvem...'}
+              </h3>
+              <p
+                style={{
+                  color: themeMode === 'DAYLIGHT' ? '#334155' : '#CBD5E1',
+                }}
+                className="text-xs font-semibold leading-relaxed"
+              >
+                A recolher quilometragem, entregas, finanças, passadeiras
+                ensinadas e ajustes para salvar nos bancos de dados... Aguarde 2
+                segundos para desconectar em segurança.
+              </p>
+
+              {/* Neon-Blue Animated Progress Bar (0% -> 100%) */}
+              <div className="space-y-1.5 pt-1">
+                <div className="w-full h-3 rounded-full bg-slate-800/80 border border-[#00E5FF]/40 overflow-hidden p-0.5">
+                  <div
+                    style={{
+                      width: `${Math.max(5, Math.min(100, logoutSweepProgressPct))}%`,
+                      backgroundColor: '#00E5FF',
+                      boxShadow: '0 0 14px rgba(0, 229, 255, 0.85)',
+                    }}
+                    className="h-full rounded-full transition-all duration-100"
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] font-black text-[#00E5FF]">
+                  <span>
+                    {logoutSweepCompleted
+                      ? '✓ Sincronização Cloud + Cofre Local Concluída'
+                      : 'A transmitir pacote OFFLINE + Cofre de Turno...'}
+                  </span>
+                  <span>{logoutSweepProgressPct}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main Application UI (Hidden when minimized into Micro-Logo Mode) */}
         {!isBubbleMinimized && (
           <>
@@ -674,7 +739,7 @@ const AppCockpitShell: React.FC = () => {
                       : 'rgba(0, 229, 255, 0.25)',
                   color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
                 }}
-                className="sticky top-0 z-40 min-h-14 py-2.5 border-b px-4 flex items-center justify-between gap-2 flex-wrap shadow-xs"
+                className="sticky top-0 z-40 min-h-16 pt-4 mt-1 pb-2.5 border-b px-4 flex items-center justify-between gap-2 flex-wrap shadow-xs"
               >
                 <div className="flex items-center gap-2">
                   <span

@@ -27,7 +27,9 @@ export const CLOUD_SHARED_STATE_STORAGE_KEY = 'buddy_cloud_shared_state_v3';
 
 export type CourierApprovalStatus = 'approved' | 'pending' | 'blocked';
 export type CourierCloudRole = 'admin' | 'courier';
-export type CourierLivePresenceStatus = 'online' | 'busy' | 'paused';
+export type CourierLivePresenceStatus = 'online' | 'busy' | 'paused' | 'offline';
+
+export const STRICT_ONLINE_HEARTBEAT_TTL_MS = 90 * 1000; // 90 seconds strict TTL
 
 export interface CloudCourierPresence {
   id: string;
@@ -50,6 +52,7 @@ export interface CloudCourierPresence {
   optInWhatsapp?: boolean;
   optInEmail?: boolean;
   lastSeen: string;
+  heartbeatAt?: number;
 }
 
 export interface CloudApprovalRequest {
@@ -130,6 +133,8 @@ type CloudPacketType =
   | 'DIRECT_MSG'
   | 'ROAD_HAZARD'
   | 'COURIER_LOGOUT'
+  | 'COURIER_OFFLINE'
+  | 'COURIER_VAULT_SNAPSHOT'
   | 'ADMIN_NOTIFICATION'
   | 'ADMIN_CONFIG_SYNC'
   | 'LEARNED_PATH_TAUGHT'
@@ -144,6 +149,8 @@ interface CloudSyncEnvelope {
   payload?: unknown;
   courier?: CloudCourierPresence;
   courierId?: string;
+  status?: CourierLivePresenceStatus;
+  lastSeen?: number | string;
   targetCourierId?: string;
   targetUsername?: string;
   approvalStatus?: CourierApprovalStatus;
@@ -279,10 +286,50 @@ export function loadCloudSharedState(): CloudSharedState {
 let inMemoryCloudState: CloudSharedState = loadCloudSharedState();
 const stateListeners = new Set<(state: CloudSharedState) => void>();
 let lastDiscoveryReplyMs = 0;
+const lastOfflineAtMsByCourier: Record<string, number> = {};
 let localIdentityProvider: (() => void | {
   presence: CloudCourierPresence | null;
   accounts: CloudApprovalRequest[];
 }) | null = null;
+
+/**
+ * Strict 90-second heartbeat TTL evaluator:
+ * Returns true ONLY if the courier is not marked 'offline' AND their last heartbeat/timestamp
+ * is within the last 90 seconds (90,000 ms).
+ */
+export function isCourierActivelyOnline(
+  courier: {
+    status?: string;
+    heartbeatAt?: number;
+    lastSeen?: string | number;
+    updated_at?: string;
+    updatedAtIso?: string;
+  } | null | undefined,
+  nowMs = Date.now()
+): boolean {
+  if (!courier) return false;
+  const st = String(courier.status || '').toLowerCase();
+  if (st === 'offline' || st === 'desconectado') return false;
+
+  let tsMs = 0;
+  if (typeof courier.heartbeatAt === 'number' && Number.isFinite(courier.heartbeatAt)) {
+    tsMs = courier.heartbeatAt;
+  } else if (typeof courier.lastSeen === 'number' && Number.isFinite(courier.lastSeen)) {
+    tsMs = courier.lastSeen;
+  } else if (typeof courier.lastSeen === 'string' && courier.lastSeen) {
+    const parsed = Date.parse(courier.lastSeen);
+    if (Number.isFinite(parsed)) tsMs = parsed;
+  } else if (typeof courier.updated_at === 'string' && courier.updated_at) {
+    const parsed = Date.parse(courier.updated_at);
+    if (Number.isFinite(parsed)) tsMs = parsed;
+  } else if (typeof courier.updatedAtIso === 'string' && courier.updatedAtIso) {
+    const parsed = Date.parse(courier.updatedAtIso);
+    if (Number.isFinite(parsed)) tsMs = parsed;
+  }
+
+  if (tsMs <= 0) return false;
+  return nowMs - tsMs <= STRICT_ONLINE_HEARTBEAT_TTL_MS;
+}
 
 function persistAndNotifyCloudState(): void {
   inMemoryCloudState.approvalRequests = Object.values(
@@ -481,9 +528,11 @@ export async function publishCourierPresenceToCloud(
       presence.optInEmail ??
       existingCourier?.optInEmail ??
       existingReq?.optInEmail,
+    heartbeatAt: Date.now(),
     lastSeen: new Date().toISOString(),
   };
 
+  lastOfflineAtMsByCourier[cleanPresence.id] = 0;
   inMemoryCloudState.couriers[cleanPresence.id] = cleanPresence;
 
   // Deduplicate any older entry with the same normalized username but a legacy acc-* ID
@@ -654,51 +703,32 @@ export async function publishAccountRegistrationToCloud(
 
   inMemoryCloudState.approvalRequestsMap[id] = cleanReq;
 
-  const courierObj: CloudCourierPresence = {
-    id,
-    name: cleanName,
-    role: isFounderAdmin ? 'admin' : 'courier',
-    vehicle: String(cleanReq.vehicle || 'Mota 125cc'),
-    platforms:
-      Array.isArray(cleanReq.platforms) && cleanReq.platforms.length > 0
-        ? cleanReq.platforms
-        : ['Uber Eats', 'Glovo'],
-    zone: String(cleanReq.zone || 'Amarante Centro / São Gonçalo'),
-    status: inMemoryCloudState.couriers[id]?.status || 'online',
-    approvalStatus: resolvedApproval,
-    lat: cleanReq.lat,
-    lng: cleanReq.lng,
-    deviceModel: cleanReq.deviceModel,
-    whatsapp: cleanReq.whatsapp,
-    email: cleanReq.email,
-    optInWhatsapp: cleanReq.optInWhatsapp,
-    optInEmail: cleanReq.optInEmail,
-    lastSeen: cleanReq.updatedAt,
-  };
-  inMemoryCloudState.couriers[id] = courierObj;
+  // IMPORTANT: Registering or syncing a known account in Contas Registadas
+  // MUST NOT mark a remote/inactive account as 'online' or overwrite its GPS!
+  if (inMemoryCloudState.couriers[id]) {
+    inMemoryCloudState.couriers[id] = {
+      ...inMemoryCloudState.couriers[id],
+      approvalStatus: resolvedApproval,
+      whatsapp: cleanReq.whatsapp ?? inMemoryCloudState.couriers[id].whatsapp,
+      email: cleanReq.email ?? inMemoryCloudState.couriers[id].email,
+      optInWhatsapp:
+        cleanReq.optInWhatsapp ?? inMemoryCloudState.couriers[id].optInWhatsapp,
+      optInEmail:
+        cleanReq.optInEmail ?? inMemoryCloudState.couriers[id].optInEmail,
+    };
+  }
 
   persistAndNotifyCloudState();
 
   const nowTs = Date.now();
-  await Promise.all([
-    postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
-      v: 2,
-      type: 'SYNC_COURIER',
-      senderId: id,
-      ts: nowTs,
-      timestamp: nowTs,
-      courier: courierObj,
-      payload: cleanReq,
-    }),
-    postPacketToNtfyTopic(ACCOUNTS_SYNC_TOPIC, {
-      v: 2,
-      type: 'APPROVAL_REQUEST',
-      senderId: id,
-      ts: nowTs,
-      timestamp: nowTs,
-      payload: cleanReq,
-    }),
-  ]);
+  await postPacketToNtfyTopic(ACCOUNTS_SYNC_TOPIC, {
+    v: 2,
+    type: 'APPROVAL_REQUEST',
+    senderId: id,
+    ts: nowTs,
+    timestamp: nowTs,
+    payload: cleanReq,
+  });
 }
 
 export async function publishAdminApprovalDecisionToCloud(params: {
@@ -776,25 +806,186 @@ export async function publishAdminApprovalDecisionToCloud(params: {
   ]);
 }
 
-export async function publishCourierLogoutToCloud(
+export interface CourierShiftVaultSnapshot {
+  courierId: string;
+  courierName: string;
+  updatedAtMs: number;
+  updatedAtIso: string;
+  totalDistanceKm: number;
+  dailyEarnings: number;
+  deliveries: unknown[];
+  expenses: unknown[];
+  crosswalksCount: number;
+  learnedRoutesCount: number;
+  evidenceArchive: unknown[];
+  userProfile: unknown;
+}
+
+export function getCourierVaultStorageKey(courierId: string): string {
+  const safeId = String(courierId || 'default').trim();
+  return `buddy_courier_vault_${safeId}`;
+}
+
+export function loadCourierShiftVaultSnapshot(
   courierId: string
+): CourierShiftVaultSnapshot | null {
+  if (typeof window === 'undefined' || !courierId) return null;
+  try {
+    const raw = window.localStorage.getItem(getCourierVaultStorageKey(courierId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CourierShiftVaultSnapshot;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveAndSyncCourierShiftVaultSnapshot(
+  snapshot: CourierShiftVaultSnapshot,
+  useBeacon = false
+): Promise<void> {
+  if (!snapshot || !snapshot.courierId) return;
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(
+        getCourierVaultStorageKey(snapshot.courierId),
+        JSON.stringify(snapshot)
+      );
+    } catch {
+      // ignore quota error
+    }
+  }
+
+  // Push compact summary + profile to cloud relay so Admin & multi-device stay synced
+  const compactVaultEnvelope: CloudSyncEnvelope = {
+    v: 2,
+    type: 'COURIER_VAULT_SNAPSHOT',
+    senderId: snapshot.courierId,
+    courierId: snapshot.courierId,
+    ts: snapshot.updatedAtMs || Date.now(),
+    timestamp: snapshot.updatedAtMs || Date.now(),
+    payload: {
+      courierId: snapshot.courierId,
+      courierName: snapshot.courierName,
+      updatedAtMs: snapshot.updatedAtMs || Date.now(),
+      updatedAtIso: snapshot.updatedAtIso || new Date().toISOString(),
+      totalDistanceKm: Number((snapshot.totalDistanceKm || 0).toFixed(2)),
+      dailyEarnings: Number((snapshot.dailyEarnings || 0).toFixed(2)),
+      deliveries: Array.isArray(snapshot.deliveries)
+        ? snapshot.deliveries.slice(0, 40)
+        : [],
+      expenses: Array.isArray(snapshot.expenses)
+        ? snapshot.expenses.slice(0, 40)
+        : [],
+      crosswalksCount: snapshot.crosswalksCount || 0,
+      learnedRoutesCount: snapshot.learnedRoutesCount || 0,
+      evidenceArchive: Array.isArray(snapshot.evidenceArchive)
+        ? snapshot.evidenceArchive.slice(0, 15)
+        : [],
+      userProfile: snapshot.userProfile,
+    },
+  };
+
+  if (
+    useBeacon &&
+    typeof navigator !== 'undefined' &&
+    typeof navigator.sendBeacon === 'function'
+  ) {
+    try {
+      navigator.sendBeacon(
+        `https://ntfy.sh/${ACCOUNTS_SYNC_TOPIC}`,
+        JSON.stringify(compactVaultEnvelope)
+      );
+      return;
+    } catch {
+      // fallback to fetch
+    }
+  }
+
+  await postPacketToNtfyTopic(ACCOUNTS_SYNC_TOPIC, compactVaultEnvelope);
+}
+
+export async function publishCourierOfflineToCloud(
+  courierId: string,
+  courierName?: string,
+  useBeacon = false
 ): Promise<void> {
   if (!courierId) return;
-  delete inMemoryCloudState.couriers[courierId];
+  const nowTs = Date.now();
+  lastOfflineAtMsByCourier[courierId] = nowTs;
+
+  if (inMemoryCloudState.couriers[courierId]) {
+    inMemoryCloudState.couriers[courierId] = {
+      ...inMemoryCloudState.couriers[courierId],
+      status: 'offline',
+      heartbeatAt: 0,
+      lastSeen: '',
+    };
+  }
+  if (courierName) {
+    const cleanKey = normalizeAccountKey(courierName);
+    Object.keys(inMemoryCloudState.couriers).forEach((k) => {
+      const c = inMemoryCloudState.couriers[k];
+      if (c && normalizeAccountKey(c.name) === cleanKey) {
+        lastOfflineAtMsByCourier[k] = nowTs;
+        inMemoryCloudState.couriers[k] = {
+          ...c,
+          status: 'offline',
+          heartbeatAt: 0,
+          lastSeen: '',
+        };
+      }
+    });
+  }
+
   persistAndNotifyCloudState();
 
-  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
+  const offlinePacket: CloudSyncEnvelope = {
     v: 2,
-    type: 'COURIER_LOGOUT',
+    type: 'COURIER_OFFLINE',
     senderId: courierId,
-    ts: Date.now(),
-    timestamp: Date.now(),
-    payload: { id: courierId },
-  });
+    courierId,
+    ts: nowTs,
+    timestamp: nowTs,
+    payload: {
+      type: 'COURIER_OFFLINE',
+      courierId,
+      name: courierName,
+      status: 'offline',
+      lastSeen: 0,
+      timestamp: nowTs,
+    },
+  };
+
+  if (
+    useBeacon &&
+    typeof navigator !== 'undefined' &&
+    typeof navigator.sendBeacon === 'function'
+  ) {
+    try {
+      navigator.sendBeacon(
+        `https://ntfy.sh/${FLEET_SYNC_TOPIC}`,
+        JSON.stringify(offlinePacket)
+      );
+      return;
+    } catch {
+      // fallback to fetch
+    }
+  }
+
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, offlinePacket);
+}
+
+export async function publishCourierLogoutToCloud(
+  courierId: string,
+  courierName?: string
+): Promise<void> {
+  await publishCourierOfflineToCloud(courierId, courierName, false);
 }
 
 export function removeCourierFromCloudState(courierId: string): void {
-  void publishCourierLogoutToCloud(courierId);
+  void publishCourierOfflineToCloud(courierId);
 }
 
 export function findExistingCourierInCloudState(
@@ -994,10 +1185,24 @@ function ingestEnvelope(
         isFounder ? 'approved' : rawCourier.approvalStatus || 'pending'
       );
       const existing = inMemoryCloudState.couriers[resolvedId];
-      const existingMs = existing?.lastSeen ? Date.parse(existing.lastSeen) : 0;
-      const incomingMs = rawCourier.lastSeen
-        ? Date.parse(rawCourier.lastSeen)
-        : packetTs;
+      const existingMs =
+        typeof existing?.heartbeatAt === 'number' && existing.heartbeatAt > 0
+          ? existing.heartbeatAt
+          : existing?.lastSeen
+            ? Date.parse(existing.lastSeen)
+            : 0;
+      const incomingMs =
+        typeof rawCourier.heartbeatAt === 'number' && rawCourier.heartbeatAt > 0
+          ? rawCourier.heartbeatAt
+          : rawCourier.lastSeen
+            ? Date.parse(rawCourier.lastSeen)
+            : packetTs;
+
+      // Ignore historical presence packets that occurred before an explicit COURIER_OFFLINE packet
+      const offlineCutMs = lastOfflineAtMsByCourier[resolvedId] || 0;
+      if (offlineCutMs > 0 && incomingMs <= offlineCutMs) {
+        break;
+      }
 
       if (!existing || incomingMs >= existingMs - 5000) {
         const cleanNameKey = normalizeAccountKey(resolvedName);
@@ -1021,6 +1226,8 @@ function ingestEnvelope(
             delete inMemoryCloudState.approvalRequestsMap[k];
           }
         });
+
+        const isExplicitOffline = rawCourier.status === 'offline';
 
         inMemoryCloudState.couriers[resolvedId] = {
           ...existing,
@@ -1051,7 +1258,10 @@ function ingestEnvelope(
           speed: rawCourier.speed ?? existing?.speed ?? 0,
           avatar: rawCourier.avatar || existing?.avatar,
           deviceModel: rawCourier.deviceModel || existing?.deviceModel,
-          lastSeen: rawCourier.lastSeen || new Date(packetTs).toISOString(),
+          heartbeatAt: isExplicitOffline ? 0 : incomingMs,
+          lastSeen: isExplicitOffline
+            ? ''
+            : rawCourier.lastSeen || new Date(incomingMs).toISOString(),
         };
 
         const prevReq = inMemoryCloudState.approvalRequestsMap[resolvedId];
@@ -1135,35 +1345,8 @@ function ingestEnvelope(
         createdAt: prev?.createdAt || req.createdAt || new Date().toISOString(),
         updatedAt: req.updatedAt || new Date(packetTs).toISOString(),
       };
-
-      if (
-        !inMemoryCloudState.couriers[reqId] &&
-        Date.now() - packetTs <= 2 * 60 * 60 * 1000
-      ) {
-        inMemoryCloudState.couriers[reqId] = {
-          id: reqId,
-          name: cleanName,
-          role: isFounder ? 'admin' : 'courier',
-          vehicle: String(req.vehicle || 'Mota 125cc'),
-          platforms:
-            Array.isArray(req.platforms) && req.platforms.length > 0
-              ? req.platforms
-              : ['Uber Eats', 'Glovo'],
-          zone: String(req.zone || 'Amarante Centro / São Gonçalo'),
-          status: 'online',
-          approvalStatus: resolvedApproval,
-          lat:
-            Number.isFinite(req.lat) && req.lat !== 0
-              ? Number(req.lat)
-              : DEFAULT_AMARANTE_LAT,
-          lng:
-            Number.isFinite(req.lng) && req.lng !== 0
-              ? Number(req.lng)
-              : DEFAULT_AMARANTE_LNG,
-          deviceModel: req.deviceModel,
-          lastSeen: req.updatedAt || new Date(packetTs).toISOString(),
-        };
-      }
+      // IMPORTANT: APPROVAL_REQUEST only registers the account in Contas Registadas.
+      // It NEVER marks a courier as 'online' in inMemoryCloudState.couriers!
       stateChanged = true;
       break;
     }
@@ -1216,11 +1399,70 @@ function ingestEnvelope(
       break;
     }
 
+    case 'COURIER_OFFLINE':
     case 'COURIER_LOGOUT': {
-      const out = envelope.payload as { id?: string };
-      if (out?.id && inMemoryCloudState.couriers[out.id]) {
-        delete inMemoryCloudState.couriers[out.id];
-        stateChanged = true;
+      const out = (envelope.payload || {}) as {
+        id?: string;
+        courierId?: string;
+        name?: string;
+        timestamp?: number;
+      };
+      const targetId = out.courierId || out.id || envelope.courierId || envelope.senderId;
+      const cutMs = Number(out.timestamp || packetTs || Date.now());
+      if (targetId) {
+        lastOfflineAtMsByCourier[targetId] = Math.max(
+          lastOfflineAtMsByCourier[targetId] || 0,
+          cutMs
+        );
+        if (inMemoryCloudState.couriers[targetId]) {
+          inMemoryCloudState.couriers[targetId] = {
+            ...inMemoryCloudState.couriers[targetId],
+            status: 'offline',
+            heartbeatAt: 0,
+            lastSeen: '',
+          };
+          stateChanged = true;
+        }
+      }
+      if (out.name) {
+        const cleanKey = normalizeAccountKey(out.name);
+        Object.keys(inMemoryCloudState.couriers).forEach((k) => {
+          const item = inMemoryCloudState.couriers[k];
+          if (item && normalizeAccountKey(item.name) === cleanKey) {
+            lastOfflineAtMsByCourier[k] = Math.max(
+              lastOfflineAtMsByCourier[k] || 0,
+              cutMs
+            );
+            inMemoryCloudState.couriers[k] = {
+              ...item,
+              status: 'offline',
+              heartbeatAt: 0,
+              lastSeen: '',
+            };
+            stateChanged = true;
+          }
+        });
+      }
+      break;
+    }
+
+    case 'COURIER_VAULT_SNAPSHOT': {
+      const vault = envelope.payload as CourierShiftVaultSnapshot;
+      if (vault && vault.courierId && typeof window !== 'undefined') {
+        try {
+          const existingVault = loadCourierShiftVaultSnapshot(vault.courierId);
+          if (
+            !existingVault ||
+            (vault.updatedAtMs || 0) >= (existingVault.updatedAtMs || 0)
+          ) {
+            window.localStorage.setItem(
+              getCourierVaultStorageKey(vault.courierId),
+              JSON.stringify(vault)
+            );
+          }
+        } catch {
+          // ignore
+        }
       }
       break;
     }
@@ -1239,11 +1481,6 @@ function ingestEnvelope(
           if (localData && typeof localData === 'object') {
             if (localData.presence) {
               void publishCourierPresenceToCloud(localData.presence);
-            }
-            if (Array.isArray(localData.accounts)) {
-              localData.accounts.forEach((acc) => {
-                void publishAccountRegistrationToCloud(acc);
-              });
             }
           }
         }
@@ -1963,7 +2200,9 @@ export function getActiveCloudCourierRows(
   stateOrMaxAgeMs?: CloudSharedState | number
 ): SupabaseCourierRow[] {
   const maxAgeMs =
-    typeof stateOrMaxAgeMs === 'number' ? stateOrMaxAgeMs : 2 * 60 * 60 * 1000;
+    typeof stateOrMaxAgeMs === 'number'
+      ? stateOrMaxAgeMs
+      : STRICT_ONLINE_HEARTBEAT_TTL_MS;
   const sourceState =
     stateOrMaxAgeMs && typeof stateOrMaxAgeMs === 'object'
       ? stateOrMaxAgeMs
@@ -1974,8 +2213,14 @@ export function getActiveCloudCourierRows(
   Object.values(sourceState.couriers).forEach((c) => {
     if (!c || !c.id || !c.name || !c.name.trim()) return;
     if (c.approvalStatus === 'blocked') return;
-    const seenMs = c.lastSeen ? Date.parse(c.lastSeen) : 0;
-    if (seenMs > 0 && nowMs - seenMs > maxAgeMs) return;
+    if (c.status === 'offline') return;
+    const seenMs =
+      typeof c.heartbeatAt === 'number' && c.heartbeatAt > 0
+        ? c.heartbeatAt
+        : c.lastSeen
+          ? Date.parse(c.lastSeen)
+          : 0;
+    if (!seenMs || seenMs <= 0 || nowMs - seenMs > maxAgeMs) return;
 
     rows.push({
       id: c.id,
@@ -1998,7 +2243,7 @@ export function getActiveCloudCourierRows(
         c.approvalStatus === 'pending'
           ? '⏳ Pendente Aprovação'
           : 'Fundador • Out 2026',
-      updated_at: c.lastSeen || new Date().toISOString(),
+      updated_at: c.lastSeen || new Date(seenMs).toISOString(),
       avatar_url: c.avatar,
       active_platforms:
         Array.isArray(c.platforms) && c.platforms.length > 0
@@ -2121,6 +2366,7 @@ export function buildRealCourierPresencePayload(params: {
     avatar: params.profile.avatar_url,
     deviceModel: params.profile.device_model,
     screenAspectRatio: params.profile.screen_aspect_ratio,
+    heartbeatAt: Date.now(),
     lastSeen: new Date().toISOString(),
   };
 }

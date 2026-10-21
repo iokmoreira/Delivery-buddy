@@ -138,21 +138,26 @@ import {
 } from '../services/geminiAgent';
 import {
   CloudSharedStateSnapshot,
+  CourierShiftVaultSnapshot,
   dispatchAdminNotificationEvent,
   FOUNDER_ADMIN_COURIER_ID,
   generateUniqueCourierIdForName,
   getActiveCloudCourierRows,
   isCourierAdminByName,
   loadCloudSharedState,
+  loadCourierShiftVaultSnapshot,
   normalizeAccountKey,
   publishAccountRegistrationToCloud,
   publishAdminApprovalDecisionToCloud,
+  publishCourierOfflineToCloud,
   publishCourierPresenceToCloud,
   publishRoadHazardToCloud,
   publishWalkieMessageToCloud,
   registerLocalCloudIdentityProvider,
   resolveApprovalStatusForCourier,
-  startRealtimeCloudSyncStream,
+  saveAndSyncCourierShiftVaultSnapshot,
+   startRealtimeCloudSyncStream,
+  STRICT_ONLINE_HEARTBEAT_TTL_MS,
   subscribeToCloudSharedState,
 } from '../services/cloudSync';
 import {
@@ -954,6 +959,7 @@ interface EstafetasContextValue {
   stopContinuousVoiceMic: () => void;
   // Automatic Incoming Order Detection & Instant Calculation
   autoOfferDetectorEnabled: boolean;
+  toggleAutoOfferDetectorEnabled: () => void;
   isAccessibilityDiagnosticOpen: boolean;
   setIsAccessibilityDiagnosticOpen: (open: boolean) => void;
   lastAutoDetectedOfferBanner: AutoDetectedOfferBannerState | null;
@@ -964,6 +970,10 @@ interface EstafetasContextValue {
     km: number,
     platformRaw?: string
   ) => void;
+  // Pre-Logout Full Data Sweep & Safe Disconnect Modal
+  isLogoutSweepModalOpen: boolean;
+  logoutSweepProgressPct: number;
+  logoutSweepCompleted: boolean;
   // Scanner Main View Sync ('OFERTA_ATUAL' | 'DIVIDIDO_PESO')
   scannerActiveMainView: 'OFERTA_ATUAL' | 'DIVIDIDO_PESO';
   setScannerActiveMainView: (view: 'OFERTA_ATUAL' | 'DIVIDIDO_PESO') => void;
@@ -2118,12 +2128,38 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
     'OFERTA_ATUAL' | 'DIVIDIDO_PESO'
   >('OFERTA_ATUAL');
   const [autoOfferDetectorEnabled, setAutoOfferDetectorEnabled] =
-    useState<boolean>(true);
+    useState<boolean>(() => {
+      try {
+        return localStorage.getItem('buddy_auto_offer_detector_enabled_v1') !== 'false';
+      } catch {
+        return true;
+      }
+    });
+  const toggleAutoOfferDetectorEnabled = useCallback(() => {
+    setAutoOfferDetectorEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('buddy_auto_offer_detector_enabled_v1', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
   const [isAccessibilityDiagnosticOpen, setIsAccessibilityDiagnosticOpen] =
     useState<boolean>(false);
   const [lastAutoDetectedOfferBanner, setLastAutoDetectedOfferBanner] =
     useState<AutoDetectedOfferBannerState | null>(null);
   const autoOfferBannerTimerRef = useRef<number | null>(null);
+
+  // Pre-Logout Full Data Sweep & Safe Disconnect Modal state
+  const [isLogoutSweepModalOpen, setIsLogoutSweepModalOpen] =
+    useState<boolean>(false);
+  const [logoutSweepProgressPct, setLogoutSweepProgressPct] =
+    useState<number>(0);
+  const [logoutSweepCompleted, setLogoutSweepCompleted] =
+    useState<boolean>(false);
+  const isLogoutSweepRunningRef = useRef<boolean>(false);
 
   const activateTwoStepWakeWindow = useCallback((durationSeconds = 6) => {
     if (twoStepWakeTimerRef.current !== null) {
@@ -2696,7 +2732,135 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
     []
   );
 
-  const logoutSession = useCallback(() => {
+  const collectCurrentCourierVaultSnapshot =
+    useCallback((): CourierShiftVaultSnapshot | null => {
+      const prof = realCourierProfileRef.current;
+      const courierId = prof?.id || '';
+      const courierName = (
+        prof?.name ||
+        state.verifiedAccount.courierName ||
+        ''
+      ).trim();
+      if (!courierId || !courierName) return null;
+
+      let totalDistKm = Number(
+        (
+          state.personalGoals.completedKmToday ||
+          realCompletedDeliveries.reduce((acc, d) => acc + (d.realKm || 0), 0)
+        ).toFixed(2)
+      );
+      let crosswalksCount = 0;
+      let learnedRoutesCount = 0;
+      if (typeof window !== 'undefined') {
+        try {
+          const shiftKmRaw = window.localStorage.getItem(
+            `buddy_shift_km_state_v1_${courierId}`
+          );
+          if (shiftKmRaw) {
+            const parsedShiftKm = JSON.parse(shiftKmRaw) as {
+              shiftKmDriven?: number;
+            };
+            if (
+              typeof parsedShiftKm?.shiftKmDriven === 'number' &&
+              parsedShiftKm.shiftKmDriven > totalDistKm
+            ) {
+              totalDistKm = Number(parsedShiftKm.shiftKmDriven.toFixed(2));
+            }
+          }
+          const cwRaw = window.localStorage.getItem(
+            'amarante_custom_taught_crosswalks_v1'
+          );
+          if (cwRaw) {
+            const parsedCw = JSON.parse(cwRaw);
+            if (Array.isArray(parsedCw)) crosswalksCount = parsedCw.length;
+          }
+          const pathsRaw = window.localStorage.getItem(
+            'amarante_learned_paths_v1'
+          );
+          if (pathsRaw) {
+            const parsedPaths = JSON.parse(pathsRaw);
+            if (Array.isArray(parsedPaths))
+              learnedRoutesCount = parsedPaths.length;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const dailyEarnings = Number(
+        (
+          state.personalGoals.currentDailyNetEarnedEur ||
+          realCompletedDeliveries.reduce(
+            (acc, d) => acc + (d.netProfitEur || 0),
+            0
+          )
+        ).toFixed(2)
+      );
+
+      return {
+        courierId,
+        courierName,
+        updatedAtMs: Date.now(),
+        updatedAtIso: new Date().toISOString(),
+        totalDistanceKm: totalDistKm,
+        dailyEarnings,
+        deliveries: realCompletedDeliveries,
+        expenses: [
+          {
+            vehicleProfile: state.vehicleProfile,
+            taxAndFleetConfig: state.taxAndFleetConfig,
+            platformLedgers: state.platformLedgers,
+            glovoWallet: state.glovoWallet,
+          },
+        ],
+        crosswalksCount,
+        learnedRoutesCount,
+        evidenceArchive: state.evidentiaryVaultRecords,
+        userProfile: {
+          ...prof,
+          userPrefs: state.userPrefs,
+          personalGoals: state.personalGoals,
+          buddyRewards: state.buddyRewards,
+          activePlatforms,
+        },
+      };
+    }, [
+      state.verifiedAccount.courierName,
+      state.personalGoals,
+      state.vehicleProfile,
+      state.taxAndFleetConfig,
+      state.platformLedgers,
+      state.glovoWallet,
+      state.evidentiaryVaultRecords,
+      state.userPrefs,
+      state.buddyRewards,
+      realCompletedDeliveries,
+      activePlatforms,
+    ]);
+
+  // Trigger navigator.sendBeacon / visibilitychange save whenever the app is backgrounded or swiped away
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleBeaconFlush = () => {
+      const snap = collectCurrentCourierVaultSnapshot();
+      if (snap) {
+        void saveAndSyncCourierShiftVaultSnapshot(snap, true);
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        handleBeaconFlush();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handleBeaconFlush);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handleBeaconFlush);
+    };
+  }, [collectCurrentCourierVaultSnapshot]);
+
+  const executeFinalSessionClear = useCallback(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -2742,6 +2906,85 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
       },
     }));
   }, [setActiveTab]);
+
+  const runSafePreLogoutSweepAndDisconnect = useCallback(() => {
+    if (isLogoutSweepRunningRef.current) return;
+    isLogoutSweepRunningRef.current = true;
+    setIsLogoutSweepModalOpen(true);
+    setLogoutSweepProgressPct(6);
+    setLogoutSweepCompleted(false);
+
+    const prof = realCourierProfileRef.current;
+    const isFounder = isCourierAdminByName(prof.name);
+    const outgoingId = isFounder
+      ? FOUNDER_ADMIN_COURIER_ID
+      : prof.id || getOrCreatePersistentCourierUuid();
+    const outgoingName = (
+      prof.name ||
+      state.verifiedAccount.courierName ||
+      ''
+    ).trim();
+
+    // 1. Collect & persist complete courier shift vault snapshot + push to Cloud Sync & Supabase
+    const snapshot = collectCurrentCourierVaultSnapshot();
+    if (snapshot) {
+      void saveAndSyncCourierShiftVaultSnapshot(snapshot, false);
+    }
+    if (prof.isRegistered && outgoingName) {
+      void upsertCourierToSupabaseRest({
+        supabaseUrl: state.aiAgentConfig.supabaseUrl,
+        supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
+        profile: {
+          ...prof,
+          id: outgoingId,
+          name: outgoingName,
+          updated_at: new Date().toISOString(),
+        },
+      });
+    }
+
+    // 2. Broadcast explicit COURIER_OFFLINE packet so all remote phones immediately drop this courier from Online Agora & Map
+    if (outgoingId) {
+      void publishCourierOfflineToCloud(outgoingId, outgoingName, false);
+      setSupabaseLiveCouriers((prev) =>
+        prev.filter(
+          (r) =>
+            r.id !== outgoingId &&
+            normalizeAccountKey(r.name) !== normalizeAccountKey(outgoingName)
+        )
+      );
+    }
+
+    // 3. Animate 0% -> 100% progress bar over 2.5 seconds (2100ms sweep + 400ms "✓ Todos os dados salvos com segurança!" confirmation)
+    const startMs = Date.now();
+    const sweepDurationMs = 2100;
+    const progressTimer = window.setInterval(() => {
+      const elapsed = Date.now() - startMs;
+      const pct = Math.min(100, Math.round((elapsed / sweepDurationMs) * 100));
+      setLogoutSweepProgressPct(pct);
+      if (pct >= 100) {
+        window.clearInterval(progressTimer);
+        setLogoutSweepCompleted(true);
+        window.setTimeout(() => {
+          setIsLogoutSweepModalOpen(false);
+          setLogoutSweepProgressPct(0);
+          setLogoutSweepCompleted(false);
+          isLogoutSweepRunningRef.current = false;
+          executeFinalSessionClear();
+        }, 450);
+      }
+    }, 60);
+  }, [
+    collectCurrentCourierVaultSnapshot,
+    executeFinalSessionClear,
+    state.verifiedAccount.courierName,
+    state.aiAgentConfig.supabaseUrl,
+    state.aiAgentConfig.supabaseAnonKey,
+  ]);
+
+  const logoutSession = useCallback(() => {
+    runSafePreLogoutSweepAndDisconnect();
+  }, [runSafePreLogoutSweepAndDisconnect]);
 
   const toggleAppPauseMode = useCallback(() => {
     setState((prev) => {
@@ -5945,7 +6188,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       const updatedMs = r.updated_at ? Date.parse(r.updated_at) : 0;
       return (
         Number.isFinite(updatedMs) &&
-        Date.now() - updatedMs <= 2 * 60 * 60 * 1000
+        updatedMs > 0 &&
+        Date.now() - updatedMs <= STRICT_ONLINE_HEARTBEAT_TTL_MS
       );
     });
 
@@ -7660,49 +7904,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
   }, []);
 
   const switchOrCreateNewCourierProfileOnDevice = useCallback(() => {
-    try {
-      localStorage.removeItem(STRICT_AUTH_SESSION_KEY);
-      localStorage.removeItem(REAL_COURIER_MAP_PROFILE_STORAGE_KEY);
-      localStorage.removeItem(LEGACY_COURIER_PROFILE_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-    const freshDeviceId = resetAndGenerateNewCourierUuid();
-    const blankProfile: RealCourierMapProfile = {
-      id: freshDeviceId,
-      name: '',
-      vehicle: 'Mota 125cc',
-      zone: 'Amarante Centro / São Gonçalo',
-      status: 'Disponível',
-      has_order: false,
-      lat: AMARANTE_DEFAULT_COORDS.lat,
-      lng: AMARANTE_DEFAULT_COORDS.lng,
-      reputation: 100,
-      buddy_since: 'Fundador • Out 2026',
-      updated_at: new Date().toISOString(),
-      avatar_url: undefined,
-      active_platforms: ['Uber Eats', 'Glovo'],
-      isRegistered: false,
-      gpsSource: 'AMARANTE_FALLBACK',
-      supabaseSyncStatusText:
-        'Sessão limpa — inicie sessão ou crie conta para entrar',
-    };
-    setRealCourierProfile(blankProfile);
-    setActiveDirectChatCourierId(null);
-    setActiveBuddyPopupCourierId(null);
-    setIsCourierRegistrationModalOpen(false);
-    setViewModeState('MODO_ESTAFETA');
-    setActiveTab('scanner');
-    setState((prev) => ({
-      ...prev,
-      isAuthenticated: false,
-      verifiedAccount: {
-        ...prev.verifiedAccount,
-        courierName: 'Novo Estafeta',
-      },
-    }));
-    speakTextPt('Sessão terminada.');
-  }, [setActiveTab, speakTextPt]);
+    runSafePreLogoutSweepAndDisconnect();
+  }, [runSafePreLogoutSweepAndDisconnect]);
 
   const isGhostDuplicateOfSelf = useCallback(
     (rowId: string, rowName: string, selfId: string, _selfName: string) => {
@@ -7889,6 +8092,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         },
       }));
 
+      // Restore per-courier vault snapshot if switching back to this account on the same phone
+      const restoredVault = loadCourierShiftVaultSnapshot(persistentId);
+      if (restoredVault && Array.isArray(restoredVault.deliveries)) {
+        setRealCompletedDeliveries(restoredVault.deliveries as ShiftTripLog[]);
+      }
+
       // Immediately broadcast presence & registration to db_amarante_fleet_v3
       void publishCourierPresenceToCloud({
         profile: nextProfile,
@@ -8070,13 +8279,19 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
       setSupabaseLiveCouriers((prev) => {
         const byId = new Map<string, SupabaseCourierRow>();
+        const nowCheckMs = Date.now();
         for (const r of prev) {
           if (
             r &&
             r.name &&
             !isGhostDuplicateOfSelf(r.id, r.name, selfProf.id, selfProf.name)
           ) {
-            byId.set(r.id, r);
+            const seenMs = r.updated_at ? Date.parse(r.updated_at) : 0;
+            const cloudEntry = nextCloud.couriers?.[r.id];
+            if (cloudEntry?.status === 'offline') continue;
+            if (seenMs > 0 && nowCheckMs - seenMs <= STRICT_ONLINE_HEARTBEAT_TTL_MS) {
+              byId.set(r.id, r);
+            }
           }
         }
         for (const r of cloudRows) {
@@ -8146,7 +8361,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     isGhostDuplicateOfSelf,
   ]);
 
-  // Send a heartbeat every 10 seconds while the app is open so active couriers stay online in public.couriers & Cloud Sync
+  // Send a lightweight live heartbeat every 20 seconds while the app is open so active couriers stay online within the strict 90s TTL
   useEffect(() => {
     const heartbeatTimer = window.setInterval(() => {
       const prof = realCourierProfileRef.current;
@@ -8158,7 +8373,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         void syncProfileToSupabaseAndLocalCache(updated);
       }
       broadcastAllLocalIdentitiesToCloud();
-    }, 10000);
+    }, 20000);
     return () => window.clearInterval(heartbeatTimer);
   }, [
     state.isAppPaused,
@@ -8244,12 +8459,22 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       }
 
       if (res.ok && res.rows.length > 0) {
-        const validRemoteRows = res.rows.filter(
-          (r) =>
-            r.name &&
-            r.name.trim().length > 0 &&
-            !isGhostDuplicateOfSelf(r.id, r.name, selfProf.id, selfProf.name)
-        );
+        const nowCheckMs = Date.now();
+        const validRemoteRows = res.rows.filter((r) => {
+          if (
+            !r.name ||
+            !r.name.trim().length ||
+            isGhostDuplicateOfSelf(r.id, r.name, selfProf.id, selfProf.name)
+          ) {
+            return false;
+          }
+          const updatedMs = r.updated_at ? Date.parse(r.updated_at) : 0;
+          return (
+            updatedMs > 0 &&
+            Number.isFinite(updatedMs) &&
+            nowCheckMs - updatedMs <= STRICT_ONLINE_HEARTBEAT_TTL_MS
+          );
+        });
         if (selfRow) {
           const hasSelfInRemote = validRemoteRows.some(
             (r) => r.id === selfRow.id
@@ -12917,9 +13142,9 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       if (!nameKey || seenNames.has(nameKey)) return;
       const updatedMs = row.updated_at ? Date.parse(row.updated_at) : 0;
       if (
-        updatedMs > 0 &&
-        Number.isFinite(updatedMs) &&
-        nowMs - updatedMs > 2 * 60 * 60 * 1000
+        !updatedMs ||
+        !Number.isFinite(updatedMs) ||
+        nowMs - updatedMs > STRICT_ONLINE_HEARTBEAT_TTL_MS
       ) {
         return;
       }
@@ -13831,12 +14056,16 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         startContinuousVoiceMic,
         stopContinuousVoiceMic,
         autoOfferDetectorEnabled,
+        toggleAutoOfferDetectorEnabled,
         isAccessibilityDiagnosticOpen,
         setIsAccessibilityDiagnosticOpen,
         lastAutoDetectedOfferBanner,
         dismissAutoDetectedOfferBanner,
         openAndroidAccessibilitySettings,
         triggerAutoDetectedOffer,
+        isLogoutSweepModalOpen,
+        logoutSweepProgressPct,
+        logoutSweepCompleted,
         scannerActiveMainView,
         setScannerActiveMainView,
         isAmaranteWeatherModalOpen,
