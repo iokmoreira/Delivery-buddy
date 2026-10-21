@@ -36,6 +36,8 @@ import { playBuddyOpenChime } from '../services/voiceEngine';
 import {
   CloudApprovalRequest,
   computeSameLocationPinOffset,
+  getDeterministicCourierCenterCoords,
+  isDefaultOrMissingCourierCoord,
   loadCloudSharedState,
   publishLearnedPathToCloud,
   publishTaughtCrosswalkToCloud,
@@ -1712,48 +1714,61 @@ export const ShiftRadarModule: React.FC = () => {
     };
   }, []);
 
-  // Show ONLY truly active online peer couriers (strict 90-second heartbeat TTL, never offline accounts)
+  // Show ONLY truly active online peer couriers (strict 90-second local-clock heartbeat TTL, never dropping indoor/center couriers)
   const activePeerCouriers = useMemo(() => {
     const nowMs = Date.now();
     const myId = realCourierProfile?.id || '';
     const cloudSnap = loadCloudSharedState();
 
-    return onlineDirectoryCouriers.filter((c) => {
-      if (c.isSelfProfile || (myId && c.id === myId)) return false;
-      const callsignLower = (c.callsign || '').trim().toLowerCase();
-      if (
-        !callsignLower ||
-        callsignLower === 'caio m.' ||
-        callsignLower === 'caio m' ||
-        callsignLower === 'cm'
-      ) {
-        return false;
-      }
-      const cloudEntry = cloudSnap.couriers?.[c.id];
-      if (cloudEntry?.status === 'offline') {
-        return false;
-      }
-      if (!c.updatedAtIso) return false;
-      const updatedMs =
-        typeof cloudEntry?.heartbeatAt === 'number' &&
-        cloudEntry.heartbeatAt > 0
-          ? cloudEntry.heartbeatAt
-          : Date.parse(c.updatedAtIso);
-      if (
-        !Number.isFinite(updatedMs) ||
-        updatedMs <= 0 ||
-        nowMs - updatedMs > 90 * 1000
-      ) {
-        return false;
-      }
-      return (
-        typeof c.lat === 'number' &&
-        typeof c.lng === 'number' &&
-        Number.isFinite(c.lat) &&
-        Number.isFinite(c.lng) &&
-        getDistanceKmFromAmaranteHub(c.lat, c.lng) <= 35
-      );
-    });
+    return onlineDirectoryCouriers
+      .filter((c) => {
+        if (c.isSelfProfile || (myId && c.id === myId)) return false;
+        if (c.isOnlineActive === false) return false;
+        const callsignLower = (c.callsign || '').trim().toLowerCase();
+        if (
+          !callsignLower ||
+          callsignLower === 'caio m.' ||
+          callsignLower === 'caio m' ||
+          callsignLower === 'cm'
+        ) {
+          return false;
+        }
+        const cloudEntry = cloudSnap.couriers?.[c.id];
+        if (cloudEntry?.status === 'offline' || cloudEntry?.isAnonymous === true) {
+          return false;
+        }
+        const updatedMs =
+          typeof cloudEntry?.localReceivedAt === 'number' &&
+          cloudEntry.localReceivedAt > 0
+            ? cloudEntry.localReceivedAt
+            : typeof cloudEntry?.heartbeatAt === 'number' &&
+                cloudEntry.heartbeatAt > 0
+              ? cloudEntry.heartbeatAt
+              : c.updatedAtIso
+                ? Date.parse(c.updatedAtIso)
+                : 0;
+        if (
+          !Number.isFinite(updatedMs) ||
+          updatedMs <= 0 ||
+          nowMs - updatedMs > 90 * 1000
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .map((c) => {
+        if (isDefaultOrMissingCourierCoord(c.lat, c.lng)) {
+          const detCoords = getDeterministicCourierCenterCoords(
+            c.id || c.callsign
+          );
+          return {
+            ...c,
+            lat: detCoords.lat,
+            lng: detCoords.lng,
+          };
+        }
+        return c;
+      });
   }, [onlineDirectoryCouriers, realCourierProfile?.id, cloudApprovalRequests]);
 
   const totalOnlineCouriersCount = useMemo(() => {

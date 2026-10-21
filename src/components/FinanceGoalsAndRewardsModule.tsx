@@ -11,6 +11,12 @@ import {
   FolderOpen,
   MapPin,
   Trash2,
+  Target,
+  Check,
+  Clock,
+  FileText,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useEstafetas } from '../context/EstafetasContext';
 import { PlatformFilterScope, PlatformName } from '../types/models';
@@ -642,7 +648,7 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
     setCapturedPhotoDataUrl(undefined);
     setOcrStatusNotice(null);
     setFinanceActionFeedback(
-      `✅ Registo completo guardado no Arquivo (${targetPlatformForManualLog}: +${net.toFixed(2)}\u00A0€ líq. • ${km.toFixed(1)} km)!`
+      `Registo completo guardado no Arquivo (${targetPlatformForManualLog}: +${net.toFixed(2)}\u00A0€ líq. • ${km.toFixed(1)} km)!`
     );
   };
 
@@ -721,172 +727,176 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
             </div>
           )}
 
-          {/* CARD 1: Goals & Projections (Daily, Weekly, Monthly) */}
+          {/* CARD 1: Goals & Projections (Daily, Weekly, Monthly) — Clean Flat Hairline Layout */}
           <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3.5">
             <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5 flex-wrap">
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xl font-extrabold text-zinc-100 whitespace-nowrap">
-                  🎯 Metas
+                <Target className="h-5 w-5 text-[#00E5FF] shrink-0" />
+                <span className="text-lg font-extrabold text-zinc-100 whitespace-nowrap">
+                  Metas
                 </span>
               </div>
-              <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1 text-base sm:text-lg font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
+              <span className="text-sm sm:text-base font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
                 +{scopedStats.netPerHourEur.toFixed(2)}{'\u00A0'}€/h •{' '}
                 {scopedStats.netPerKmEur.toFixed(2)}{'\u00A0'}€/km
               </span>
             </div>
 
-            {/* Daily Goal */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80 min-w-0">
-                <span className="font-bold text-sm sm:text-base text-zinc-100 whitespace-nowrap shrink-0">
-                  Meta Diária
-                </span>
-                <div className="flex items-center gap-1 font-bold text-zinc-200 min-w-0">
-                  <span className="whitespace-nowrap text-xs sm:text-sm text-zinc-300 shrink-0">
-                    {scopedStats.currentDaily.toFixed(2)}{'\u00A0'}€ /
+            {/* Flat Metas Rows Separated by 1px Hairlines */}
+            <div className="divide-y divide-zinc-800/80">
+              {/* Daily Goal */}
+              <div className="py-2.5 first:pt-0 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="font-bold text-sm text-zinc-100 whitespace-nowrap shrink-0">
+                    Meta Diária
                   </span>
-                  <input
-                    type="number"
-                    min={10}
-                    max={500}
-                    step={5}
-                    aria-label="Editar Meta Diária"
-                    value={scopedStats.dailyGoal}
-                    onChange={(e) =>
-                      handleGoalChange('DAILY', parseFloat(e.target.value) || 50)
-                    }
-                    className="w-16 rounded-lg bg-zinc-900 border border-zinc-700 px-1.5 py-1 text-center text-sm font-extrabold text-zinc-100 shrink-0"
+                  <div className="flex items-center gap-1.5 font-bold text-zinc-200 min-w-0 shrink-0">
+                    <span className="whitespace-nowrap text-xs sm:text-sm text-zinc-300 shrink-0">
+                      {scopedStats.currentDaily.toFixed(2)}{'\u00A0'}€ /
+                    </span>
+                    <input
+                      type="number"
+                      min={10}
+                      max={500}
+                      step={5}
+                      aria-label="Editar Meta Diária"
+                      value={scopedStats.dailyGoal}
+                      onChange={(e) =>
+                        handleGoalChange('DAILY', parseFloat(e.target.value) || 50)
+                      }
+                      className="w-16 rounded-lg bg-zinc-950 border border-zinc-700 px-1.5 py-1 text-center text-xs sm:text-sm font-extrabold text-zinc-100 shrink-0"
+                    />
+                    <span className="whitespace-nowrap shrink-0 text-xs sm:text-sm text-emerald-400 font-extrabold">
+                      € ({scopedStats.dailyPct}%)
+                    </span>
+                  </div>
+                </div>
+                <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-400 rounded-full transition-all"
+                    style={{ width: `${scopedStats.dailyPct}%` }}
                   />
-                  <span className="whitespace-nowrap shrink-0 text-sm text-emerald-300">
-                    € ({scopedStats.dailyPct}%)
-                  </span>
                 </div>
               </div>
-              <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden">
-                <div
-                  className="h-full bg-emerald-400 rounded-full transition-all"
-                  style={{ width: `${scopedStats.dailyPct}%` }}
-                />
+
+              {/* Weekly Goal */}
+              <div className="py-2.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="font-bold text-sm text-zinc-100 whitespace-nowrap shrink-0">
+                    Meta Semanal
+                  </span>
+                  <div className="flex items-center gap-1.5 font-bold text-zinc-200 min-w-0 shrink-0">
+                    <span className="whitespace-nowrap text-xs sm:text-sm text-zinc-300 shrink-0">
+                      {scopedStats.currentWeekly.toFixed(2)}{'\u00A0'}€ /
+                    </span>
+                    <input
+                      type="number"
+                      min={50}
+                      max={3000}
+                      step={25}
+                      aria-label="Editar Meta Semanal"
+                      value={scopedStats.weeklyGoal}
+                      onChange={(e) =>
+                        handleGoalChange(
+                          'WEEKLY',
+                          parseFloat(e.target.value) || 300
+                        )
+                      }
+                      className="w-16 rounded-lg bg-zinc-950 border border-zinc-700 px-1.5 py-1 text-center text-xs sm:text-sm font-extrabold text-zinc-100 shrink-0"
+                    />
+                    <span className="whitespace-nowrap shrink-0 text-xs sm:text-sm text-emerald-400 font-extrabold">
+                      € ({scopedStats.weeklyPct}%)
+                    </span>
+                  </div>
+                </div>
+                <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-400 rounded-full transition-all"
+                    style={{ width: `${scopedStats.weeklyPct}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Monthly Goal */}
+              <div className="py-2.5 last:pb-0 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="font-bold text-sm text-zinc-100 whitespace-nowrap shrink-0">
+                    Meta Mensal
+                  </span>
+                  <div className="flex items-center gap-1.5 font-bold text-zinc-200 min-w-0 shrink-0">
+                    <span className="whitespace-nowrap text-xs sm:text-sm text-zinc-300 shrink-0">
+                      {scopedStats.currentMonthly.toFixed(2)}{'\u00A0'}€ /
+                    </span>
+                    <input
+                      type="number"
+                      min={200}
+                      max={10000}
+                      step={50}
+                      aria-label="Editar Meta Mensal"
+                      value={scopedStats.monthlyGoal}
+                      onChange={(e) =>
+                        handleGoalChange(
+                          'MONTHLY',
+                          parseFloat(e.target.value) || 1200
+                        )
+                      }
+                      className="w-16 rounded-lg bg-zinc-950 border border-zinc-700 px-1.5 py-1 text-center text-xs sm:text-sm font-extrabold text-zinc-100 shrink-0"
+                    />
+                    <span className="whitespace-nowrap shrink-0 text-xs sm:text-sm text-emerald-400 font-extrabold">
+                      € ({scopedStats.monthlyPct}%)
+                    </span>
+                  </div>
+                </div>
+                <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-400 rounded-full transition-all"
+                    style={{ width: `${scopedStats.monthlyPct}%` }}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Weekly Goal */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80 min-w-0">
-                <span className="font-bold text-sm sm:text-base text-zinc-100 whitespace-nowrap shrink-0">
-                  Meta Semanal
-                </span>
-                <div className="flex items-center gap-1 font-bold text-zinc-200 min-w-0">
-                  <span className="whitespace-nowrap text-xs sm:text-sm text-zinc-300 shrink-0">
-                    {scopedStats.currentWeekly.toFixed(2)}{'\u00A0'}€ /
-                  </span>
-                  <input
-                    type="number"
-                    min={50}
-                    max={3000}
-                    step={25}
-                    aria-label="Editar Meta Semanal"
-                    value={scopedStats.weeklyGoal}
-                    onChange={(e) =>
-                      handleGoalChange(
-                        'WEEKLY',
-                        parseFloat(e.target.value) || 300
-                      )
-                    }
-                    className="w-16 rounded-lg bg-zinc-900 border border-zinc-700 px-1.5 py-1 text-center text-sm font-extrabold text-zinc-100 shrink-0"
-                  />
-                  <span className="whitespace-nowrap shrink-0 text-sm text-emerald-300">
-                    € ({scopedStats.weeklyPct}%)
-                  </span>
-                </div>
-              </div>
-              <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden">
-                <div
-                  className="h-full bg-emerald-400 rounded-full transition-all"
-                  style={{ width: `${scopedStats.weeklyPct}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Monthly Goal */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80 min-w-0">
-                <span className="font-bold text-sm sm:text-base text-zinc-100 whitespace-nowrap shrink-0">
-                  Meta Mensal
-                </span>
-                <div className="flex items-center gap-1 font-bold text-zinc-200 min-w-0">
-                  <span className="whitespace-nowrap text-xs sm:text-sm text-zinc-300 shrink-0">
-                    {scopedStats.currentMonthly.toFixed(2)}{'\u00A0'}€ /
-                  </span>
-                  <input
-                    type="number"
-                    min={200}
-                    max={10000}
-                    step={50}
-                    aria-label="Editar Meta Mensal"
-                    value={scopedStats.monthlyGoal}
-                    onChange={(e) =>
-                      handleGoalChange(
-                        'MONTHLY',
-                        parseFloat(e.target.value) || 1200
-                      )
-                    }
-                    className="w-16 rounded-lg bg-zinc-900 border border-zinc-700 px-1.5 py-1 text-center text-sm font-extrabold text-zinc-100 shrink-0"
-                  />
-                  <span className="whitespace-nowrap shrink-0 text-sm text-emerald-300">
-                    € ({scopedStats.monthlyPct}%)
-                  </span>
-                </div>
-              </div>
-              <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden">
-                <div
-                  className="h-full bg-emerald-400 rounded-full transition-all"
-                  style={{ width: `${scopedStats.monthlyPct}%` }}
-                />
-              </div>
-            </div>
-
-            {/* KPI Summary Row: Entregas Concluídas, KM Rodados, Média Líquida €/km, Quanto Falta */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
-                <span className="text-base font-medium text-zinc-400 block">
+            {/* Open 2x2 KPI Grid With Subtle Hairline Dividers */}
+            <div className="grid grid-cols-2 border-t border-b border-zinc-800/80 divide-x divide-y divide-zinc-800/80">
+              <div className="p-3.5">
+                <span className="text-xs font-medium text-zinc-400 block">
                   Entregas Concluídas
                 </span>
-                <span className="text-xl font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
+                <span className="text-lg font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
                   {scopedStats.deliveriesToday} entregas
                 </span>
               </div>
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
-                <span className="text-base font-medium text-zinc-400 block">
+              <div className="p-3.5">
+                <span className="text-xs font-medium text-zinc-400 block">
                   KM Rodados
                 </span>
-                <span className="text-xl font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
+                <span className="text-lg font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
                   {scopedStats.kmToday.toFixed(1)} km
                 </span>
               </div>
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
-                <span className="text-base font-medium text-zinc-400 block">
+              <div className="p-3.5">
+                <span className="text-xs font-medium text-zinc-400 block">
                   Média Líquida €/km
                 </span>
-                <span className="text-xl font-extrabold text-emerald-400 whitespace-nowrap mt-0.5 block">
+                <span className="text-lg font-extrabold text-emerald-400 whitespace-nowrap mt-0.5 block">
                   {scopedStats.netPerKmEur.toFixed(2)}{'\u00A0'}€/km
                 </span>
               </div>
-              <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 min-w-0">
-                <span className="text-base font-medium text-zinc-400 block truncate">
-                  Quanto Falta p/ Meta
+              <div className="p-3.5 min-w-0">
+                <span className="text-xs font-medium text-zinc-400 block truncate">
+                  Quanto Falta
                 </span>
                 {scopedStats.remainingDailyEur > 0 ? (
                   <div className="mt-0.5 leading-tight">
-                    <span className="text-xl font-extrabold text-zinc-100 block whitespace-nowrap">
+                    <span className="text-lg font-extrabold text-zinc-100 block whitespace-nowrap">
                       {scopedStats.remainingDailyEur.toFixed(2)}{'\u00A0'}€
                     </span>
-                    <span className="text-xs font-bold text-emerald-400 block mt-0.5">
+                    <span className="text-[11px] font-bold text-emerald-400 block mt-0.5">
                       ({scopedStats.remainingOrders} pedidos)
                     </span>
                   </div>
                 ) : (
-                  <span className="text-xl font-extrabold text-emerald-400 whitespace-nowrap mt-0.5 block">
+                  <span className="text-lg font-extrabold text-emerald-400 whitespace-nowrap mt-0.5 block">
                     Concluída!
                   </span>
                 )}
@@ -922,19 +932,19 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
               className="hidden"
             />
 
-            {/* Primary Trigger Button: 📸 Registar Entrega (Foto, Vídeo & Dados Completos) */}
+            {/* Primary Trigger Button: Registar Entrega (Foto, Vídeo & Dados Completos) */}
             <button
               type="button"
               onClick={() => setShowManualDeliveryModal((prev) => !prev)}
               style={{
-                backgroundColor: '#0B0F17',
+                backgroundColor: '#0F172A',
                 borderColor: '#00E5FF',
                 color: '#00E5FF',
               }}
-              className="w-full rounded-2xl border-2 py-3 px-4 font-black text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer transition shadow-[0_4px_16px_rgba(0,229,255,0.2)]"
+              className="w-full rounded-xl border py-2.5 px-4 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition"
             >
-              <Plus className="h-5 w-5 shrink-0" />
-              <span>📸 Registar Entrega (Foto, Vídeo &amp; Dados Completos)</span>
+              <Camera className="h-4 w-4 shrink-0" />
+              <span>Registar Entrega (Foto, Vídeo &amp; Dados Completos)</span>
             </button>
 
             {/* Complete Photo / Video Delivery Logger Form */}
@@ -945,11 +955,12 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                   borderColor: '#00E5FF',
                   color: isDaylight ? '#090D16' : '#FFFFFF',
                 }}
-                className="rounded-2xl border-2 p-3.5 space-y-3 overflow-hidden"
+                className="rounded-2xl border p-3.5 space-y-3 overflow-hidden"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm sm:text-base font-black">
-                    📸 Registar Entrega (Foto, Vídeo &amp; Morada Completa)
+                  <span className="text-sm font-extrabold flex items-center gap-1.5">
+                    <Camera className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                    <span>Registar Entrega (Foto, Vídeo &amp; Morada Completa)</span>
                   </span>
                   <button
                     type="button"
@@ -970,10 +981,10 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                       borderColor: '#00E5FF',
                       color: '#00E5FF',
                     }}
-                    className="rounded-xl border py-2.5 px-2.5 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95"
+                    className="rounded-xl border py-2.5 px-2.5 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95"
                   >
                     <Camera className="h-4 w-4 shrink-0" />
-                    <span className="truncate">📷 Foto / Print da Entrega</span>
+                    <span className="truncate">Foto / Print da Entrega</span>
                   </button>
 
                   <button
@@ -984,10 +995,10 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                       borderColor: '#00E5FF',
                       color: isDaylight ? '#090D16' : '#FFFFFF',
                     }}
-                    className="rounded-xl border py-2.5 px-2.5 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95"
+                    className="rounded-xl border py-2.5 px-2.5 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95"
                   >
                     <Video className="h-4 w-4 text-[#00E5FF] shrink-0" />
-                    <span className="truncate">🎥 Vídeo da Entrega</span>
+                    <span className="truncate">Vídeo da Entrega</span>
                   </button>
                 </div>
 
@@ -1015,13 +1026,14 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                           className="h-14 w-14 rounded-lg object-cover shrink-0"
                         />
                         <div className="min-w-0 flex-1">
-                          <span className="text-xs font-extrabold block truncate">
-                            📷 Foto Anexada
+                          <span className="text-xs font-extrabold flex items-center gap-1 truncate">
+                            <Camera className="h-3 w-3 text-[#00E5FF] shrink-0" />
+                            <span>Foto Anexada</span>
                           </span>
                           <button
                             type="button"
                             onClick={() => setCapturedPhotoDataUrl(undefined)}
-                            className="text-[11px] font-bold text-rose-400 cursor-pointer mt-0.5"
+                            className="text-[11px] font-bold text-slate-400 hover:text-white cursor-pointer mt-0.5"
                           >
                             Remover foto
                           </button>
@@ -1037,8 +1049,9 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                           playsInline
                         />
                         <div className="min-w-0 flex-1">
-                          <span className="text-xs font-extrabold block truncate">
-                            🎥 {capturedVideoName || 'Vídeo Anexado'}
+                          <span className="text-xs font-extrabold flex items-center gap-1 truncate">
+                            <Video className="h-3 w-3 text-[#00E5FF] shrink-0" />
+                            <span>{capturedVideoName || 'Vídeo Anexado'}</span>
                           </span>
                           <button
                             type="button"
@@ -1046,7 +1059,7 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                               setCapturedVideoUrl(undefined);
                               setCapturedVideoName(undefined);
                             }}
-                            className="text-[11px] font-bold text-rose-400 cursor-pointer mt-0.5"
+                            className="text-[11px] font-bold text-slate-400 hover:text-white cursor-pointer mt-0.5"
                           >
                             Remover vídeo
                           </button>
@@ -1196,13 +1209,14 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                   }}
                   className="w-full rounded-xl py-3 px-4 font-black text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md transition active:scale-[0.99]"
                 >
-                  <span>✅ Guardar Registo Completo de Entrega</span>
+                  <Check className="h-4 w-4 shrink-0" />
+                  <span>Guardar Registo Completo de Entrega</span>
                 </button>
               </div>
             )}
 
-            {/* Persistent 📂 Histórico & Arquivo de Entregas Registadas */}
-            <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 overflow-hidden">
+            {/* Persistent Histórico & Arquivo de Entregas Registadas */}
+            <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 overflow-hidden">
               <button
                 type="button"
                 onClick={() => setIsArchiveOpen((prev) => !prev)}
@@ -1211,12 +1225,22 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                 <div className="flex items-center gap-2 min-w-0">
                   <FolderOpen className="h-4 w-4 text-[#00E5FF] shrink-0" />
                   <span className="text-xs sm:text-sm font-extrabold text-zinc-100 truncate">
-                    📂 Arquivo de Entregas (Com Foto/Vídeo &amp; Morada) (
+                    Arquivo de Entregas (Com Foto/Vídeo &amp; Morada) (
                     {archivedDeliveries.length})
                   </span>
                 </div>
-                <span className="text-xs font-black text-[#00E5FF] shrink-0">
-                  {isArchiveOpen ? '▲ Ocultar' : '▼ Ver Arquivo'}
+                <span className="text-xs font-extrabold text-[#00E5FF] shrink-0 inline-flex items-center gap-1">
+                  {isArchiveOpen ? (
+                    <>
+                      <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+                      <span>Ocultar</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                      <span>Ver Arquivo</span>
+                    </>
+                  )}
                 </span>
               </button>
 
@@ -1273,8 +1297,15 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                               {item.pickupAndDeliveryAddress}
                             </span>
                           </p>
-                          <p className="text-[11px] text-zinc-400 font-semibold">
-                            ⏱️ {item.durationMin} min • 📝 {item.notesOrPinCode}
+                          <p className="text-[11px] text-zinc-400 font-semibold flex items-center gap-3 flex-wrap">
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-[#00E5FF] shrink-0" />
+                              <span>{item.durationMin} min</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <FileText className="h-3 w-3 text-[#00E5FF] shrink-0" />
+                              <span>{item.notesOrPinCode}</span>
+                            </span>
                           </p>
                         </div>
 
@@ -1372,76 +1403,76 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
           {effectiveScope === 'GLOBAL_CRUZADO' && !isSinglePlatformMode ? (
             <>
-              {/* GLOBAL CARD 1: Total Combined Net Profit (€ Líquido Global) */}
+              {/* GLOBAL CARD 1: Total Combined Net Profit (€ Líquido Global) — Clean Flat Hairline Layout */}
               <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3">
-                <div className="space-y-1.5 border-b border-zinc-800/80 pb-2.5">
+                <div className="space-y-1 border-b border-zinc-800/80 pb-2.5">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <h3 className="text-xl font-bold text-zinc-100">
+                    <h3 className="text-base sm:text-lg font-extrabold text-zinc-100">
                       1. Lucro Real Combinado (€ Líquido Global)
                     </h3>
-                    <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-1 text-2xl font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
+                    <span className="text-xl sm:text-2xl font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
                       +{crossRefMetrics.globalNetDayEur.toFixed(2)}{'\u00A0'}€
                     </span>
                   </div>
-                  <p className="text-sm sm:text-base font-medium text-zinc-400 w-full leading-snug">
+                  <p className="text-xs sm:text-sm font-medium text-zinc-400 w-full leading-snug">
                     Soma cruzada de {enabledPlatforms.join(' + ')} após frotas,
                     impostos e desgaste
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
-                    <span className="text-base font-medium text-zinc-400 block">
+                <div className="grid grid-cols-2 border-t border-b border-zinc-800/80 divide-x divide-y divide-zinc-800/80">
+                  <div className="p-3">
+                    <span className="text-xs font-medium text-zinc-400 block">
                       Bruto Global Hoje
                     </span>
-                    <span className="text-xl font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
+                    <span className="text-base sm:text-lg font-extrabold text-zinc-100 whitespace-nowrap mt-0.5 block">
                       {crossRefMetrics.globalGrossDayEur.toFixed(2)}{'\u00A0'}€
                     </span>
                   </div>
-                  <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
-                    <span className="text-base font-medium text-zinc-400 block">
+                  <div className="p-3">
+                    <span className="text-xs font-medium text-slate-400 block">
                       Comissões Frota
                     </span>
-                    <span className="text-xl font-bold text-zinc-300 whitespace-nowrap mt-0.5 block">
+                    <span className="text-base sm:text-lg font-semibold text-slate-400 whitespace-nowrap mt-0.5 block">
                       -{crossRefMetrics.globalFleetCutEur.toFixed(2)}{'\u00A0'}€
                     </span>
                   </div>
-                  <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
-                    <span className="text-base font-medium text-zinc-400 block">
+                  <div className="p-3">
+                    <span className="text-xs font-medium text-slate-400 block">
                       Reserva Impostos/SS
                     </span>
-                    <span className="text-xl font-bold text-zinc-300 whitespace-nowrap mt-0.5 block">
+                    <span className="text-base sm:text-lg font-semibold text-slate-400 whitespace-nowrap mt-0.5 block">
                       -{crossRefMetrics.globalTaxReserveEur.toFixed(2)}{'\u00A0'}€
                     </span>
                   </div>
-                  <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3">
-                    <span className="text-base font-medium text-zinc-400 block">
+                  <div className="p-3">
+                    <span className="text-xs font-medium text-slate-400 block">
                       Custo Veículo ({crossRefMetrics.globalKmToday} km)
                     </span>
-                    <span className="text-xl font-bold text-zinc-300 whitespace-nowrap mt-0.5 block">
+                    <span className="text-base sm:text-lg font-semibold text-slate-400 whitespace-nowrap mt-0.5 block">
                       -{crossRefMetrics.globalVehicleCostEur.toFixed(2)}{'\u00A0'}€
                     </span>
                   </div>
                 </div>
               </section>
 
-              {/* GLOBAL CARD 2: Cross-Platform Efficiency Comparison Card (ONLY for enabledPlatforms) */}
+              {/* GLOBAL CARD 2: Cross-Platform Efficiency Comparison Card — Clean Hairline Columns */}
               <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5 flex-wrap">
                   <div className="flex items-center gap-2 min-w-0">
-                    <TrendingUp className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <h3 className="text-xl font-bold text-zinc-100 truncate">
-                      2. Comparativo de Eficiência Cruzada (€/h e €/km)
+                    <TrendingUp className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <h3 className="text-base sm:text-lg font-extrabold text-zinc-100 truncate">
+                      2. Melhor Plataforma (€/h e €/km)
                     </h3>
                   </div>
-                  <span className="rounded-xl bg-zinc-950 border border-zinc-800 px-2.5 py-1 text-base font-bold text-emerald-400 shrink-0 whitespace-nowrap">
+                  <span className="text-xs sm:text-sm font-extrabold text-emerald-400 shrink-0 whitespace-nowrap">
                     Melhor: {crossRefMetrics.bestHourlyPlatform.ledger.platform}{' '}
                     ({crossRefMetrics.bestHourlyPlatform.netPerHourEur.toFixed(2)}{'\u00A0'}€/h)
                   </span>
                 </div>
 
                 <div
-                  className={`grid gap-2.5 ${
+                  className={`grid divide-x divide-zinc-800/80 border-b border-zinc-800/80 ${
                     enabledPlatforms.length === 2
                       ? 'grid-cols-2'
                       : 'grid-cols-3'
@@ -1456,23 +1487,23 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                       <div
                         key={platform}
                         onClick={() => setActivePlatformScope(platform)}
-                        className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3.5 space-y-1 cursor-pointer hover:border-zinc-700 transition"
+                        className="p-3 space-y-1 cursor-pointer hover:bg-zinc-950/60 transition"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-lg font-extrabold text-zinc-100 truncate">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-sm sm:text-base font-extrabold text-zinc-100 truncate">
                             {platform}
                           </span>
                           {isBest && (
-                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0" />
+                            <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
                           )}
                         </div>
-                        <div className="text-2xl font-extrabold text-emerald-400 whitespace-nowrap">
+                        <div className="text-lg sm:text-xl font-extrabold text-emerald-400 whitespace-nowrap">
                           {m.netPerHourEur.toFixed(2)}{'\u00A0'}€/h
                         </div>
-                        <div className="text-lg font-bold text-zinc-200 whitespace-nowrap">
+                        <div className="text-xs sm:text-sm font-bold text-zinc-200 whitespace-nowrap">
                           {m.netPerKmEur.toFixed(2)}{'\u00A0'}€/km líq.
                         </div>
-                        <div className="text-base font-medium text-zinc-400 truncate whitespace-nowrap">
+                        <div className="text-[11px] font-medium text-slate-400 truncate whitespace-nowrap">
                           Líq: +{m.netDayEur.toFixed(2)}{'\u00A0'}€ • Frota:{' '}
                           {m.ledger.fleetCommissionPct}%
                         </div>
@@ -1482,41 +1513,41 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                 </div>
               </section>
 
-              {/* GLOBAL CARD 3: Global Payout Calendar (ONLY for enabledPlatforms) */}
-              <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-3">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
+              {/* GLOBAL CARD 3: Global Payout Calendar — Clean Flat Divided Rows */}
+              <section className="rounded-2xl bg-zinc-900/90 border border-zinc-800/80 p-4 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5 flex-wrap">
                   <div className="flex items-center gap-2 min-w-0">
-                    <Calendar className="h-4 w-4 text-zinc-300 shrink-0" />
-                    <h3 className="text-lg sm:text-xl font-bold text-zinc-100">
+                    <Calendar className="h-4 w-4 text-cyan-400 shrink-0" />
+                    <h3 className="text-base sm:text-lg font-extrabold text-zinc-100">
                       3. Calendário de Repasses ({enabledPlatforms.join(' + ')})
                     </h3>
                   </div>
-                  <span className="text-base sm:text-lg font-extrabold text-zinc-200 shrink-0 whitespace-nowrap">
+                  <span className="text-xs sm:text-sm font-extrabold text-zinc-200 shrink-0 whitespace-nowrap">
                     Semana: +{crossRefMetrics.globalNetWeekEur.toFixed(2)}{'\u00A0'}€ líq.
                   </span>
                 </div>
 
-                <div className="space-y-2">
+                <div className="divide-y divide-zinc-800/80">
                   {enabledPlatforms.map((platform) => {
                     const m = crossRefMetrics.byPlatform[platform];
                     return (
                       <div
                         key={platform}
-                        className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-3 flex items-start justify-between gap-3"
+                        className="py-2.5 first:pt-0 last:pb-0 flex items-start justify-between gap-3"
                       >
                         <div className="min-w-0 flex-1 space-y-0.5">
-                          <span className="text-sm sm:text-base font-extrabold text-zinc-100 block leading-snug break-words">
+                          <span className="text-xs sm:text-sm font-extrabold text-zinc-100 block leading-snug break-words">
                             {platform} • {m.ledger.payoutMethodology}
                           </span>
-                          <span className="text-xs sm:text-sm font-medium text-zinc-400 block leading-snug break-words">
+                          <span className="text-xs font-medium text-slate-400 block leading-snug break-words">
                             {m.ledger.nextPayoutDateLabel}
                           </span>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="text-lg sm:text-xl font-extrabold text-emerald-400 block whitespace-nowrap">
+                          <span className="text-sm sm:text-base font-extrabold text-emerald-400 block whitespace-nowrap">
                             +{m.netWeekEur.toFixed(2)}{'\u00A0'}€
                           </span>
-                          <span className="text-xs sm:text-sm font-medium text-zinc-400 block whitespace-nowrap">
+                          <span className="text-[11px] font-medium text-slate-400 block whitespace-nowrap">
                             Hoje: +{m.netDayEur.toFixed(2)}{'\u00A0'}€
                           </span>
                         </div>

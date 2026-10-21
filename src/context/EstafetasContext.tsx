@@ -143,7 +143,10 @@ import {
   FOUNDER_ADMIN_COURIER_ID,
   generateUniqueCourierIdForName,
   getActiveCloudCourierRows,
+  getDeterministicCourierCenterCoords,
+  isCourierActivelyOnline,
   isCourierAdminByName,
+  isDefaultOrMissingCourierCoord,
   loadCloudSharedState,
   loadCourierShiftVaultSnapshot,
   normalizeAccountKey,
@@ -151,12 +154,13 @@ import {
   publishAdminApprovalDecisionToCloud,
   publishCourierOfflineToCloud,
   publishCourierPresenceToCloud,
+  publishDirectChatMessageToCloud,
   publishRoadHazardToCloud,
   publishWalkieMessageToCloud,
   registerLocalCloudIdentityProvider,
   resolveApprovalStatusForCourier,
   saveAndSyncCourierShiftVaultSnapshot,
-   startRealtimeCloudSyncStream,
+  startRealtimeCloudSyncStream,
   STRICT_ONLINE_HEARTBEAT_TTL_MS,
   subscribeToCloudSharedState,
 } from '../services/cloudSync';
@@ -8229,7 +8233,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       ? FOUNDER_ADMIN_COURIER_ID
       : prof.id || getOrCreatePersistentCourierUuid();
 
-    if (prof.isRegistered && prof.name.trim().length > 0 && !state.isAppPaused) {
+    if (prof.isRegistered && prof.name.trim().length > 0) {
       const cleanName = prof.name.trim();
       // If courier is in Ninja Mode (anonymousMode === true), broadcast offline so pin is hidden on Map
       if (state.userPrefs.anonymousMode) {
@@ -8262,6 +8266,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         }
       }
 
+      if (isDefaultOrMissingCourierCoord(ownLat, ownLng)) {
+        const detCoords = getDeterministicCourierCenterCoords(
+          persistentId || cleanName
+        );
+        ownLat = detCoords.lat;
+        ownLng = detCoords.lng;
+      }
+
       void publishCourierPresenceToCloud({
         profile: {
           ...prof,
@@ -8270,30 +8282,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           lat: ownLat,
           lng: ownLng,
         },
-        status:
-          state.userOrderAvailabilityStatus === 'DISPONIVEL'
+        status: state.isAppPaused
+          ? 'paused'
+          : state.userOrderAvailabilityStatus === 'DISPONIVEL'
             ? 'online'
             : 'busy',
       });
-      void publishAccountRegistrationToCloud({
-        id: persistentId,
-        username: cleanName,
-        emailOrPhone: cleanName,
-        vehicle: prof.vehicle,
-        platforms:
-          prof.active_platforms && prof.active_platforms.length > 0
-            ? prof.active_platforms
-            : activePlatforms,
-        zone: prof.zone,
-        role: isFounder ? 'admin' : 'courier',
-        lat: ownLat || AMARANTE_DEFAULT_COORDS.lat,
-        lng: ownLng || AMARANTE_DEFAULT_COORDS.lng,
-        deviceModel: prof.device_model || deviceScreenProfile.deviceModel,
-      });
     }
   }, [
-    activePlatforms,
-    deviceScreenProfile.deviceModel,
     state.isAppPaused,
     state.userOrderAvailabilityStatus,
     state.userPrefs.anonymousMode,
@@ -11602,42 +11598,108 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         hour: '2-digit',
         minute: '2-digit',
       });
-      setState((prev) => ({
-        ...prev,
-        onlineDirectoryCouriers: prev.onlineDirectoryCouriers.map((c) =>
-          c.id === courierId
-            ? {
-                ...c,
-                contactPermission: 'APROVADO',
-                lastMessageDeliveryState: 'MENSAGEM_ENVIADA',
-                directMessages: [
-                  ...c.directMessages,
-                  {
-                    id: `DM-${Date.now()}`,
-                    sender: 'EU',
-                    text: trimmed,
-                    timestamp: nowStr,
-                  },
-                ],
-              }
-            : c
-        ),
-      }));
+      const msgId = `DM-${Date.now()}`;
+      setState((prev) => {
+        const exists = prev.onlineDirectoryCouriers.some(
+          (c) => c.id === courierId
+        );
+        if (exists) {
+          return {
+            ...prev,
+            onlineDirectoryCouriers: prev.onlineDirectoryCouriers.map((c) =>
+              c.id === courierId
+                ? {
+                    ...c,
+                    contactPermission: 'APROVADO',
+                    lastMessageDeliveryState: 'MENSAGEM_ENVIADA',
+                    directMessages: [
+                      ...c.directMessages,
+                      {
+                        id: msgId,
+                        sender: 'EU',
+                        text: trimmed,
+                        timestamp: nowStr,
+                      },
+                    ],
+                  }
+                : c
+            ),
+          };
+        }
+        const cloudMatch = cloudSharedState.couriers[courierId];
+        const reqMatch = cloudSharedState.approvalRequests.find(
+          (r) => r.id === courierId
+        );
+        const fallbackName =
+          cloudMatch?.name || reqMatch?.username || 'Colega Estafeta';
+        const fallbackCoords = getDeterministicCourierCenterCoords(
+          courierId || fallbackName
+        );
+        const newEntry: OnlineDirectoryCourier = {
+          id: courierId,
+          callsign: fallbackName,
+          vehicle: 'Mota 125cc',
+          distanceKm: 0.3,
+          zoneName:
+            cloudMatch?.zone ||
+            reqMatch?.zone ||
+            'Amarante Centro / São Gonçalo',
+          cellId: 'CELL-CENTRO',
+          reputationPct: 100,
+          orderStatus: 'DISPONIVEL',
+          contactPermission: 'APROVADO',
+          isOnlineActive: isCourierActivelyOnline(cloudMatch),
+          lastMessageDeliveryState: 'MENSAGEM_ENVIADA',
+          directMessages: [
+            {
+              id: msgId,
+              sender: 'EU',
+              text: trimmed,
+              timestamp: nowStr,
+            },
+          ],
+          lat: cloudMatch?.lat || fallbackCoords.lat,
+          lng: cloudMatch?.lng || fallbackCoords.lng,
+        };
+        return {
+          ...prev,
+          onlineDirectoryCouriers: [...prev.onlineDirectoryCouriers, newEntry],
+        };
+      });
 
       const selfProf = realCourierProfileRef.current;
+      const senderId = selfProf.id || 'local_courier';
+      const senderCallsign = selfProf.name.trim() || 'Estafeta';
+
+      void publishDirectChatMessageToCloud({
+        id: msgId,
+        senderId,
+        senderCallsign,
+        recipientId: courierId,
+        text: trimmed,
+        messageBody: trimmed,
+        channelType: 'DIRECT_1ON1',
+        createdAt: new Date().toISOString(),
+      });
+
       if (selfProf.id) {
         void insertDirectMessageToSupabaseRest({
           supabaseUrl: state.aiAgentConfig.supabaseUrl,
           supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
           senderId: selfProf.id,
-          senderCallsign: selfProf.name.trim() || 'Estafeta',
+          senderCallsign,
           recipientId: courierId,
           messageBody: trimmed,
           channelType: 'DIRECT_1ON1',
         });
       }
     },
-    [state.aiAgentConfig.supabaseUrl, state.aiAgentConfig.supabaseAnonKey]
+    [
+      cloudSharedState.approvalRequests,
+      cloudSharedState.couriers,
+      state.aiAgentConfig.supabaseUrl,
+      state.aiAgentConfig.supabaseAnonKey,
+    ]
   );
 
   const setMapCourierFilterMode = useCallback((mode: MapCourierFilterMode) => {
@@ -13321,7 +13383,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       seen.add(realCourierProfile.id);
     }
 
-    // 2. Append all other real couriers synced from Supabase public.couriers & Cloud Sync (active within last 2 hours)
+    // 2. Append all active real couriers synced from Cloud Sync & Supabase public.couriers
     const nowMs = Date.now();
     const seenNames = new Set<string>();
     if (isSelfRegistered && realCourierProfile?.name) {
@@ -13332,11 +13394,63 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       ...supabaseLiveCouriers,
     ];
 
+    const myId = realCourierProfile?.id || '';
+
+    const mergeCloudDirectMessagesForCourier = (
+      courierId: string,
+      courierName: string,
+      baseMessages: OnlineDirectoryCourier['directMessages']
+    ): OnlineDirectoryCourier['directMessages'] => {
+      const cNameKey = normalizeAccountKey(courierName);
+      const myNameKey = normalizeAccountKey(realCourierProfile?.name || '');
+      const relevant = (cloudSharedState.directMessages || []).filter((dm) => {
+        const sKey = normalizeAccountKey(dm.senderCallsign || '');
+        const isFromMeToPeer =
+          (dm.senderId === myId || (myNameKey && sKey === myNameKey)) &&
+          (dm.recipientId === courierId ||
+            normalizeAccountKey(dm.recipientId) === cNameKey);
+        const isFromPeerToMe =
+          (dm.senderId === courierId || (cNameKey && sKey === cNameKey)) &&
+          (dm.recipientId === myId ||
+            dm.recipientId === 'ALL' ||
+            (myNameKey && normalizeAccountKey(dm.recipientId) === myNameKey));
+        return isFromMeToPeer || isFromPeerToMe;
+      });
+      if (relevant.length === 0) return baseMessages;
+      const existingIds = new Set(baseMessages.map((m) => m.id));
+      const appended = [...baseMessages];
+      relevant.forEach((dm) => {
+        if (existingIds.has(dm.id)) return;
+        existingIds.add(dm.id);
+        const isFromMe =
+          dm.senderId === myId ||
+          (myNameKey && normalizeAccountKey(dm.senderCallsign) === myNameKey);
+        appended.push({
+          id: dm.id,
+          sender: isFromMe ? 'EU' : 'COLEGA',
+          text: dm.text || dm.messageBody || '',
+          timestamp: dm.createdAt
+            ? new Date(dm.createdAt).toLocaleTimeString('pt-PT', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+            : 'Agora',
+        });
+      });
+      return appended;
+    };
+
+    const remoteEntries: OnlineDirectoryCourier[] = [];
+
     mergedLiveRows.forEach((row) => {
       if (!row || seen.has(row.id) || !row.name || !row.name.trim()) return;
       const nameKey = normalizeAccountKey(row.name);
       if (!nameKey || seenNames.has(nameKey)) return;
-      const updatedMs = row.updated_at ? Date.parse(row.updated_at) : 0;
+      const cloudMatch = cloudSharedState.couriers[row.id];
+      const updatedMs =
+        cloudMatch?.localReceivedAt ||
+        cloudMatch?.heartbeatAt ||
+        (row.updated_at ? Date.parse(row.updated_at) : 0);
       if (
         !updatedMs ||
         !Number.isFinite(updatedMs) ||
@@ -13355,53 +13469,304 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         return;
       }
       const existing = state.onlineDirectoryCouriers.find(
-        (c) => c.id === row.id
+        (c) =>
+          c.id === row.id || normalizeAccountKey(c.callsign) === nameKey
       );
+      const fallbackCoords = getDeterministicCourierCenterCoords(
+        row.id || row.name
+      );
+      const safeLat = !isDefaultOrMissingCourierCoord(row.lat, row.lng)
+        ? row.lat
+        : fallbackCoords.lat;
+      const safeLng = !isDefaultOrMissingCourierCoord(row.lat, row.lng)
+        ? row.lng
+        : fallbackCoords.lng;
+
       const distKm = calculateHaversineDistanceKm(
         myLat,
         myLng,
-        row.lat || AMARANTE_DEFAULT_COORDS.lat,
-        row.lng || AMARANTE_DEFAULT_COORDS.lng
+        safeLat,
+        safeLng
       );
-      result.push(
-        existing
-          ? {
-              ...existing,
-              callsign: row.name,
-              isSelfProfile: false,
-              distanceKm: distKm,
-              vehicle: normalizeCourierVehicle(row.vehicle),
-              zoneName: row.zone,
-              cellId: mapZoneToAmaranteCellId(row.zone),
-              orderStatus:
-                row.has_order ||
-                row.status === 'Ocupado' ||
-                row.status === 'OCUPADO_COM_PEDIDO'
-                  ? 'OCUPADO_COM_PEDIDO'
-                  : 'DISPONIVEL',
-              avatarPhotoUrl: row.avatar_url || existing.avatarPhotoUrl,
-              activePlatforms:
-                row.active_platforms && row.active_platforms.length > 0
-                  ? row.active_platforms
-                  : existing.activePlatforms || ['Uber Eats', 'Glovo'],
-              lat: row.lat,
-              lng: row.lng,
-              updatedAtIso: row.updated_at,
-            }
-          : buildFallbackDirectoryEntry(row, false)
-      );
+      const isPausedShift =
+        row.status === 'Pausa' || cloudMatch?.status === 'paused';
+      const baseEntry = existing
+        ? {
+            ...existing,
+            id: row.id,
+            callsign: row.name,
+            isSelfProfile: false,
+            isOnlineActive: true,
+            contactPermission: 'APROVADO' as const,
+            distanceKm: distKm,
+            vehicle: normalizeCourierVehicle(row.vehicle),
+            zoneName: row.zone,
+            cellId: mapZoneToAmaranteCellId(row.zone),
+            orderStatus: (row.has_order ||
+            row.status === 'Ocupado' ||
+            row.status === 'OCUPADO_COM_PEDIDO'
+              ? 'OCUPADO_COM_PEDIDO'
+              : 'DISPONIVEL') as CourierOrderAvailabilityStatus,
+            buddyTenureText: isPausedShift
+              ? 'Ausente • Em Pausa'
+              : row.buddy_since || 'Online no Turno',
+            avatarPhotoUrl: row.avatar_url || existing.avatarPhotoUrl,
+            activePlatforms:
+              row.active_platforms && row.active_platforms.length > 0
+                ? row.active_platforms
+                : existing.activePlatforms || ['Uber Eats', 'Glovo'],
+            lat: safeLat,
+            lng: safeLng,
+            updatedAtIso: row.updated_at,
+          }
+        : {
+            ...buildFallbackDirectoryEntry(
+              { ...row, lat: safeLat, lng: safeLng },
+              false
+            ),
+            buddyTenureText: isPausedShift
+              ? 'Ausente • Em Pausa'
+              : row.buddy_since || 'Online no Turno',
+          };
+
+      remoteEntries.push({
+        ...baseEntry,
+        directMessages: mergeCloudDirectMessagesForCourier(
+          row.id,
+          row.name,
+          baseEntry.directMessages
+        ),
+      });
       seen.add(row.id);
       seenNames.add(nameKey);
     });
 
-    // 3. Append remaining directory couriers (filtering out mocks & non-remote stale entries when in Production Mode)
-    if (!isProdMode) {
-      state.onlineDirectoryCouriers.forEach((c) => {
-        if (seen.has(c.id)) return;
-        result.push({ ...c, isSelfProfile: false });
-        seen.add(c.id);
-      });
+    // 3. Keep All Known / Registered Team Members Visible in Buddys -> Chat -> Todos (Online, Ausente, or Offline)
+    const knownTeamCandidates: Array<{
+      id: string;
+      name: string;
+      vehicle: string;
+      zone: string;
+      platforms?: PlatformName[];
+      avatar?: string;
+      lat?: number;
+      lng?: number;
+      status?: string;
+    }> = [];
+
+    Object.values(cloudSharedState.couriers).forEach((c) => {
+      if (c && c.name && c.name.trim() && c.approvalStatus !== 'blocked') {
+        knownTeamCandidates.push({
+          id: c.id,
+          name: c.name.trim(),
+          vehicle: c.vehicle || 'Mota 125cc',
+          zone: c.zone || 'Amarante Centro / São Gonçalo',
+          platforms: c.platforms,
+          avatar: c.avatar,
+          lat: c.lat,
+          lng: c.lng,
+          status: c.status,
+        });
+      }
+    });
+
+    cloudSharedState.approvalRequests.forEach((req) => {
+      if (
+        req &&
+        req.username &&
+        req.username.trim() &&
+        req.approvalStatus !== 'blocked'
+      ) {
+        knownTeamCandidates.push({
+          id: req.id,
+          name: req.username.trim(),
+          vehicle: String(req.vehicle || 'Mota 125cc'),
+          zone: String(req.zone || 'Amarante Centro / São Gonçalo'),
+          platforms: req.platforms,
+          lat: req.lat,
+          lng: req.lng,
+          status: 'offline',
+        });
+      }
+    });
+
+    if (typeof window !== 'undefined') {
+      try {
+        const rawSaved = window.localStorage.getItem('buddy_saved_accounts_v1');
+        if (rawSaved) {
+          const parsedSaved = JSON.parse(rawSaved) as Array<{
+            id?: string;
+            username?: string;
+            vehicle?: string;
+            zone?: string;
+            platforms?: PlatformName[];
+            status?: string;
+          }>;
+          if (Array.isArray(parsedSaved)) {
+            parsedSaved.forEach((acc) => {
+              if (
+                acc &&
+                acc.username &&
+                acc.username.trim() &&
+                acc.status !== 'BLOQUEADO'
+              ) {
+                const cleanU = acc.username.trim();
+                knownTeamCandidates.push({
+                  id:
+                    acc.id ||
+                    (isCourierAdminByName(cleanU)
+                      ? FOUNDER_ADMIN_COURIER_ID
+                      : `courier_team_${normalizeAccountKey(cleanU).replace(/[^a-z0-9]/g, '')}`),
+                  name: cleanU,
+                  vehicle: acc.vehicle || 'Mota 125cc',
+                  zone: acc.zone || 'Amarante Centro / São Gonçalo',
+                  platforms: acc.platforms,
+                  status: 'offline',
+                });
+              }
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
+
+    // Ensure core Amarante team members (including Ary Moreira & Presidente) are always listed in Buddys -> Chat -> Todos
+    [
+      {
+        id: FOUNDER_ADMIN_COURIER_ID,
+        name: 'Presidente',
+        vehicle: 'Mota 125cc',
+        zone: 'Amarante Centro / São Gonçalo',
+        platforms: ['Uber Eats', 'Glovo'] as PlatformName[],
+      },
+      {
+        id: 'courier_team_arymoreira',
+        name: 'Ary Moreira',
+        vehicle: 'Mota 125cc',
+        zone: 'Amarante Centro / São Gonçalo',
+        platforms: ['Uber Eats', 'Glovo'] as PlatformName[],
+      },
+    ].forEach((seedMember) => {
+      knownTeamCandidates.push({
+        ...seedMember,
+        status: 'offline',
+      });
+    });
+
+    knownTeamCandidates.forEach((cand) => {
+      const nameKey = normalizeAccountKey(cand.name);
+      if (!nameKey || seenNames.has(nameKey) || seen.has(cand.id)) return;
+      if (
+        isGhostDuplicateOfSelf(
+          cand.id,
+          cand.name,
+          realCourierProfile?.id || '',
+          realCourierProfile?.name || ''
+        )
+      ) {
+        return;
+      }
+
+      const fallbackCoords = getDeterministicCourierCenterCoords(
+        cand.id || cand.name
+      );
+      const safeLat = !isDefaultOrMissingCourierCoord(cand.lat, cand.lng)
+        ? Number(cand.lat)
+        : fallbackCoords.lat;
+      const safeLng = !isDefaultOrMissingCourierCoord(cand.lat, cand.lng)
+        ? Number(cand.lng)
+        : fallbackCoords.lng;
+
+      const existing = state.onlineDirectoryCouriers.find(
+        (c) =>
+          c.id === cand.id || normalizeAccountKey(c.callsign) === nameKey
+      );
+      const distKm = calculateHaversineDistanceKm(
+        myLat,
+        myLng,
+        safeLat,
+        safeLng
+      );
+      const initials =
+        cand.name
+          .trim()
+          .split(/\s+/)
+          .map((p) => p[0]?.toUpperCase() || '')
+          .join('')
+          .slice(0, 2) || 'BD';
+
+      const baseMessages = existing?.directMessages?.length
+        ? existing.directMessages
+        : [
+            {
+              id: `DM-TEAM-${cand.id.slice(0, 8)}`,
+              sender: 'COLEGA' as const,
+              text: `Canal direto com ${cand.name} disponível. Podes enviar mensagem a qualquer momento.`,
+              timestamp: 'Equipa',
+            },
+          ];
+
+      remoteEntries.push({
+        id: cand.id,
+        callsign: cand.name,
+        isSelfProfile: false,
+        vehicle: normalizeCourierVehicle(cand.vehicle),
+        distanceKm: distKm,
+        zoneName: cand.zone || 'Amarante Centro / São Gonçalo',
+        cellId: mapZoneToAmaranteCellId(
+          cand.zone || 'Amarante Centro / São Gonçalo'
+        ),
+        reputationPct: 100,
+        orderStatus: 'DISPONIVEL',
+        contactPermission: 'APROVADO',
+        isOnlineActive: false,
+        lastMessageDeliveryState:
+          existing?.lastMessageDeliveryState || 'MENSAGEM_RECEBIDA',
+        directMessages: mergeCloudDirectMessagesForCourier(
+          cand.id,
+          cand.name,
+          baseMessages
+        ),
+        avatarInitials: initials,
+        avatarPhotoUrl: cand.avatar || existing?.avatarPhotoUrl,
+        activePlatforms:
+          cand.platforms && cand.platforms.length > 0
+            ? cand.platforms
+            : ['Uber Eats', 'Glovo'],
+        buddyTenureText: 'Offline • Equipa Amarante',
+        voiceChatStatus: 'INATIVO',
+        invitedGroupName: null,
+        crossStats: {
+          deliveriesToday: 0,
+          avgEurPerKm: 1.15,
+          activeHoursToday: 0,
+          syncScorePct: 99,
+        },
+        activeChallenge: null,
+        lat: safeLat,
+        lng: safeLng,
+      });
+
+      seen.add(cand.id);
+      seenNames.add(nameKey);
+    });
+
+    // Sort remote couriers: Online first, then Ausente, then Offline
+    remoteEntries.sort((a, b) => {
+      const rank = (c: OnlineDirectoryCourier) => {
+        if (c.isOnlineActive) {
+          return c.buddyTenureText?.includes('Ausente') ? 1 : 0;
+        }
+        return 2;
+      };
+      const diff = rank(a) - rank(b);
+      if (diff !== 0) return diff;
+      return a.callsign.localeCompare(b.callsign, 'pt-PT');
+    });
+
+    result.push(...remoteEntries);
 
     return result;
   }, [

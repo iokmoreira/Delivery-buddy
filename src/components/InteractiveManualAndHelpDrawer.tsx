@@ -30,6 +30,20 @@ import {
   Lock,
   Unlock,
   Printer,
+  Wallet,
+  Edit3,
+  EyeOff,
+  PauseCircle,
+  Radio,
+  MessageSquare,
+  Bell,
+  Mail,
+  Save,
+  Target,
+  Car,
+  CloudRain,
+  BatteryCharging,
+  FolderOpen,
 } from 'lucide-react';
 import {
   CONTEXTUAL_HELP_BY_TAB,
@@ -1991,9 +2005,28 @@ export const MenuMaisHubView: React.FC = () => {
 
   const isFinancasSubTab = activeTab === 'financas';
 
+  const currentShiftMode: 'ONLINE' | 'AUSENTE' | 'NINJA' = userPrefs.anonymousMode
+    ? 'NINJA'
+    : isAppPaused
+      ? 'AUSENTE'
+      : 'ONLINE';
+
+  const handleSelectShiftMode = (mode: 'ONLINE' | 'AUSENTE' | 'NINJA') => {
+    if (mode === 'ONLINE') {
+      if (isAppPaused) toggleAppPauseMode();
+      if (userPrefs.anonymousMode) toggleAnonymousMode();
+    } else if (mode === 'AUSENTE') {
+      if (userPrefs.anonymousMode) toggleAnonymousMode();
+      if (!isAppPaused) toggleAppPauseMode();
+    } else if (mode === 'NINJA') {
+      if (isAppPaused) toggleAppPauseMode();
+      if (!userPrefs.anonymousMode) toggleAnonymousMode();
+    }
+  };
+
   return (
     <div className="space-y-3">
-      {/* TOP SEGMENTED SWITCHER INSIDE PERFIL: Tab A (👤 Meu Perfil & Ajustes) | Tab B (💶 Finanças & Metas) */}
+      {/* TOP SEGMENTED SWITCHER INSIDE PERFIL: Tab A (Meu Perfil & Ajustes) | Tab B (Finanças & Metas) */}
       <div
         style={{
           backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
@@ -2020,7 +2053,8 @@ export const MenuMaisHubView: React.FC = () => {
           }}
           className="rounded-xl border py-2.5 px-2 text-xs sm:text-sm font-black tracking-tight flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
         >
-          <span>👤 Meu Perfil &amp; Ajustes</span>
+          <UserCheck className="h-4 w-4 shrink-0" />
+          <span>Meu Perfil &amp; Ajustes</span>
         </button>
 
         <button
@@ -2041,7 +2075,8 @@ export const MenuMaisHubView: React.FC = () => {
           }}
           className="rounded-xl border py-2.5 px-2 text-xs sm:text-sm font-black tracking-tight flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
         >
-          <span>💶 Finanças &amp; Metas</span>
+          <Wallet className="h-4 w-4 shrink-0" />
+          <span>Finanças &amp; Metas</span>
         </button>
       </div>
 
@@ -2049,57 +2084,158 @@ export const MenuMaisHubView: React.FC = () => {
         <FinanceGoalsAndRewardsModule />
       ) : (
         <>
-          {/* 1. VERY TOP OF AJUSTES: 🚪 Terminar Sessão / Trocar Conta */}
-      <button
-        type="button"
-        onClick={logoutSession}
-        style={{
-          backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
-          borderColor:
-            themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.35)',
-          color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
-          borderRadius: '12px',
-        }}
-        className="w-full border px-4 py-3 text-left flex items-center justify-between gap-3 cursor-pointer transition hover:border-[#00E5FF] shadow-xs"
-      >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span
+          {/* 1. SLEEK USER HEADER AT TOP OF PERFIL + OFFICIAL 3-MODE SHIFT SELECTOR (Online | Ausente | Modo Ninja) */}
+          <div
             style={{
-              backgroundColor: 'rgba(244, 63, 94, 0.14)',
-              borderColor: 'rgba(244, 63, 94, 0.45)',
+              backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0F172A',
+              borderColor:
+                themeMode === 'DAYLIGHT'
+                  ? '#CBD5E1'
+                  : 'rgba(0, 229, 255, 0.28)',
             }}
-            className="h-9 w-9 rounded-lg border flex items-center justify-center shrink-0 text-base"
+            className="rounded-2xl border p-3.5 space-y-3 shadow-xs"
           >
-            🚪
-          </span>
-          <div className="min-w-0">
-            <span
-              style={{
-                color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
-              }}
-              className="block text-sm font-extrabold truncate"
-            >
-              🚪 Terminar Sessão / Trocar Conta
-            </span>
-            <span
-              style={{
-                color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
-              }}
-              className="block text-xs font-semibold truncate"
-            >
-              Sessão ativa: {currentUserName} • Toque para sair ou trocar
-            </span>
-          </div>
-        </div>
-        <ChevronRight
-          style={{
-            color: themeMode === 'DAYLIGHT' ? '#090D16' : '#00E5FF',
-          }}
-          className="h-5 w-5 shrink-0"
-        />
-      </button>
+            {/* User Identity Row: Avatar + Nome, Veículo, Plataformas */}
+            <div className="flex items-center justify-between gap-3 min-w-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF] bg-slate-900 shrink-0 flex items-center justify-center">
+                  {realCourierProfile?.isRegistered &&
+                  realCourierProfile.avatar_url ? (
+                    <img
+                      src={realCourierProfile.avatar_url}
+                      alt={currentUserName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-sm font-extrabold text-white">
+                      {currentUserName.slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <span
+                    style={{
+                      color: themeMode === 'DAYLIGHT' ? '#0F172A' : '#FFFFFF',
+                    }}
+                    className="block text-base font-extrabold truncate"
+                  >
+                    {currentUserName}
+                  </span>
+                  <span
+                    style={{
+                      color: themeMode === 'DAYLIGHT' ? '#475569' : '#94A3B8',
+                    }}
+                    className="block text-xs font-semibold truncate mt-0.5"
+                  >
+                    {realCourierProfile?.vehicle || 'Mota 125cc'} •{' '}
+                    {activePlatforms.join(' + ')}
+                  </span>
+                </div>
+              </div>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold shrink-0 border ${
+                  currentShiftMode === 'ONLINE'
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                    : currentShiftMode === 'AUSENTE'
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                      : 'bg-slate-800 border-cyan-500/40 text-cyan-300'
+                }`}
+              >
+                {currentShiftMode === 'ONLINE'
+                  ? 'Online'
+                  : currentShiftMode === 'AUSENTE'
+                    ? 'Ausente'
+                    : 'Modo Ninja'}
+              </span>
+            </div>
 
-      {/* Top Quick Actions Grid: Enviar App / QR Code APK | Suporte em Tempo Real | Manual & Dossiê Legal */}
+            {/* Quick SVG Action Buttons: Editar Perfil | Foto | Terminar Sessão (Sleek Matte Dark Slate #0F172A, Zero Bright Red) */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCourierRegistrationModalOpen(true)}
+                className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 py-2 px-2.5 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+              >
+                <Edit3 className="h-3.5 w-3.5 shrink-0" />
+                <span>Editar Perfil</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toggleAccordionCard('PERFIL')}
+                className="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 py-2 px-2.5 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+              >
+                <Camera className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                <span>Foto</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={logoutSession}
+                style={{ backgroundColor: '#0F172A' }}
+                className="rounded-xl border border-slate-700 hover:border-cyan-500/40 text-slate-200 py-2 px-2.5 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+              >
+                <LogOut className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                <span>Terminar Sessão</span>
+              </button>
+            </div>
+
+            {/* Prominent 3-Way Estado do Turno Selector: Online | Ausente | Modo Ninja */}
+            <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
+                <span>Estado do Turno</span>
+                <span className="text-cyan-400">
+                  {currentShiftMode === 'ONLINE'
+                    ? 'Visível no Mapa & Buddys'
+                    : currentShiftMode === 'AUSENTE'
+                      ? 'Em Pausa / Intervalo'
+                      : 'Invisível no Mapa (Acesso Total)'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleSelectShiftMode('ONLINE')}
+                  className={`rounded-xl py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
+                    currentShiftMode === 'ONLINE'
+                      ? 'bg-slate-950 border-[#00E5FF] text-[#00E5FF]'
+                      : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Radio className="h-3.5 w-3.5 shrink-0" />
+                  <span>Online</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectShiftMode('AUSENTE')}
+                  className={`rounded-xl py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
+                    currentShiftMode === 'AUSENTE'
+                      ? 'bg-slate-950 border-amber-400 text-amber-300'
+                      : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <PauseCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span>Ausente</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectShiftMode('NINJA')}
+                  className={`rounded-xl py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
+                    currentShiftMode === 'NINJA'
+                      ? 'bg-slate-950 border-[#00E5FF] text-[#00E5FF]'
+                      : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <EyeOff className="h-3.5 w-3.5 shrink-0" />
+                  <span>Modo Ninja</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Top Quick Actions Grid: Enviar App / QR Code APK | Suporte em Tempo Real | Manual & Dossiê Legal */}
       <div
         style={{
           backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
@@ -2178,9 +2314,9 @@ export const MenuMaisHubView: React.FC = () => {
                   borderColor: 'rgba(0, 229, 255, 0.45)',
                   color: '#00E5FF',
                 }}
-                className="h-9 w-9 rounded-lg border flex items-center justify-center shrink-0 text-base"
+                className="h-9 w-9 rounded-lg border flex items-center justify-center shrink-0"
               >
-                💬
+                <MessageSquare className="h-4 w-4 text-[#00E5FF]" />
               </span>
               <div className="min-w-0">
                 <span
@@ -2235,7 +2371,7 @@ export const MenuMaisHubView: React.FC = () => {
                 }}
                 className="block text-sm font-extrabold truncate"
               >
-                📘 Manual &amp; Dossiê Legal (RGPD / Finanças / AT)
+                Manual &amp; Dossiê Legal (RGPD / Finanças / AT)
               </span>
               <span
                 style={{
@@ -2290,9 +2426,10 @@ export const MenuMaisHubView: React.FC = () => {
               style={{
                 color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
               }}
-              className="block text-sm sm:text-base font-extrabold truncate"
+              className="flex items-center gap-1.5 text-sm sm:text-base font-extrabold truncate"
             >
-              👤 Perfil ({currentUserName})
+              <UserCheck className="h-4 w-4 text-[#00E5FF] shrink-0" />
+              <span>Perfil ({currentUserName})</span>
             </span>
             <span
               style={{
@@ -2315,14 +2452,15 @@ export const MenuMaisHubView: React.FC = () => {
 
         {openAccordion === 'PERFIL' && (
           <div className="p-3.5 pt-2.5 border-t border-zinc-800 space-y-2.5 bg-zinc-950/60">
-            {/* Top Quick Buttons: 📍 GPS | ✏️ Editar Perfil */}
+            {/* Top Quick Buttons: GPS | Editar Perfil */}
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={refreshLiveGpsPosition}
                 className="w-full rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-100 py-2.5 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition"
               >
-                <span>📍 GPS</span>
+                <MapPin className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+                <span>GPS</span>
               </button>
               <button
                 type="button"
@@ -2333,11 +2471,12 @@ export const MenuMaisHubView: React.FC = () => {
                 }}
                 className="w-full rounded-xl py-2.5 px-3 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition hover:opacity-95 shadow-xs"
               >
-                <span>✏️ Editar Perfil</span>
+                <Edit3 className="h-3.5 w-3.5 shrink-0" />
+                <span>Editar Perfil</span>
               </button>
             </div>
 
-            {/* Clean Avatar Preview + Single 📷 Escolher Foto Button */}
+            {/* Clean Avatar Preview + Single Escolher Foto Button */}
             <ZeroAiProfilePhotoUploader
               avatarUrl={
                 realCourierProfile?.isRegistered
@@ -2354,8 +2493,9 @@ export const MenuMaisHubView: React.FC = () => {
             {/* Optional WhatsApp & E-mail Opt-In Card for Important Fleet Alerts */}
             <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-extrabold text-zinc-100">
-                  🔔 Receber alertas e mensagens importantes via:
+                <span className="flex items-center gap-1.5 text-xs font-extrabold text-zinc-100">
+                  <Bell className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+                  <span>Receber alertas e mensagens importantes via:</span>
                 </span>
                 {contactSavedFeedback && (
                   <span className="text-[11px] font-black text-emerald-400">
@@ -2366,8 +2506,9 @@ export const MenuMaisHubView: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1">
-                    📲 WhatsApp (Opcional)
+                  <label className="flex items-center gap-1 text-[10px] font-bold text-zinc-400 mb-1">
+                    <Smartphone className="h-3 w-3 text-[#00E5FF]" />
+                    <span>WhatsApp (Opcional)</span>
                   </label>
                   <input
                     type="tel"
@@ -2378,8 +2519,9 @@ export const MenuMaisHubView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1">
-                    ✉️ E-mail (Opcional)
+                  <label className="flex items-center gap-1 text-[10px] font-bold text-zinc-400 mb-1">
+                    <Mail className="h-3 w-3 text-[#00E5FF]" />
+                    <span>E-mail (Opcional)</span>
                   </label>
                   <input
                     type="email"
@@ -2445,9 +2587,10 @@ export const MenuMaisHubView: React.FC = () => {
                     backgroundColor: '#00E5FF',
                     color: '#05070B',
                   }}
-                  className="rounded-lg py-1.5 px-2 text-xs font-black cursor-pointer transition hover:opacity-95"
+                  className="rounded-lg py-1.5 px-2 text-xs font-black flex items-center justify-center gap-1 cursor-pointer transition hover:opacity-95"
                 >
-                  💾 Guardar
+                  <Save className="h-3.5 w-3.5 shrink-0" />
+                  <span>Guardar</span>
                 </button>
               </div>
             </div>
@@ -2459,8 +2602,9 @@ export const MenuMaisHubView: React.FC = () => {
                 onClick={() => setActiveTab('financas')}
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                  🎯 Metas Financeiras &amp; Caixa
+                <span className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-zinc-100">
+                  <Target className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                  <span>Metas Financeiras &amp; Caixa</span>
                 </span>
                 <ChevronRight className="h-4 w-4 text-[#00E5FF] shrink-0" />
               </button>
@@ -2470,8 +2614,9 @@ export const MenuMaisHubView: React.FC = () => {
                 onClick={() => setActiveTab('calculadora')}
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                  🚗 Veículo, Custos &amp; Impostos
+                <span className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-zinc-100">
+                  <Car className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                  <span>Veículo, Custos &amp; Impostos</span>
                 </span>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="rounded bg-zinc-950 border border-[#00E5FF]/40 px-2 py-0.5 text-[11px] font-extrabold text-[#00E5FF]">
@@ -2486,10 +2631,13 @@ export const MenuMaisHubView: React.FC = () => {
                 onClick={toggleThemeMode}
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                  {themeMode === 'DAYLIGHT'
-                    ? '☀️ Tema Visual (Modo Claro / Escuro)'
-                    : '🌙 Tema Visual (Modo Claro / Escuro)'}
+                <span className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-zinc-100">
+                  {themeMode === 'DAYLIGHT' ? (
+                    <Sun className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                  ) : (
+                    <Moon className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                  )}
+                  <span>Tema Visual (Modo Claro / Escuro)</span>
                 </span>
                 <span className="rounded bg-zinc-950 border border-zinc-700 px-2 py-0.5 text-[11px] font-extrabold text-zinc-200 shrink-0">
                   {themeMode === 'DAYLIGHT' ? 'Modo Claro' : 'Modo Escuro'}
@@ -2501,8 +2649,9 @@ export const MenuMaisHubView: React.FC = () => {
                 onClick={() => setIsShiftDrawerOpen((prev) => !prev)}
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                  🟢 Estado do Turno (Online / Pausa / Anónimo / Voz)
+                <span className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-zinc-100">
+                  <Radio className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>Estado do Turno (Online / Ausente / Modo Ninja / Voz)</span>
                 </span>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="rounded bg-zinc-950 border border-[#00E5FF]/40 px-2 py-0.5 text-[11px] font-extrabold text-[#00E5FF]">
@@ -2538,7 +2687,7 @@ export const MenuMaisHubView: React.FC = () => {
                         : 'bg-zinc-900 text-zinc-200 border border-zinc-800'
                     }`}
                   >
-                    Anónimo: {userPrefs.anonymousMode ? 'ON' : 'OFF'}
+                    Ninja: {userPrefs.anonymousMode ? 'ON' : 'OFF'}
                   </button>
                   <button
                     type="button"
@@ -2559,7 +2708,7 @@ export const MenuMaisHubView: React.FC = () => {
       </div>
 
       {/* =====================================================================
-          ACCORDION CARD 2: 🎙️ VOZ & POSIÇÃO DA BOLINHA
+          ACCORDION CARD 2: VOZ & POSIÇÃO DA BOLINHA
           ===================================================================== */}
       <div
         style={{
@@ -2585,9 +2734,10 @@ export const MenuMaisHubView: React.FC = () => {
               style={{
                 color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
               }}
-              className="block text-sm sm:text-base font-extrabold truncate"
+              className="flex items-center gap-1.5 text-sm sm:text-base font-extrabold truncate"
             >
-              🎙️ Voz &amp; Posição da Bolinha
+              <Mic className="h-4 w-4 text-[#00E5FF] shrink-0" />
+              <span>Voz &amp; Posição da Bolinha</span>
             </span>
             <span
               style={{
@@ -3008,9 +3158,10 @@ export const MenuMaisHubView: React.FC = () => {
               style={{
                 color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
               }}
-              className="block text-sm sm:text-base font-extrabold truncate"
+              className="flex items-center gap-1.5 text-sm sm:text-base font-extrabold truncate"
             >
-              📍 Mapa, Zona &amp; Acordos ({selectedRegionName})
+              <MapPin className="h-4 w-4 text-[#00E5FF] shrink-0" />
+              <span>Mapa, Zona &amp; Acordos ({selectedRegionName})</span>
             </span>
             <span
               style={{
@@ -3033,15 +3184,16 @@ export const MenuMaisHubView: React.FC = () => {
 
         {openAccordion === 'CENTRO_FINANCAS' && (
           <div className="p-3.5 pt-2.5 border-t border-zinc-800 space-y-2.5 bg-zinc-950/60">
-            {/* 1. 📍 Editar Centro & Raio do Mapa */}
+            {/* 1. Editar Centro & Raio do Mapa */}
             <button
               type="button"
               onClick={() => setIsHubSelectorModalOpen(true)}
               className="w-full rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 p-3 flex items-center justify-between gap-2.5 text-left transition cursor-pointer"
             >
               <div className="min-w-0">
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100 block">
-                  📍 Editar Centro &amp; Raio do Mapa
+                <span className="flex items-center gap-1.5 text-xs sm:text-sm font-extrabold text-zinc-100">
+                  <MapPin className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+                  <span>Editar Centro &amp; Raio do Mapa</span>
                 </span>
                 <span className="text-xs text-[#00E5FF] font-semibold block mt-0.5">
                   {selectedRegionName} • Raio {mapRadiusKm} km
@@ -3052,15 +3204,16 @@ export const MenuMaisHubView: React.FC = () => {
               </span>
             </button>
 
-            {/* 2. 🤝 Acordos de Zona (Piso Mínimo Coletivo) */}
+            {/* 2. Acordos de Zona (Piso Mínimo Coletivo) */}
             <button
               type="button"
               onClick={() => setSubPage('ACORDOS_ZONA')}
               className="w-full rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 p-3 flex items-center justify-between gap-2.5 text-left transition cursor-pointer"
             >
               <div className="min-w-0">
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100 block">
-                  🤝 Acordos de Zona (Piso Mínimo Coletivo)
+                <span className="flex items-center gap-1.5 text-xs sm:text-sm font-extrabold text-zinc-100">
+                  <Handshake className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+                  <span>Acordos de Zona (Piso Mínimo Coletivo)</span>
                 </span>
                 <span className="text-xs text-zinc-400 font-semibold block mt-0.5">
                   Tarifa mínima acordada entre estafetas da zona
@@ -3079,7 +3232,7 @@ export const MenuMaisHubView: React.FC = () => {
       </div>
 
       {/* =====================================================================
-          ACCORDION CARD 4: 🛡️ SEGURANÇA DE RUA & SISTEMA
+          ACCORDION CARD 4: SEGURANÇA DE RUA & SISTEMA
           ===================================================================== */}
       <div
         style={{
@@ -3105,9 +3258,10 @@ export const MenuMaisHubView: React.FC = () => {
               style={{
                 color: themeMode === 'DAYLIGHT' ? '#090D16' : '#FFFFFF',
               }}
-              className="block text-sm sm:text-base font-extrabold truncate"
+              className="flex items-center gap-1.5 text-sm sm:text-base font-extrabold truncate"
             >
-              🛡️ Segurança de Rua &amp; Sistema
+              <Shield className="h-4 w-4 text-[#00E5FF] shrink-0" />
+              <span>Segurança de Rua &amp; Sistema</span>
             </span>
             <span
               style={{
@@ -3134,8 +3288,9 @@ export const MenuMaisHubView: React.FC = () => {
             <div className="space-y-2">
               <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <span className="text-xs font-extrabold text-zinc-100 block">
-                    🌧️ Modo Chuva &amp; Luvas
+                  <span className="flex items-center gap-1.5 text-xs font-extrabold text-zinc-100">
+                    <CloudRain className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+                    <span>Modo Chuva &amp; Luvas</span>
                   </span>
                   <span className="text-[11px] text-zinc-400 block">
                     Bloqueia toques fantasma de gotas de água
@@ -3157,8 +3312,9 @@ export const MenuMaisHubView: React.FC = () => {
               <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <span className="text-xs font-extrabold text-zinc-100 block">
-                      🚨 Deteção Automática de Queda (45s)
+                    <span className="flex items-center gap-1.5 text-xs font-extrabold text-zinc-100">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <span>Deteção Automática de Queda (45s)</span>
                     </span>
                     <span className="text-[11px] text-zinc-400 block">
                       Exige impacto &gt;32 m/s² + 3.5s de imobilidade pós-impacto
@@ -3179,7 +3335,7 @@ export const MenuMaisHubView: React.FC = () => {
                     <button
                       type="button"
                       onClick={triggerSimulatedCrashTest}
-                      className="rounded-lg bg-rose-600/20 border border-rose-500/40 text-rose-300 px-2.5 py-1.5 text-xs font-bold cursor-pointer"
+                      className="rounded-lg bg-slate-800 border border-slate-700 text-slate-200 px-2.5 py-1.5 text-xs font-bold cursor-pointer"
                     >
                       Testar
                     </button>
@@ -3227,11 +3383,12 @@ export const MenuMaisHubView: React.FC = () => {
               <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2.5 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <span className="text-xs font-extrabold text-zinc-100 block">
-                      🔋 Modo Sobrevivência (&le;{userBatteryAlertThreshold}%)
+                    <span className="flex items-center gap-1.5 text-xs font-extrabold text-zinc-100">
+                      <BatteryCharging className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+                      <span>Modo Sobrevivência (&le;{userBatteryAlertThreshold}%)</span>
                     </span>
                     <span className="text-[11px] text-zinc-400 block">
-                      Sem alertas de carregador acima de {userBatteryAlertThreshold}% (Atual: {batteryLevelPct}%{isBatteryCharging ? ' ⚡' : ''})
+                      Sem alertas de carregador acima de {userBatteryAlertThreshold}% (Atual: {batteryLevelPct}%{isBatteryCharging ? ' • A carregar' : ''})
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -3290,27 +3447,29 @@ export const MenuMaisHubView: React.FC = () => {
               </div>
             </div>
 
-            {/* 2. 🆘 Acionar Alerta SOS de Emergência */}
+            {/* 2. Acionar Alerta SOS de Emergência (Sleek Matte Dark Slate, Zero Bright Red) */}
             <button
               type="button"
               onClick={() => requestOrConfirmSosActivation('Acidente na Via')}
-              style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
-              className="w-full rounded-xl border border-red-400 py-2.5 px-3 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition hover:opacity-95"
+              style={{ backgroundColor: '#0F172A', color: '#FFFFFF' }}
+              className="w-full rounded-xl border border-amber-400/50 py-2.5 px-3 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-xs transition hover:opacity-95"
             >
+              <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
               <span>
-                🆘 Acionar Alerta SOS de Emergência (ou diga &ldquo;Buddy SOS&rdquo;)
+                Acionar Alerta SOS de Emergência (ou diga &ldquo;Buddy SOS&rdquo;)
               </span>
             </button>
 
-            {/* 3. 🔒 Ecrã Sempre Ligado | 📱 Auto-Detetor de Pedidos | 🔄 Atualizar App Agora (OTA) */}
+            {/* 3. Ecrã Sempre Ligado | Auto-Detetor de Pedidos | Atualizar App Agora (OTA) */}
             <div className="rounded-xl bg-zinc-900 border border-zinc-800 divide-y divide-zinc-800 overflow-hidden">
               <button
                 type="button"
                 onClick={toggleWakeLock}
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                  🔒 Ecrã Sempre Ligado
+                <span className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-zinc-100">
+                  <Lock className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                  <span>Ecrã Sempre Ligado</span>
                 </span>
                 <span
                   className={`rounded px-2 py-0.5 text-xs font-extrabold shrink-0 ${
@@ -3337,13 +3496,14 @@ export const MenuMaisHubView: React.FC = () => {
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
                 <div className="flex flex-col">
-                  <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                    📱 Auto-Detetor de Pedidos (Acessibilidade)
+                  <span className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-zinc-100">
+                    <Smartphone className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                    <span>Auto-Detetor de Pedidos (Acessibilidade)</span>
                   </span>
-                  <span className="text-[11px] font-bold text-emerald-400">
+                  <span className="text-[11px] font-bold text-emerald-400 mt-0.5">
                     {autoOfferDetectorEnabled
-                      ? 'Estado: ATIVO 🟢 (Uber, Glovo & Bolt)'
-                      : 'Estado: INATIVO ⚪ — Toque para ativar'}
+                      ? 'Estado: ATIVO (Uber, Glovo & Bolt)'
+                      : 'Estado: INATIVO — Toque para ativar'}
                   </span>
                 </div>
                 <span className="rounded bg-[#00E5FF] px-2.5 py-1 text-xs font-black text-slate-950 shrink-0 shadow-xs">
@@ -3391,22 +3551,24 @@ export const MenuMaisHubView: React.FC = () => {
                 }}
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                  🔄 Atualizar App Agora (OTA)
+                <span className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-zinc-100">
+                  <RefreshCw className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                  <span>Atualizar App Agora (OTA)</span>
                 </span>
                 <span className="rounded bg-sky-500/15 border border-sky-500/35 px-2 py-0.5 text-xs font-bold text-sky-300 shrink-0">
                   Recarregar
                 </span>
               </button>
 
-              {/* 4. ⚠️ Perigos na Via | 📁 Rotas Proibidas & Reclamações */}
+              {/* 4. Perigos na Via | Rotas Proibidas & Reclamações */}
               <button
                 type="button"
                 onClick={() => setSubPage('PERIGOS_VIA')}
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                  ⚠️ Perigos na Via
+                <span className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-zinc-100">
+                  <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                  <span>Perigos na Via</span>
                 </span>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="rounded-lg bg-zinc-800 px-2.5 py-0.5 text-xs font-bold text-zinc-200">
@@ -3421,8 +3583,9 @@ export const MenuMaisHubView: React.FC = () => {
                 onClick={() => setActiveTab('reclamacoes')}
                 className="w-full py-3 px-3.5 flex justify-between items-center text-left hover:bg-zinc-800/50 transition cursor-pointer"
               >
-                <span className="text-xs sm:text-sm font-extrabold text-zinc-100">
-                  📁 Rotas Proibidas &amp; Reclamações
+                <span className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-zinc-100">
+                  <FileCheck2 className="h-4 w-4 text-[#00E5FF] shrink-0" />
+                  <span>Rotas Proibidas &amp; Reclamações</span>
                 </span>
                 <ChevronRight className="h-4 w-4 text-[#00E5FF] shrink-0" />
               </button>

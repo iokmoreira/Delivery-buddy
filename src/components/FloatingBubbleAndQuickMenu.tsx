@@ -582,6 +582,18 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
               style={{ objectFit: 'contain' }}
               className="h-full w-full object-contain"
             />
+            {userPrefs.anonymousMode && (
+              <span
+                style={{
+                  backgroundColor: '#0F172A',
+                  color: '#00E5FF',
+                  borderColor: 'rgba(0,229,255,0.45)',
+                }}
+                className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full border px-1.5 py-0.5 text-[8px] font-black tracking-wider uppercase shadow-sm whitespace-nowrap"
+              >
+                NINJA
+              </span>
+            )}
           </div>
         </button>
 

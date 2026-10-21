@@ -19,6 +19,12 @@ import {
   UserCheck,
   MapPin,
   RefreshCw,
+  Share2,
+  Globe,
+  BarChart3,
+  FileText,
+  Lock,
+  AlertTriangle,
 } from 'lucide-react';
 import { BuddyChallengePeriod, WalkieChannelId } from '../types/models';
 import { WALKIE_QUICK_MACROS } from '../data/seedData';
@@ -71,6 +77,9 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
   const [messageInput, setMessageInput] = useState<string>('');
   const [directMessageInput, setDirectMessageInput] = useState<string>('');
   const [popupMessageInput, setPopupMessageInput] = useState<string>('');
+  const [quickTeamMessageInput, setQuickTeamMessageInput] =
+    useState<string>('');
+  const [quickTeamNotice, setQuickTeamNotice] = useState<string | null>(null);
   const [blogPostInput, setBlogPostInput] = useState<string>('');
   const [blogCategoryInput, setBlogCategoryInput] = useState<
     'DICA_RUA' | 'ALERTA_TRANSITO' | 'COMUNIDADE'
@@ -170,6 +179,22 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
     if (!popupCourier || !popupMessageInput.trim()) return;
     sendDirectCourierMessage(popupCourier.id, popupMessageInput);
     setPopupMessageInput('');
+  };
+
+  const handleSendQuickTeamMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = quickTeamMessageInput.trim();
+    if (!trimmed) return;
+    const peerTargets = onlineDirectoryCouriers.filter((c) => !c.isSelfProfile);
+    if (peerTargets.length > 0) {
+      peerTargets.forEach((peer) => {
+        sendDirectCourierMessage(peer.id, trimmed);
+      });
+    }
+    sendWalkieMessage(trimmed, { isVoicePtt: false });
+    setQuickTeamMessageInput('');
+    setQuickTeamNotice('Mensagem enviada para a equipa de Amarante.');
+    window.setTimeout(() => setQuickTeamNotice(null), 3500);
   };
 
   const handlePublishSocialPost = (e: React.FormEvent) => {
@@ -359,10 +384,13 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                       {popupCourier.vehicle} • {popupCourier.zoneName}
                     </span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 pt-1 border-t border-zinc-800">
-                    🔒 Estatísticas cruzadas, Voice Chat em tempo real, convite
-                    para grupo fechado e desafios estão visíveis apenas para
-                    Buddys amigos conectados.
+                  <p className="text-[11px] text-zinc-400 pt-1 border-t border-zinc-800 flex items-start gap-1.5">
+                    <Lock className="h-3.5 w-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                    <span>
+                      Estatísticas cruzadas, Voice Chat em tempo real, convite
+                      para grupo fechado e desafios estão visíveis apenas para
+                      Buddys amigos conectados.
+                    </span>
                   </p>
                 </div>
 
@@ -523,8 +551,9 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                   {popupCourier.activeChallenge && (
                     <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-2 space-y-1">
                       <div className="flex items-center justify-between text-[10px]">
-                        <span className="font-bold text-emerald-400">
-                          🏆 {popupCourier.activeChallenge.periodLabel}
+                        <span className="font-bold text-emerald-400 flex items-center gap-1">
+                          <Trophy className="h-3 w-3 shrink-0" />
+                          <span>{popupCourier.activeChallenge.periodLabel}</span>
                         </span>
                         <span className=" text-zinc-300">
                           Tu: {popupCourier.activeChallenge.userCurrentScore}{' '}
@@ -560,8 +589,9 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                 {/* Live 1-on-1 Direct Messages Thread Synced via Supabase (public.direct_messages / public.community_events) */}
                 <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-2.5 space-y-1.5">
                   <div className="flex items-center justify-between text-[10px]">
-                    <span className="font-extrabold text-emerald-400">
-                      💬 Chat Direto 1-a-1 ({popupCourier.directMessages.length})
+                    <span className="font-extrabold text-emerald-400 flex items-center gap-1">
+                      <MessageSquare className="h-3 w-3 shrink-0" />
+                      <span>Chat Direto 1-a-1 ({popupCourier.directMessages.length})</span>
                     </span>
                     <button
                       type="button"
@@ -663,15 +693,15 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
       {/* Interactive 45% / 80% Buddy Profile Pop-up */}
       {renderBuddyProfilePopup()}
 
-      {/* Top Bar: Courier Identity (Profile Editing Lives Exclusively Inside the Perfil Tab) */}
-      <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-3 space-y-2.5">
+      {/* Top Bar: Clean Flat Courier Identity + Quick Actions (Profile Editing Lives Exclusively Inside the Perfil Tab) */}
+      <div className="border-b border-zinc-800/80 pb-2.5 space-y-2">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             {realCourierProfile?.isRegistered && realCourierProfile.avatar_url ? (
               <img
                 src={realCourierProfile.avatar_url}
                 alt={realCourierProfile.name}
-                className="h-6 w-6 rounded-full object-cover ring-2 ring-[#00E5FF] shrink-0"
+                className="h-6 w-6 rounded-full object-cover ring-1 ring-[#00E5FF] shrink-0"
               />
             ) : (
               <MapPin className="h-4 w-4 text-[#00E5FF] shrink-0" />
@@ -682,101 +712,73 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                 : 'Aceda à aba "Perfil" para gerir a sua conta'}
             </span>
           </div>
-        </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={() => setIsDirectApkShareModalOpen(true)}
-            style={{ backgroundColor: '#0284c7', color: '#ffffff' }}
-            className="col-span-2 rounded-xl px-3 py-2 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm truncate"
-          >
-            <span className="truncate">📲 Enviar App a um Colega</span>
-          </button>
-          <button
-            type="button"
-            onClick={refreshLiveGpsPosition}
-            className="col-span-1 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 px-2.5 py-2 text-xs sm:text-sm font-extrabold text-zinc-100 flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
-          >
-            <RefreshCw className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
-            <span>🔄 GPS</span>
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsDirectApkShareModalOpen(true)}
+              className="rounded-lg bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 px-2.5 py-1.5 text-[11px] font-bold text-cyan-400 flex items-center gap-1.5 cursor-pointer transition"
+            >
+              <Share2 className="h-3.5 w-3.5 shrink-0" />
+              <span>Partilhar App</span>
+            </button>
+            <button
+              type="button"
+              onClick={refreshLiveGpsPosition}
+              className="rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2.5 py-1.5 text-[11px] font-bold text-zinc-100 flex items-center gap-1 cursor-pointer transition whitespace-nowrap"
+            >
+              <RefreshCw className="h-3.5 w-3.5 text-[#00E5FF] shrink-0" />
+              <span>GPS</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 4-Tab Sub-Tab Bar: [Chat] | [Walkie] | [Blog] | [🌍 Tradutor] */}
-      <div className="bg-zinc-900 p-1 rounded-xl grid grid-cols-4 gap-1 border border-zinc-800/80">
+      {/* Clean Flat Segmented Navigation Bar: [Chat] | [Walkie] | [Blog] | [Tradutor] */}
+      <div className="grid grid-cols-4 border-b border-zinc-800/80 divide-x divide-zinc-800/80 bg-zinc-950/60 rounded-xl overflow-hidden">
         <button
           type="button"
           onClick={() => setSubTab('CHAT')}
-          style={
+          className={`py-2.5 px-2 text-xs flex items-center justify-center gap-1.5 transition cursor-pointer truncate border-b-2 ${
             subTab === 'CHAT'
-              ? {
-                  backgroundColor: '#0B0F17',
-                  borderColor: '#00E5FF',
-                  color: '#00E5FF',
-                }
-              : undefined
-          }
-          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate border ${
-            subTab === 'CHAT'
-              ? 'font-extrabold'
-              : 'border-transparent text-zinc-400 hover:text-zinc-100'
+              ? 'border-[#00E5FF] text-[#00E5FF] font-extrabold bg-slate-900/80'
+              : 'border-transparent text-zinc-400 hover:text-zinc-100 font-semibold'
           }`}
         >
-          Chat
+          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">Chat</span>
         </button>
         <button
           type="button"
           onClick={() => setSubTab('WALKIE')}
-          style={
+          className={`py-2.5 px-2 text-xs flex items-center justify-center gap-1.5 transition cursor-pointer truncate border-b-2 ${
             subTab === 'WALKIE'
-              ? {
-                  backgroundColor: '#0B0F17',
-                  borderColor: '#00E5FF',
-                  color: '#00E5FF',
-                }
-              : undefined
-          }
-          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate border ${
-            subTab === 'WALKIE'
-              ? 'font-extrabold'
-              : 'border-transparent text-zinc-400 hover:text-zinc-100'
+              ? 'border-[#00E5FF] text-[#00E5FF] font-extrabold bg-slate-900/80'
+              : 'border-transparent text-zinc-400 hover:text-zinc-100 font-semibold'
           }`}
         >
-          Walkie
+          <Radio className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">Walkie</span>
         </button>
         <button
           type="button"
           onClick={() => setSubTab('BLOG')}
-          style={
+          className={`py-2.5 px-2 text-xs flex items-center justify-center gap-1.5 transition cursor-pointer truncate border-b-2 ${
             subTab === 'BLOG'
-              ? {
-                  backgroundColor: '#0B0F17',
-                  borderColor: '#00E5FF',
-                  color: '#00E5FF',
-                }
-              : undefined
-          }
-          className={`rounded-lg py-1.5 px-2 text-xs transition cursor-pointer truncate border ${
-            subTab === 'BLOG'
-              ? 'font-extrabold'
-              : 'border-transparent text-zinc-400 hover:text-zinc-100'
+              ? 'border-[#00E5FF] text-[#00E5FF] font-extrabold bg-slate-900/80'
+              : 'border-transparent text-zinc-400 hover:text-zinc-100 font-semibold'
           }`}
         >
-          Blog
+          <FileText className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">Blog</span>
         </button>
         <button
           type="button"
           onClick={() => openTranslatorModal('TRADUTOR')}
-          style={{
-            backgroundColor: '#0B0F17',
-            borderColor: '#00E5FF',
-            color: '#00E5FF',
-          }}
-          className="rounded-lg border py-1.5 px-2 text-xs font-extrabold transition cursor-pointer truncate shadow-[0_0_10px_rgba(0,229,255,0.2)]"
+          className="py-2.5 px-2 text-xs font-extrabold text-[#00E5FF] hover:bg-slate-900/80 flex items-center justify-center gap-1.5 transition cursor-pointer truncate border-b-2 border-transparent"
         >
-          🌍 Tradutor
+          <Globe className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">Tradutor</span>
         </button>
       </div>
 
@@ -908,9 +910,13 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
             ) : (
               filteredCouriers.map((courier) => {
                 const isOffline = courier.isOnlineActive === false;
+                const isPaused =
+                  !isOffline &&
+                  Boolean(courier.buddyTenureText?.includes('Ausente'));
                 const isCourierAvailable =
-                  !isOffline && courier.orderStatus === 'DISPONIVEL';
-                const isFriend = courier.contactPermission === 'APROVADO';
+                  !isOffline &&
+                  !isPaused &&
+                  courier.orderStatus === 'DISPONIVEL';
                 const isSelf = Boolean(courier.isSelfProfile);
                 const courierPlatforms =
                   courier.activePlatforms && courier.activePlatforms.length > 0
@@ -918,6 +924,24 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                     : isSelf
                       ? activePlatforms
                       : activePlatforms;
+
+                const statusBadgeLabel = isOffline
+                  ? 'Offline'
+                  : isPaused
+                    ? 'Ausente'
+                    : 'Online';
+
+                const statusBadgeClasses = isOffline
+                  ? 'bg-slate-800/80 border-slate-700 text-slate-300'
+                  : isPaused
+                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                    : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400';
+
+                const statusDotColor = isOffline
+                  ? 'bg-slate-400'
+                  : isPaused
+                    ? 'bg-amber-400'
+                    : 'bg-emerald-400';
 
                 return (
                   <div
@@ -934,17 +958,17 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                         setActiveBuddyPopupCourierId(courier.id);
                       }
                     }}
-                    className={`mb-3 last:mb-0 rounded-2xl p-3.5 space-y-3 cursor-pointer transition ${
+                    className={`mb-2.5 last:mb-0 rounded-xl p-3 space-y-2.5 cursor-pointer transition ${
                       isSelf
-                        ? 'bg-zinc-900 hover:bg-zinc-800/90 border-2 border-[#00E5FF]/60'
-                        : 'bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800'
+                        ? 'bg-zinc-900 hover:bg-zinc-800/90 border border-[#00E5FF]/60'
+                        : 'bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800/80'
                     }`}
                   >
-                    {/* Top Row: Avatar + Courier Name + Clean Status Dot (Online) + Subtitle (Vehicle • Platforms) */}
+                    {/* Top Row: Avatar + Courier Name + Clean Status Dot (Online / Ausente / Offline) + Subtitle */}
                     <div className="flex items-center justify-between gap-3 min-w-0">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div
-                          className={`relative h-12 w-12 rounded-full overflow-hidden border-2 shrink-0 flex items-center justify-center ${
+                          className={`relative h-11 w-11 rounded-full overflow-hidden border shrink-0 flex items-center justify-center ${
                             isSelf
                               ? 'border-[#00E5FF] bg-slate-900'
                               : 'border-zinc-700 bg-zinc-950'
@@ -965,10 +989,12 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                           <span
                             className={`absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border border-zinc-950 ${
                               isOffline
-                                ? 'bg-zinc-500'
-                                : isCourierAvailable
-                                  ? 'bg-emerald-500'
-                                  : 'bg-amber-500'
+                                ? 'bg-slate-500'
+                                : isPaused
+                                  ? 'bg-amber-400'
+                                  : isCourierAvailable
+                                    ? 'bg-emerald-500'
+                                    : 'bg-cyan-400'
                             }`}
                           />
                         </div>
@@ -979,23 +1005,23 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                               style={{
                                 color: isDaylight ? '#0f172a' : '#ffffff',
                               }}
-                              className="text-base font-extrabold leading-tight truncate"
+                              className="text-sm font-extrabold leading-tight truncate"
                             >
                               {isSelf
                                 ? `${courier.callsign} (Meu Perfil)`
                                 : courier.callsign}
                             </span>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-extrabold text-emerald-400 shrink-0">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-extrabold shrink-0 ${statusBadgeClasses}`}
+                            >
                               <span
-                                className={`h-1.5 w-1.5 rounded-full ${
-                                  isOffline ? 'bg-zinc-400' : 'bg-emerald-400'
-                                }`}
+                                className={`h-1.5 w-1.5 rounded-full ${statusDotColor}`}
                               />
-                              <span>{isOffline ? 'Offline' : 'Online'}</span>
+                              <span>{statusBadgeLabel}</span>
                             </span>
                           </div>
 
-                          <span className="text-xs font-semibold text-zinc-400 block truncate mt-0.5">
+                          <span className="text-xs font-medium text-zinc-400 block truncate mt-0.5">
                             {courier.vehicle} • {courierPlatforms.join(' + ')} •{' '}
                             {courier.zoneName}
                           </span>
@@ -1003,7 +1029,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Bottom Row: Two Clean, Side-by-Side Full-Width Buttons */}
+                    {/* Bottom Row: Two Clean, Side-by-Side Full-Width Buttons with SVG Icons */}
                     <div
                       className="grid grid-cols-2 gap-2"
                       onClick={(e) => e.stopPropagation()}
@@ -1014,49 +1040,79 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                           setBuddyPopupSizeMode('45VH');
                           setActiveBuddyPopupCourierId(courier.id);
                         }}
-                        className="w-full rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-[#00E5FF]/50 text-[#00E5FF] py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
+                        className="w-full rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-[#00E5FF] py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
                       >
-                        <span>📊 Estatísticas</span>
+                        <BarChart3 className="h-3.5 w-3.5 shrink-0" />
+                        <span>Estatísticas</span>
                       </button>
 
-                      {isFriend ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            startLiveVoiceDictation({
-                              targetType: 'BUDDY_DIRETO',
-                              recipientId: courier.id,
-                              recipientName: courier.callsign,
-                              initialPhrase: `Boas ${courier.callsign}, estás perto de ${courier.zoneName}?`,
-                            })
-                          }
-                          title={`Ditar mensagem por voz ao vivo para ${courier.callsign}`}
-                          className="w-full rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
-                        >
-                          <span>🎙️ Mensagem</span>
-                        </button>
-                      ) : courier.contactPermission === 'PENDENTE' ? (
-                        <span className="w-full rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 py-2 px-2 text-xs font-bold flex items-center justify-center whitespace-nowrap">
-                          ◌ Pendente
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            requestCourierContactPermission(courier.id)
-                          }
-                          className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
-                        >
-                          <UserPlus className="h-3.5 w-3.5 shrink-0" />
-                          <span>Adicionar Buddy</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          startLiveVoiceDictation({
+                            targetType: 'BUDDY_DIRETO',
+                            recipientId: courier.id,
+                            recipientName: courier.callsign,
+                            initialPhrase: `Boas ${courier.callsign}, estás perto de ${courier.zoneName}?`,
+                          })
+                        }
+                        title={`Enviar ou ditar mensagem para ${courier.callsign}`}
+                        className="w-full rounded-lg bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 py-2 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                        <span>Mensagem</span>
+                      </button>
                     </div>
                   </div>
                 );
               })
             )}
           </div>
+
+          {/* Direct Quick Message Bar at Bottom of Buddys -> Chat */}
+          <form
+            onSubmit={handleSendQuickTeamMessage}
+            className="pt-1 border-t border-zinc-800/80 space-y-1.5"
+          >
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  startLiveVoiceDictation({
+                    targetType: 'WALKIE_CANAL',
+                    recipientId: activeWalkieChannel,
+                    recipientName: 'Equipa Amarante',
+                    initialPhrase:
+                      'Boas equipa, como está o movimento agora no centro de Amarante?',
+                  })
+                }
+                title="Ditar mensagem rápida por voz para a equipa"
+                className="rounded-lg bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 text-cyan-400 px-2.5 py-2 text-xs font-extrabold flex items-center gap-1 cursor-pointer shrink-0 transition"
+              >
+                <Mic className="h-3.5 w-3.5 shrink-0" />
+                <span>Voz</span>
+              </button>
+              <input
+                type="text"
+                value={quickTeamMessageInput}
+                onChange={(e) => setQuickTeamMessageInput(e.target.value)}
+                placeholder="Mensagem Rápida p/ Equipa..."
+                className="min-w-0 flex-1 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500"
+              />
+              <button
+                type="submit"
+                className="rounded-lg bg-white hover:bg-zinc-200 text-slate-950 px-3 py-2 text-xs font-extrabold flex items-center gap-1 cursor-pointer shrink-0 transition"
+              >
+                <Send className="h-3.5 w-3.5 shrink-0" />
+                <span>Enviar</span>
+              </button>
+            </div>
+            {quickTeamNotice && (
+              <p className="text-[11px] font-semibold text-cyan-400 px-1">
+                {quickTeamNotice}
+              </p>
+            )}
+          </form>
         </section>
       )}
 
@@ -1283,36 +1339,51 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                       </p>
                     </div>
                   ) : (
-                    channelMessages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2.5 space-y-1"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-semibold text-zinc-100 truncate">
-                            {msg.senderName} ({msg.senderVehicle})
-                          </span>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[10px] text-zinc-500">
-                              {msg.timestamp}
+                    channelMessages.map((msg) => {
+                      const cleanMsgText = msg.text
+                        .replace(/🚨/g, '')
+                        .replace(/🔴/g, '')
+                        .trim();
+                      const isAlertMsg =
+                        msg.text.includes('SOS') ||
+                        msg.text.includes('🚨') ||
+                        msg.text.toLowerCase().includes('emergência');
+                      return (
+                        <div
+                          key={msg.id}
+                          className="rounded-lg bg-zinc-950 border border-zinc-800/80 p-2.5 space-y-1"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 truncate">
+                              {isAlertMsg && (
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                              )}
+                              <span className="truncate">
+                                {msg.senderName} ({msg.senderVehicle})
+                              </span>
                             </span>
-                            {msg.senderId !== 'SELF-COURIER' && (
-                              <button
-                                type="button"
-                                onClick={() => flagOrMuteWalkieMessage(msg.id)}
-                                title="Silenciar remetente"
-                                className="text-zinc-500 hover:text-zinc-300 cursor-pointer"
-                              >
-                                <Flag className="h-3 w-3" />
-                              </button>
-                            )}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] text-zinc-500">
+                                {msg.timestamp}
+                              </span>
+                              {msg.senderId !== 'SELF-COURIER' && (
+                                <button
+                                  type="button"
+                                  onClick={() => flagOrMuteWalkieMessage(msg.id)}
+                                  title="Silenciar remetente"
+                                  className="text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                                >
+                                  <Flag className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
                           </div>
+                          <p className="text-xs text-zinc-300 leading-snug">
+                            {cleanMsgText}
+                          </p>
                         </div>
-                        <p className="text-xs text-zinc-300 leading-snug">
-                          {msg.text}
-                        </p>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </section>

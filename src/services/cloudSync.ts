@@ -53,6 +53,8 @@ export interface CloudCourierPresence {
   optInEmail?: boolean;
   lastSeen: string;
   heartbeatAt?: number;
+  localReceivedAt?: number;
+  isAnonymous?: boolean;
 }
 
 export interface CloudApprovalRequest {
@@ -190,10 +192,54 @@ export function normalizeAccountKey(rawNameOrId: string): string {
     .toLowerCase();
 }
 
+export const AMARANTE_CENTER_REF_LAT = 41.2688;
+export const AMARANTE_CENTER_REF_LNG = -8.0782;
+
+/**
+ * Deterministic offset around Amarante center (41.2688, -8.0782) using +0.0003 * hash(id)
+ * so indoor/no-GPS remote couriers are 100% visible on the map and never glued to Presidente.
+ */
+export function getDeterministicCourierCenterCoords(idOrName: string): {
+  lat: number;
+  lng: number;
+} {
+  const seedStr = (idOrName || 'courier').trim().toLowerCase();
+  let h1 = 0;
+  let h2 = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    h1 = (h1 * 31 + seedStr.charCodeAt(i)) % 97;
+    h2 = (h2 * 37 + seedStr.charCodeAt(i) * (i + 1)) % 89;
+  }
+  const stepLat = (h1 % 7) - 3 || 2;
+  const stepLng = (h2 % 7) - 3 || -2;
+  return {
+    lat: Number((AMARANTE_CENTER_REF_LAT + 0.0003 * stepLat).toFixed(6)),
+    lng: Number((AMARANTE_CENTER_REF_LNG + 0.0003 * stepLng).toFixed(6)),
+  };
+}
+
+export function isDefaultOrMissingCourierCoord(
+  lat?: number | null,
+  lng?: number | null
+): boolean {
+  if (typeof lat !== 'number' || typeof lng !== 'number') return true;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) {
+    return true;
+  }
+  const nearDefault1 =
+    Math.abs(lat - DEFAULT_AMARANTE_LAT) < 0.00025 &&
+    Math.abs(lng - DEFAULT_AMARANTE_LNG) < 0.00025;
+  const nearDefault2 =
+    Math.abs(lat - AMARANTE_CENTER_REF_LAT) < 0.00015 &&
+    Math.abs(lng - AMARANTE_CENTER_REF_LNG) < 0.00015;
+  return nearDefault1 || nearDefault2;
+}
+
 function getSafeAvatarForRelay(avatarUrl?: string): string | undefined {
   if (!avatarUrl) return undefined;
-  // Keep relay packet well below ntfy's 4096-byte text message limit
-  if (avatarUrl.length <= 750) {
+  if (avatarUrl.startsWith('data:')) return undefined;
+  // Keep relay packet lightweight to avoid ntfy.sh rate limits and size limits
+  if (avatarUrl.length <= 300) {
     return avatarUrl;
   }
   return undefined;
@@ -300,6 +346,8 @@ let localIdentityProvider: (() => void | {
 export function isCourierActivelyOnline(
   courier: {
     status?: string;
+    isAnonymous?: boolean;
+    localReceivedAt?: number;
     heartbeatAt?: number;
     lastSeen?: string | number;
     updated_at?: string;
@@ -308,11 +356,22 @@ export function isCourierActivelyOnline(
   nowMs = Date.now()
 ): boolean {
   if (!courier) return false;
+  if (courier.isAnonymous === true) return false;
   const st = String(courier.status || '').toLowerCase();
   if (st === 'offline' || st === 'desconectado') return false;
 
   let tsMs = 0;
-  if (typeof courier.heartbeatAt === 'number' && Number.isFinite(courier.heartbeatAt)) {
+  if (
+    typeof courier.localReceivedAt === 'number' &&
+    Number.isFinite(courier.localReceivedAt) &&
+    courier.localReceivedAt > 0
+  ) {
+    tsMs = courier.localReceivedAt;
+  } else if (
+    typeof courier.heartbeatAt === 'number' &&
+    Number.isFinite(courier.heartbeatAt) &&
+    courier.heartbeatAt > 0
+  ) {
     tsMs = courier.heartbeatAt;
   } else if (typeof courier.lastSeen === 'number' && Number.isFinite(courier.lastSeen)) {
     tsMs = courier.lastSeen;
@@ -502,20 +561,38 @@ export async function publishCourierPresenceToCloud(
     isFounderAdmin ? 'approved' : presence.approvalStatus || 'pending'
   );
 
+  const fallbackCoords = getDeterministicCourierCenterCoords(
+    effectiveId || presence.name
+  );
+  const hasRealCoords = !isDefaultOrMissingCourierCoord(
+    presence.lat,
+    presence.lng
+  );
+  const existingHasRealCoords =
+    existingCourier &&
+    !isDefaultOrMissingCourierCoord(existingCourier.lat, existingCourier.lng);
+
+  const resolvedLat = hasRealCoords
+    ? Number(presence.lat.toFixed(6))
+    : existingHasRealCoords
+      ? Number(existingCourier!.lat.toFixed(6))
+      : fallbackCoords.lat;
+
+  const resolvedLng = hasRealCoords
+    ? Number(presence.lng.toFixed(6))
+    : existingHasRealCoords
+      ? Number(existingCourier!.lng.toFixed(6))
+      : fallbackCoords.lng;
+
+  const localNow = Date.now();
   const cleanPresence: CloudCourierPresence = {
     ...presence,
     id: effectiveId,
     name: presence.name.trim(),
     role: isFounderAdmin ? 'admin' : 'courier',
     approvalStatus: resolvedApproval,
-    lat:
-      Number.isFinite(presence.lat) && presence.lat !== 0
-        ? Number(presence.lat.toFixed(6))
-        : DEFAULT_AMARANTE_LAT,
-    lng:
-      Number.isFinite(presence.lng) && presence.lng !== 0
-        ? Number(presence.lng.toFixed(6))
-        : DEFAULT_AMARANTE_LNG,
+    lat: resolvedLat,
+    lng: resolvedLng,
     avatar: getSafeAvatarForRelay(presence.avatar),
     whatsapp:
       presence.whatsapp ?? existingCourier?.whatsapp ?? existingReq?.whatsapp,
@@ -528,8 +605,9 @@ export async function publishCourierPresenceToCloud(
       presence.optInEmail ??
       existingCourier?.optInEmail ??
       existingReq?.optInEmail,
-    heartbeatAt: Date.now(),
-    lastSeen: new Date().toISOString(),
+    heartbeatAt: localNow,
+    localReceivedAt: localNow,
+    lastSeen: new Date(localNow).toISOString(),
   };
 
   lastOfflineAtMsByCourier[cleanPresence.id] = 0;
@@ -1130,6 +1208,8 @@ export async function publishDirectMessageToCloud(
   });
 }
 
+export const publishDirectChatMessageToCloud = publishDirectMessageToCloud;
+
 export async function publishRoadHazardToCloud(
   hazard: RoadHazardPin,
   senderId = 'local_device'
@@ -1154,11 +1234,13 @@ export async function publishRoadHazardToCloud(
 
 function ingestEnvelope(
   envelope: CloudSyncEnvelope,
-  myDeviceId: string
+  myDeviceId: string,
+  isLiveOrRecentStream = true
 ): boolean {
   if (!envelope || !envelope.type) return false;
   let stateChanged = false;
-  const packetTs = Number(envelope.timestamp || envelope.ts || Date.now());
+  const localNowMs = Date.now();
+  const packetTs = Number(envelope.timestamp || envelope.ts || localNowMs);
 
   switch (envelope.type) {
     case 'SYNC_COURIER':
@@ -1185,26 +1267,36 @@ function ingestEnvelope(
         isFounder ? 'approved' : rawCourier.approvalStatus || 'pending'
       );
       const existing = inMemoryCloudState.couriers[resolvedId];
-      const existingMs =
-        typeof existing?.heartbeatAt === 'number' && existing.heartbeatAt > 0
-          ? existing.heartbeatAt
-          : existing?.lastSeen
-            ? Date.parse(existing.lastSeen)
-            : 0;
-      const incomingMs =
+      const incomingRemoteMs =
         typeof rawCourier.heartbeatAt === 'number' && rawCourier.heartbeatAt > 0
           ? rawCourier.heartbeatAt
           : rawCourier.lastSeen
             ? Date.parse(rawCourier.lastSeen)
             : packetTs;
 
+      // Stamp with the RECEIVING device's own clock when packet arrives from live SSE or recent (<90s) stream
+      const effectiveLocalStampMs = isLiveOrRecentStream
+        ? localNowMs
+        : incomingRemoteMs;
+
       // Ignore historical presence packets that occurred before an explicit COURIER_OFFLINE packet
       const offlineCutMs = lastOfflineAtMsByCourier[resolvedId] || 0;
-      if (offlineCutMs > 0 && incomingMs <= offlineCutMs) {
+      if (
+        !isLiveOrRecentStream &&
+        offlineCutMs > 0 &&
+        incomingRemoteMs <= offlineCutMs
+      ) {
         break;
       }
 
-      if (!existing || incomingMs >= existingMs - 5000) {
+      const existingLocalStamp =
+        existing?.localReceivedAt || existing?.heartbeatAt || 0;
+
+      if (
+        isLiveOrRecentStream ||
+        !existing ||
+        effectiveLocalStampMs >= existingLocalStamp - 5000
+      ) {
         const cleanNameKey = normalizeAccountKey(resolvedName);
         Object.keys(inMemoryCloudState.couriers).forEach((k) => {
           const item = inMemoryCloudState.couriers[k];
@@ -1227,7 +1319,34 @@ function ingestEnvelope(
           }
         });
 
-        const isExplicitOffline = rawCourier.status === 'offline';
+        const isExplicitOffline =
+          rawCourier.status === 'offline' || rawCourier.isAnonymous === true;
+        if (!isExplicitOffline && isLiveOrRecentStream) {
+          lastOfflineAtMsByCourier[resolvedId] = 0;
+        }
+
+        const fallbackCenter = getDeterministicCourierCenterCoords(
+          resolvedId || resolvedName
+        );
+        const incomingHasOwnCoords = !isDefaultOrMissingCourierCoord(
+          rawCourier.lat,
+          rawCourier.lng
+        );
+        const existingHasOwnCoords =
+          existing &&
+          !isDefaultOrMissingCourierCoord(existing.lat, existing.lng);
+
+        const resolvedLat = incomingHasOwnCoords
+          ? Number(rawCourier.lat)
+          : existingHasOwnCoords
+            ? Number(existing.lat)
+            : fallbackCenter.lat;
+
+        const resolvedLng = incomingHasOwnCoords
+          ? Number(rawCourier.lng)
+          : existingHasOwnCoords
+            ? Number(existing.lng)
+            : fallbackCenter.lng;
 
         inMemoryCloudState.couriers[resolvedId] = {
           ...existing,
@@ -1244,24 +1363,22 @@ function ingestEnvelope(
             rawCourier.zone ||
             existing?.zone ||
             'Amarante Centro / São Gonçalo',
-          status: rawCourier.status || existing?.status || 'online',
+          status: isExplicitOffline
+            ? 'offline'
+            : rawCourier.status || existing?.status || 'online',
+          isAnonymous: rawCourier.isAnonymous === true,
           approvalStatus: resolvedApproval,
-          lat:
-            Number.isFinite(rawCourier.lat) && Number(rawCourier.lat) !== 0
-              ? Number(rawCourier.lat)
-              : existing?.lat || DEFAULT_AMARANTE_LAT,
-          lng:
-            Number.isFinite(rawCourier.lng) && Number(rawCourier.lng) !== 0
-              ? Number(rawCourier.lng)
-              : existing?.lng || DEFAULT_AMARANTE_LNG,
+          lat: resolvedLat,
+          lng: resolvedLng,
           heading: rawCourier.heading ?? existing?.heading ?? null,
           speed: rawCourier.speed ?? existing?.speed ?? 0,
           avatar: rawCourier.avatar || existing?.avatar,
           deviceModel: rawCourier.deviceModel || existing?.deviceModel,
-          heartbeatAt: isExplicitOffline ? 0 : incomingMs,
+          heartbeatAt: isExplicitOffline ? 0 : effectiveLocalStampMs,
+          localReceivedAt: isExplicitOffline ? 0 : effectiveLocalStampMs,
           lastSeen: isExplicitOffline
             ? ''
-            : rawCourier.lastSeen || new Date(incomingMs).toISOString(),
+            : new Date(effectiveLocalStampMs).toISOString(),
         };
 
         const prevReq = inMemoryCloudState.approvalRequestsMap[resolvedId];
@@ -1288,7 +1405,7 @@ function ingestEnvelope(
             prevReq?.createdAt ||
             rawCourier.lastSeen ||
             new Date(packetTs).toISOString(),
-          updatedAt: rawCourier.lastSeen || new Date(packetTs).toISOString(),
+          updatedAt: new Date(effectiveLocalStampMs).toISOString(),
         };
         stateChanged = true;
       }
@@ -1408,7 +1525,9 @@ function ingestEnvelope(
         timestamp?: number;
       };
       const targetId = out.courierId || out.id || envelope.courierId || envelope.senderId;
-      const cutMs = Number(out.timestamp || packetTs || Date.now());
+      const cutMs = isLiveOrRecentStream
+        ? localNowMs
+        : Number(out.timestamp || packetTs || localNowMs);
       if (targetId) {
         lastOfflineAtMsByCourier[targetId] = Math.max(
           lastOfflineAtMsByCourier[targetId] || 0,
@@ -1419,6 +1538,7 @@ function ingestEnvelope(
             ...inMemoryCloudState.couriers[targetId],
             status: 'offline',
             heartbeatAt: 0,
+            localReceivedAt: 0,
             lastSeen: '',
           };
           stateChanged = true;
@@ -1437,6 +1557,7 @@ function ingestEnvelope(
               ...item,
               status: 'offline',
               heartbeatAt: 0,
+              localReceivedAt: 0,
               lastSeen: '',
             };
             stateChanged = true;
@@ -1954,6 +2075,29 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
   if (typeof window === 'undefined') return;
 
   try {
+    // Check if local user is in Modo Ninja (anonymousMode) or Ausente (isAppPaused)
+    let isNinjaMode = false;
+    let isAusenteMode = false;
+    try {
+      const rawAppState = window.localStorage.getItem(
+        'delivery_buddy_amarante_v5_state'
+      );
+      if (rawAppState) {
+        const parsedApp = JSON.parse(rawAppState) as {
+          isAppPaused?: boolean;
+          userPrefs?: { anonymousMode?: boolean };
+        };
+        isNinjaMode = Boolean(parsedApp?.userPrefs?.anonymousMode);
+        isAusenteMode = Boolean(parsedApp?.isAppPaused);
+      }
+    } catch {
+      // ignore
+    }
+
+    if (isNinjaMode) {
+      return;
+    }
+
     const rawProfile =
       window.localStorage.getItem('buddy_my_profile') ||
       window.localStorage.getItem('delivery_buddy_real_courier_profile_v1') ||
@@ -1980,7 +2124,11 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
             id: resolvedId,
             name: cleanName,
           },
-          status: parsedProfile.has_order ? 'busy' : 'online',
+          status: isAusenteMode
+            ? 'paused'
+            : parsedProfile.has_order
+              ? 'busy'
+              : 'online',
           approvalStatus: isFounder ? 'approved' : undefined,
         });
         if (inMemoryCloudState.couriers[resolvedId]) {
@@ -2034,11 +2182,11 @@ export async function pollCloudSyncTopicsOnce(
   includeAccountsHistory = false
 ): Promise<CloudSharedState> {
   const urls = [
-    `https://ntfy.sh/${FLEET_SYNC_TOPIC}/json?poll=1&since=24h`,
+    `https://ntfy.sh/${FLEET_SYNC_TOPIC}/json?poll=1&since=2m`,
     ...(includeAccountsHistory
       ? [
           `https://ntfy.sh/${ACCOUNTS_SYNC_TOPIC}/json?poll=1&since=48h`,
-          `https://ntfy.sh/${LEGACY_LIVE_SYNC_TOPIC}/json?poll=1&since=24h`,
+          `https://ntfy.sh/${LEGACY_LIVE_SYNC_TOPIC}/json?poll=1&since=2m`,
         ]
       : []),
   ];
@@ -2053,6 +2201,13 @@ export async function pollCloudSyncTopicsOnce(
     for (const text of texts) {
       if (!text || !text.trim()) continue;
       const lines = text.trim().split('\n');
+      const parsedRows: Array<{
+        event?: string;
+        message?: string;
+        time?: number;
+      }> = [];
+      let maxServerSec = 0;
+
       for (const line of lines) {
         try {
           const ntfyRow = JSON.parse(line) as {
@@ -2062,12 +2217,32 @@ export async function pollCloudSyncTopicsOnce(
           };
           if (ntfyRow.event && ntfyRow.event !== 'message') continue;
           if (!ntfyRow.message) continue;
-          const env = JSON.parse(ntfyRow.message) as CloudSyncEnvelope;
-          if (ingestEnvelope(env, myDeviceId)) {
+          if (typeof ntfyRow.time === 'number' && ntfyRow.time > maxServerSec) {
+            maxServerSec = ntfyRow.time;
+          }
+          parsedRows.push(ntfyRow);
+        } catch {
+          // ignore malformed line
+        }
+      }
+
+      const localNowSec = Math.floor(Date.now() / 1000);
+      const refLatestSec = maxServerSec > 0 ? maxServerSec : localNowSec;
+
+      for (const ntfyRow of parsedRows) {
+        try {
+          const env = JSON.parse(ntfyRow.message!) as CloudSyncEnvelope;
+          // Treat any message received in the last 90 seconds of the server stream as freshly online (localReceivedAt = Date.now())
+          const rowSec =
+            typeof ntfyRow.time === 'number' && ntfyRow.time > 0
+              ? ntfyRow.time
+              : refLatestSec;
+          const isRecentInServerStream = refLatestSec - rowSec <= 95;
+          if (ingestEnvelope(env, myDeviceId, isRecentInServerStream)) {
             anyChanged = true;
           }
         } catch {
-          // ignore malformed line
+          // ignore malformed envelope
         }
       }
     }
@@ -2120,14 +2295,14 @@ export function startRealtimeCloudSyncStream(
     if (stopped || typeof EventSource === 'undefined') return;
     try {
       fleetEventSource = new EventSource(
-        `https://ntfy.sh/${FLEET_SYNC_TOPIC}/sse?since=2h`
+        `https://ntfy.sh/${FLEET_SYNC_TOPIC}/sse?since=2m`
       );
       fleetEventSource.onmessage = (ev) => {
         try {
           const ntfyRow = JSON.parse(ev.data) as { message?: string };
           if (!ntfyRow?.message) return;
           const env = JSON.parse(ntfyRow.message) as CloudSyncEnvelope;
-          if (ingestEnvelope(env, myDeviceId)) {
+          if (ingestEnvelope(env, myDeviceId, true)) {
             persistAndNotifyCloudState();
           }
         } catch {
@@ -2135,7 +2310,7 @@ export function startRealtimeCloudSyncStream(
         }
       };
     } catch {
-      // fallback to 4s poll
+      // fallback to 20s poll
     }
 
     try {
@@ -2147,7 +2322,7 @@ export function startRealtimeCloudSyncStream(
           const ntfyRow = JSON.parse(ev.data) as { message?: string };
           if (!ntfyRow?.message) return;
           const env = JSON.parse(ntfyRow.message) as CloudSyncEnvelope;
-          if (ingestEnvelope(env, myDeviceId)) {
+          if (ingestEnvelope(env, myDeviceId, false)) {
             persistAndNotifyCloudState();
           }
         } catch {
@@ -2165,16 +2340,13 @@ export function startRealtimeCloudSyncStream(
   void publishPeerDiscoveryPing(myDeviceId);
 
   let tickCount = 0;
+  // Broadcast heartbeat and poll every 20 seconds to prevent ntfy.sh rate-limiting (HTTP 429)
   const pollTimer = window.setInterval(() => {
     if (stopped) return;
     tickCount += 1;
-    // Publish current user's live profile & GPS every 12 seconds so peers always stay synced
-    if (tickCount % 3 === 1) {
-      broadcastLocalStorageAccountsAndProfileNow();
-    }
-    // Poll db_amarante_fleet_v3 every 4s, and legacy/accounts topics every 12s
+    broadcastLocalStorageAccountsAndProfileNow();
     void pollCloudSyncTopicsOnce(myDeviceId, tickCount % 3 === 0);
-  }, 4000);
+  }, 20000);
 
   return () => {
     stopped = true;
@@ -2213,14 +2385,19 @@ export function getActiveCloudCourierRows(
   Object.values(sourceState.couriers).forEach((c) => {
     if (!c || !c.id || !c.name || !c.name.trim()) return;
     if (c.approvalStatus === 'blocked') return;
-    if (c.status === 'offline') return;
+    if (c.status === 'offline' || c.isAnonymous === true) return;
     const seenMs =
-      typeof c.heartbeatAt === 'number' && c.heartbeatAt > 0
-        ? c.heartbeatAt
-        : c.lastSeen
-          ? Date.parse(c.lastSeen)
-          : 0;
+      typeof c.localReceivedAt === 'number' && c.localReceivedAt > 0
+        ? c.localReceivedAt
+        : typeof c.heartbeatAt === 'number' && c.heartbeatAt > 0
+          ? c.heartbeatAt
+          : c.lastSeen
+            ? Date.parse(c.lastSeen)
+            : 0;
     if (!seenMs || seenMs <= 0 || nowMs - seenMs > maxAgeMs) return;
+
+    const fallbackCoords = getDeterministicCourierCenterCoords(c.id || c.name);
+    const hasOwnCoords = !isDefaultOrMissingCourierCoord(c.lat, c.lng);
 
     rows.push({
       id: c.id,
@@ -2233,17 +2410,15 @@ export function getActiveCloudCourierRows(
             ? 'Pausa'
             : 'Disponível',
       has_order: c.status === 'busy',
-      lat:
-        Number.isFinite(c.lat) && c.lat !== 0 ? c.lat : DEFAULT_AMARANTE_LAT,
-      lng:
-        Number.isFinite(c.lng) && c.lng !== 0 ? c.lng : DEFAULT_AMARANTE_LNG,
+      lat: hasOwnCoords ? c.lat : fallbackCoords.lat,
+      lng: hasOwnCoords ? c.lng : fallbackCoords.lng,
       zone: c.zone || 'Amarante Centro / São Gonçalo',
       reputation: 100,
       buddy_since:
         c.approvalStatus === 'pending'
-          ? '⏳ Pendente Aprovação'
+          ? 'Pendente Aprovação'
           : 'Fundador • Out 2026',
-      updated_at: c.lastSeen || new Date(seenMs).toISOString(),
+      updated_at: new Date(seenMs).toISOString(),
       avatar_url: c.avatar,
       active_platforms:
         Array.isArray(c.platforms) && c.platforms.length > 0
