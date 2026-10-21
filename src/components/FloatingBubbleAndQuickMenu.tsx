@@ -1797,9 +1797,9 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
         const pillBg = isDaylight ? '#F8FAFC' : '#111827';
         const primaryText = isDaylight ? '#090D16' : '#FFFFFF';
         const secondaryText = isDaylight ? '#475569' : '#94A3B8';
-        const neonAccent = isDaylight ? '#00B8D4' : '#00E5FF';
-        const neonText = isDaylight ? '#00838F' : '#00E5FF';
-        const cardBorder = isDaylight ? '#00B8D4' : '#00E5FF';
+        const neonAccent = isDaylight ? '#0096C7' : '#00E5FF';
+        const neonText = isDaylight ? '#0284C7' : '#00E5FF';
+        const cardBorder = isDaylight ? '#0096C7' : '#00E5FF';
         const subtleBorder = isDaylight ? '#CBD5E1' : 'rgba(0, 229, 255, 0.35)';
 
         return (
@@ -1891,12 +1891,12 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                         fill={
                           isDaylight ? '#E0F2FE' : 'rgba(0, 229, 255, 0.16)'
                         }
-                        stroke={isDaylight ? '#0891B2' : '#00E5FF'}
+                        stroke={isDaylight ? '#0284C7' : '#00E5FF'}
                         strokeWidth="2"
                       />
                       <path
                         d="M12 4V5.8M12 18.2V20M4 12H5.8M18.2 12H20M6.34 6.34L7.62 7.62M16.38 16.38L17.66 17.66M17.66 6.34L16.38 7.62M7.62 16.38L6.34 17.66"
-                        stroke={isDaylight ? '#0891B2' : '#00E5FF'}
+                        stroke={isDaylight ? '#0284C7' : '#00E5FF'}
                         strokeWidth="2"
                         strokeLinecap="round"
                       />
@@ -2059,70 +2059,6 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                       {rainBonusFinanceActive ? 'ATIVO (ON)' : 'ATIVAR'}
                     </button>
                   </div>
-                </div>
-
-                {/* Audio & Refresh Actions (Matte Black + Cyan Accent for Parar Fala — Zero Vibrant Red & Zero Emojis) */}
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  {isSpeakingTts ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        stopBuddySpeech();
-                        cancelSpeechNow();
-                      }}
-                      className="rounded-xl bg-slate-900 text-cyan-400 border border-cyan-500/30 py-3 px-3 text-sm sm:text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer transition hover:opacity-90"
-                    >
-                      <VolumeX className="h-5 w-5 text-cyan-400 shrink-0" />
-                      <span>Parar Fala</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const rainNote =
-                          amaranteLiveWeather.rainMm > 0
-                            ? ', com chuva'
-                            : ', sem chuva';
-                        speakTextPt(
-                          `Amarante: ${Math.round(amaranteLiveWeather.temperatureC)} graus, ${amaranteLiveWeather.conditionLabel.toLowerCase()}${rainNote}.`
-                        );
-                      }}
-                      style={{
-                        backgroundColor: pillBg,
-                        borderColor: subtleBorder,
-                        color: primaryText,
-                      }}
-                      className="rounded-xl border py-3 px-3 text-sm sm:text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer transition hover:opacity-90"
-                    >
-                      <Volume2
-                        style={{ color: neonText }}
-                        className="h-5 w-5 shrink-0"
-                      />
-                      <span>Ouvir em Voz Alta</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void openAndFetchAmaranteWeather(true);
-                    }}
-                    style={{
-                      backgroundColor: pillBg,
-                      borderColor: cardBorder,
-                      color: neonText,
-                    }}
-                    className="rounded-xl border py-3 px-3 text-sm sm:text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer transition hover:opacity-90"
-                  >
-                    <RefreshCw
-                      style={{ color: neonText }}
-                      className="h-4 w-4 shrink-0"
-                      strokeWidth={2.2}
-                    />
-                    <span>Atualizar Agora</span>
-                  </button>
                 </div>
               </div>
 

@@ -916,7 +916,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   Online Agora
                 </span>
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="block text-2xl font-extrabold my-0.5 leading-none"
                 >
                   {liveOnlineCount}
@@ -978,7 +978,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   Amarante
                 </span>
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="block text-[10px] sm:text-[11px] font-extrabold leading-tight"
                 >
                   Raio 35 km
@@ -998,7 +998,7 @@ export const AdminBackofficeModule: React.FC = () => {
                 className="rounded-xl border p-3 space-y-1"
               >
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-extrabold flex items-center gap-1.5"
                 >
                   <TrendingUp className="h-3.5 w-3.5 shrink-0" />
@@ -1011,7 +1011,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   28 Estafetas Ativos
                 </span>
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-extrabold block"
                 >
                   Receita B2B Est.: € 420 / mês
@@ -1034,7 +1034,7 @@ export const AdminBackofficeModule: React.FC = () => {
                 className="rounded-xl border p-3 space-y-1"
               >
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-extrabold flex items-center gap-1.5"
                 >
                   <Rocket className="h-3.5 w-3.5 shrink-0" />
@@ -1047,7 +1047,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   85 Estafetas Ativos
                 </span>
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-extrabold block"
                 >
                   Receita B2B Est.: € 1.450 / mês
@@ -1070,7 +1070,7 @@ export const AdminBackofficeModule: React.FC = () => {
                 className="rounded-xl border p-3 space-y-1"
               >
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-extrabold flex items-center gap-1.5"
                 >
                   <BarChart3 className="h-3.5 w-3.5 shrink-0" />
@@ -1083,7 +1083,7 @@ export const AdminBackofficeModule: React.FC = () => {
                   340 Estafetas Ativos
                 </span>
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-extrabold block"
                 >
                   Receita B2B Est.: € 5.800 / mês
@@ -2761,7 +2761,7 @@ export const AdminBackofficeModule: React.FC = () => {
                               {rc.appAnnouncedKm.toFixed(1)} km →{' '}
                               <strong
                                 style={{
-                                  color: isDaylight ? '#00838F' : '#00E5FF',
+                                  color: isDaylight ? '#0284C7' : '#00E5FF',
                                 }}
                               >
                                 {rc.realLegalKm.toFixed(1)} km reais

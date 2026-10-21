@@ -23,6 +23,10 @@ import { PlatformFilterScope, PlatformName } from '../types/models';
 import { insertAiSkillLogToSupabaseRest } from '../services/geminiAgent';
 import { learnFromScannedOrderSample } from '../services/orderScreenLearner';
 import { publishLearnedOrderTemplateToCloud } from '../services/cloudSync';
+import {
+  getEnabledProfilePlatforms,
+  PlatformBrandDot,
+} from '../utils/platformBrand';
 
 export interface ArchivedCompleteDeliveryRecord {
   id: string;
@@ -1113,7 +1117,7 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                         }}
                         className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-2.5 py-2 text-xs sm:text-sm font-extrabold text-zinc-100"
                       >
-                        {(['Glovo', 'Uber Eats', 'Bolt Food'] as PlatformName[]).map(
+                        {getEnabledProfilePlatforms(enabledPlatforms).map(
                           (p) => (
                             <option key={p} value={p}>
                               {p}
@@ -1473,9 +1477,11 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
                 <div
                   className={`grid divide-x divide-zinc-800/80 border-b border-zinc-800/80 ${
-                    enabledPlatforms.length === 2
-                      ? 'grid-cols-2'
-                      : 'grid-cols-3'
+                    enabledPlatforms.length === 1
+                      ? 'grid-cols-1'
+                      : enabledPlatforms.length === 2
+                        ? 'grid-cols-2'
+                        : 'grid-cols-3'
                   }`}
                 >
                   {enabledPlatforms.map((platform) => {
@@ -1490,11 +1496,14 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                         className="p-3 space-y-1 cursor-pointer hover:bg-zinc-950/60 transition"
                       >
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-sm sm:text-base font-extrabold text-zinc-100 truncate">
-                            {platform}
+                          <span className="text-sm sm:text-base font-extrabold text-zinc-100 truncate inline-flex items-center gap-1.5">
+                            <PlatformBrandDot platform={platform} size={9} />
+                            <span className="truncate">{platform}</span>
                           </span>
                           {isBest && (
-                            <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+                            <span className="text-[10px] font-black uppercase tracking-wide text-emerald-400 shrink-0">
+                              Melhor
+                            </span>
                           )}
                         </div>
                         <div className="text-lg sm:text-xl font-extrabold text-emerald-400 whitespace-nowrap">

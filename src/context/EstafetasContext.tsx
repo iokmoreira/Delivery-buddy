@@ -1971,6 +1971,23 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
     return [];
   });
 
+  // Keep the active platforms selector strictly aligned with the courier profile
+  // (e.g. a profile registered with only "Glovo" must never show Uber Eats / Bolt Food)
+  useEffect(() => {
+    if (!realCourierProfile.isRegistered) return;
+    const profilePlatforms = (realCourierProfile.active_platforms || []).filter(
+      (p): p is PlatformName =>
+        p === 'Uber Eats' || p === 'Glovo' || p === 'Bolt Food'
+    );
+    if (profilePlatforms.length === 0) return;
+    setActivePlatformsState((prev) =>
+      prev.length === profilePlatforms.length &&
+      prev.every((p) => profilePlatforms.includes(p))
+        ? prev
+        : profilePlatforms
+    );
+  }, [realCourierProfile.isRegistered, realCourierProfile.active_platforms]);
+
   const [realKycStatusOverrides, setRealKycStatusOverrides] = useState<
     Record<string, AdminCourierKycStatus>
   >({});

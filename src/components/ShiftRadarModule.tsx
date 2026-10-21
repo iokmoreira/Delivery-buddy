@@ -255,7 +255,7 @@ export const DirectApkShareModal: React.FC<{
             Delivery-Buddy-Amarante.apk
           </span>
           <span
-            style={{ color: '#00838F' }}
+            style={{ color: '#0284C7' }}
             className="text-sm font-bold"
           >
             1 Toque → Baixar e Instalar Direto no Android
@@ -2942,7 +2942,7 @@ export const ShiftRadarModule: React.FC = () => {
                 </span>
               ) : (
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-[10px] font-bold block leading-tight mt-0.5"
                 >
                   {amaranteCrosswalks.length} passadeiras

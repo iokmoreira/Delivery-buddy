@@ -29,6 +29,76 @@ import {
 } from '../services/voiceEngine';
 import { learnFromScannedOrderSample } from '../services/orderScreenLearner';
 import { publishLearnedOrderTemplateToCloud } from '../services/cloudSync';
+import {
+  getEnabledProfilePlatforms,
+  PlatformBrandDot,
+} from '../utils/platformBrand';
+
+/**
+ * Meta Diária progress: centered labels + slim 4px track with a visible
+ * cyan glow start dot even at 0% (never looks like a browser scrollbar).
+ */
+const MetaDiariaProgress: React.FC<{
+  pct: number;
+  currentLabel: string;
+  targetLabel: string;
+  isDaylight: boolean;
+}> = ({ pct, currentLabel, targetLabel, isDaylight }) => {
+  const safePct = Math.max(0, Math.min(100, Math.round(pct)));
+  const accent = isDaylight ? '#0284C7' : '#00E5FF';
+  return (
+    <div className="w-full overflow-x-hidden flex flex-col items-center text-center gap-2">
+      <span
+        className={`text-xs font-bold uppercase tracking-wider ${
+          isDaylight ? 'text-slate-500' : 'text-slate-400'
+        }`}
+      >
+        Meta Diária{' '}
+        <span style={{ color: accent }} className="font-black">
+          {safePct}%
+        </span>
+      </span>
+      <div className="w-full max-w-[280px] px-1.5">
+        <div
+          className="relative w-full h-1 rounded-full"
+          style={{
+            backgroundColor: isDaylight
+              ? 'rgba(8, 47, 73, 0.10)'
+              : 'rgba(0, 229, 255, 0.12)',
+          }}
+        >
+          <div
+            className="absolute left-0 top-0 h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${safePct}%`,
+              background: 'linear-gradient(90deg, #0284C7 0%, #00E5FF 100%)',
+            }}
+          />
+          <span
+            aria-hidden="true"
+            className="absolute top-1/2 h-2.5 w-2.5 rounded-full -translate-x-1/2 -translate-y-1/2 transition-all duration-500"
+            style={{
+              left: `${safePct}%`,
+              backgroundColor: accent,
+              boxShadow: '0 0 8px 2px rgba(0, 229, 255, 0.55)',
+            }}
+          />
+        </div>
+      </div>
+      <span
+        className={`text-sm font-extrabold whitespace-nowrap ${
+          isDaylight ? 'text-slate-900' : 'text-white'
+        }`}
+      >
+        {currentLabel}{' '}
+        <span className={isDaylight ? 'text-slate-400' : 'text-slate-500'}>
+          /
+        </span>{' '}
+        {targetLabel}
+      </span>
+    </div>
+  );
+};
 
 export const ScannerAndSplitModule: React.FC = () => {
   const {
@@ -72,9 +142,15 @@ export const ScannerAndSplitModule: React.FC = () => {
     personalGoals,
     addManualDeliveryRecord,
     openTranslatorModal,
+    activePlatforms,
   } = useEstafetas();
 
   const isDaylight = themeMode === 'DAYLIGHT';
+  // Only render the delivery platforms enabled in the courier profile (e.g. Glovo only)
+  const enabledProfilePlatforms = useMemo(
+    () => getEnabledProfilePlatforms(activePlatforms),
+    [activePlatforms]
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [overweightProofCopied, setOverweightProofCopied] =
@@ -691,12 +767,12 @@ export const ScannerAndSplitModule: React.FC = () => {
           ===================================================================== */}
       {!hasActiveOrder && (
         <>
-          {/* 1. TOP SUMMARY BAR (Balanced 2-Column Header Container — Zero Line-Wrapping Bug) */}
+          {/* 1. TOP SUMMARY BAR (Balanced, centered 2-column header — no outer border lines) */}
           <div
-            className={`grid grid-cols-2 gap-4 py-3.5 px-4 rounded-2xl border ${
+            className={`grid grid-cols-2 py-4 px-3 rounded-2xl overflow-x-hidden ${
               isDaylight
-                ? 'bg-slate-50/70 border-slate-200/80 text-slate-900'
-                : 'bg-slate-900/80 border-slate-800 text-slate-100'
+                ? 'bg-slate-50 text-slate-900'
+                : 'bg-slate-900/80 text-slate-100'
             }`}
           >
             {/* LEFT COLUMN (Resumo de Ganhos trigger): Stacked €0,00 on top + 0 entregas hoje below */}
@@ -704,7 +780,7 @@ export const ScannerAndSplitModule: React.FC = () => {
               type="button"
               onClick={() => setIsEarningsModalOpen(true)}
               title="Toque para abrir Resumo de Ganhos & Estatísticas de Hoje"
-              className="flex flex-col items-start justify-center cursor-pointer transition text-left hover:opacity-85"
+              className="flex flex-col items-center justify-center cursor-pointer transition text-center hover:opacity-85"
             >
               <span
                 className={`text-2xl font-extrabold tracking-tight leading-none ${
@@ -727,7 +803,7 @@ export const ScannerAndSplitModule: React.FC = () => {
               type="button"
               onClick={() => void openAndFetchAmaranteWeather(false)}
               title="Toque para abrir Clima Atual em Amarante e ouvir previsão"
-              className={`border-l pl-4 flex items-center gap-3 cursor-pointer transition text-left hover:opacity-85 ${
+              className={`border-l flex items-center justify-center gap-2.5 cursor-pointer transition text-left hover:opacity-85 ${
                 isDaylight ? 'border-slate-200' : 'border-slate-800'
               }`}
             >
@@ -745,12 +821,12 @@ export const ScannerAndSplitModule: React.FC = () => {
                   cy="12"
                   r="4.5"
                   fill={isDaylight ? '#E0F2FE' : 'rgba(0, 229, 255, 0.16)'}
-                  stroke={isDaylight ? '#0891B2' : '#00E5FF'}
+                  stroke={isDaylight ? '#0284C7' : '#00E5FF'}
                   strokeWidth="2"
                 />
                 <path
                   d="M12 4V5.8M12 18.2V20M4 12H5.8M18.2 12H20M6.34 6.34L7.62 7.62M16.38 16.38L17.66 17.66M17.66 6.34L16.38 7.62M7.62 16.38L6.34 17.66"
-                  stroke={isDaylight ? '#0891B2' : '#00E5FF'}
+                  stroke={isDaylight ? '#0284C7' : '#00E5FF'}
                   strokeWidth="2"
                   strokeLinecap="round"
                 />
@@ -783,10 +859,10 @@ export const ScannerAndSplitModule: React.FC = () => {
           </div>
 
           {/* 2. ÚLTIMA ENTREGA SECTION (Clean Structured Header + Segmented SVG Action Bar + Proportional Surface) */}
-          <section className="py-2 space-y-2.5">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-cyan-500 shrink-0" />
+          <section className="pt-3 space-y-3">
+            <div className="flex flex-col items-center gap-2.5 text-center">
+              <div className="flex items-center justify-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#00B8D4] shadow-[0_0_6px_rgba(0,229,255,0.7)] shrink-0" />
                 <h2
                   className={`text-base font-extrabold tracking-tight ${
                     isDaylight ? 'text-slate-900' : 'text-white'
@@ -795,7 +871,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                   Última Entrega
                 </h2>
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center justify-center gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={() => openTranslatorModal('TRADUTOR')}
@@ -807,7 +883,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 >
                   <Languages
                     className={`h-3.5 w-3.5 shrink-0 ${
-                      isDaylight ? 'text-[#0891B2]' : 'text-[#00E5FF]'
+                      isDaylight ? 'text-[#0284C7]' : 'text-[#00E5FF]'
                     }`}
                     strokeWidth={2.2}
                   />
@@ -824,7 +900,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 >
                   <ScanLine
                     className={`h-3.5 w-3.5 shrink-0 ${
-                      isDaylight ? 'text-[#0891B2]' : 'text-[#00E5FF]'
+                      isDaylight ? 'text-[#0284C7]' : 'text-[#00E5FF]'
                     }`}
                     strokeWidth={2.2}
                   />
@@ -835,18 +911,20 @@ export const ScannerAndSplitModule: React.FC = () => {
 
             {earningsTodayByApp.lastDelivery ? (
               <div
-                className={`py-3 px-3.5 rounded-xl border space-y-1.5 ${
-                  isDaylight
-                    ? 'bg-slate-50/50 border-slate-100'
-                    : 'bg-slate-900/60 border-slate-800/80'
+                className={`py-3 px-4 rounded-2xl space-y-1.5 text-center ${
+                  isDaylight ? 'bg-slate-50' : 'bg-slate-900/60'
                 }`}
               >
-                <div className="flex items-baseline justify-between gap-2">
+                <div className="flex flex-col items-center gap-1">
                   <span
-                    className={`text-xs font-extrabold uppercase tracking-wide ${
-                      isDaylight ? 'text-cyan-700' : 'text-cyan-400'
+                    className={`text-xs font-extrabold uppercase tracking-wide inline-flex items-center gap-1.5 ${
+                      isDaylight ? 'text-slate-700' : 'text-slate-200'
                     }`}
                   >
+                    <PlatformBrandDot
+                      platform={earningsTodayByApp.lastDelivery.platform}
+                      size={9}
+                    />
                     {earningsTodayByApp.lastDelivery.platform}
                   </span>
                   <span
@@ -865,7 +943,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                   {earningsTodayByApp.lastDelivery.segment}
                 </div>
                 <div
-                  className={`flex items-center justify-between text-xs pt-1 ${
+                  className={`grid grid-cols-3 text-xs pt-1 ${
                     isDaylight ? 'text-slate-500' : 'text-slate-400'
                   }`}
                 >
@@ -886,8 +964,8 @@ export const ScannerAndSplitModule: React.FC = () => {
                     <strong
                       className={
                         isDaylight
-                          ? 'text-cyan-700 font-bold'
-                          : 'text-cyan-400 font-bold'
+                          ? 'text-[#0284C7] font-bold'
+                          : 'text-[#00E5FF] font-bold'
                       }
                     >
                       {earningsTodayByApp.lastDelivery.netEurPerKm.toFixed(2)}{' '}
@@ -899,10 +977,8 @@ export const ScannerAndSplitModule: React.FC = () => {
               </div>
             ) : (
               <div
-                className={`py-3 px-3.5 rounded-xl border ${
-                  isDaylight
-                    ? 'bg-slate-50/50 border-slate-100'
-                    : 'bg-slate-900/60 border-slate-800/80'
+                className={`py-3.5 px-4 rounded-2xl text-center ${
+                  isDaylight ? 'bg-slate-50' : 'bg-slate-900/60'
                 }`}
               >
                 <p
@@ -924,10 +1000,10 @@ export const ScannerAndSplitModule: React.FC = () => {
             )}
           </section>
 
-          {/* 3. ESTATÍSTICA DIÁRIA & META DIÁRIA (Crisp 2x2 Grid + pr-20 Safe Padding Against Floating Buddy Overlap) */}
-          <section className="pt-1 space-y-3">
+          {/* 3. ESTATÍSTICA DIÁRIA & META DIÁRIA (Centered 2x2 metrics — no divider lines, whitespace only) */}
+          <section className="pt-4 space-y-3 overflow-x-hidden">
             <h2
-              className={`text-base font-extrabold tracking-tight ${
+              className={`text-base font-extrabold tracking-tight text-center ${
                 isDaylight ? 'text-slate-900' : 'text-white'
               }`}
             >
@@ -935,13 +1011,11 @@ export const ScannerAndSplitModule: React.FC = () => {
             </h2>
 
             <div
-              className={`grid grid-cols-2 border-t border-b divide-x divide-y ${
-                isDaylight
-                  ? 'border-slate-200/80 divide-slate-200/80'
-                  : 'border-slate-800 divide-slate-800'
+              className={`grid grid-cols-2 gap-x-3 gap-y-2 rounded-2xl py-2 ${
+                isDaylight ? 'bg-slate-50' : 'bg-slate-900/60'
               }`}
             >
-              <div className="p-3.5">
+              <div className="py-2.5 px-2 text-center">
                 <span
                   className={`text-xs font-medium block ${
                     isDaylight ? 'text-slate-500' : 'text-slate-400'
@@ -958,7 +1032,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </span>
               </div>
 
-              <div className="p-3.5">
+              <div className="py-2.5 px-2 text-center">
                 <span
                   className={`text-xs font-medium block ${
                     isDaylight ? 'text-slate-500' : 'text-slate-400'
@@ -975,7 +1049,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </span>
               </div>
 
-              <div className="p-3.5">
+              <div className="py-2.5 px-2 text-center">
                 <span
                   className={`text-xs font-medium block ${
                     isDaylight ? 'text-slate-500' : 'text-slate-400'
@@ -985,7 +1059,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </span>
                 <span
                   className={`text-lg font-extrabold mt-0.5 block ${
-                    isDaylight ? 'text-[#0891B2]' : 'text-[#00E5FF]'
+                    isDaylight ? 'text-[#0284C7]' : 'text-[#00E5FF]'
                   }`}
                 >
                   {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')}{' '}
@@ -993,7 +1067,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </span>
               </div>
 
-              <div className="p-3.5">
+              <div className="py-2.5 px-2 text-center">
                 <span
                   className={`text-xs font-medium block ${
                     isDaylight ? 'text-slate-500' : 'text-slate-400'
@@ -1012,35 +1086,14 @@ export const ScannerAndSplitModule: React.FC = () => {
               </div>
             </div>
 
-            {/* Meta Diária Row: Label & Value placed on Left/Center with pr-20 right safe padding so Floating Buddy never covers it */}
-            <div className="pt-1 pr-20 space-y-1.5">
-              <div className="flex items-center justify-between gap-2 text-xs">
-                <span
-                  className={`font-bold whitespace-nowrap ${
-                    isDaylight ? 'text-slate-700' : 'text-slate-300'
-                  }`}
-                >
-                  Meta Diária ({earningsTodayByApp.goalProgressPct}%)
-                </span>
-                <span
-                  className={`font-extrabold whitespace-nowrap ${
-                    isDaylight ? 'text-slate-900' : 'text-[#00E5FF]'
-                  }`}
-                >
-                  {formatEurPt(earningsTodayByApp.total)} /{' '}
-                  {formatEurPt(earningsTodayByApp.goalTargetEur)}
-                </span>
-              </div>
-              <div
-                className={`w-full h-1 rounded-full overflow-hidden ${
-                  isDaylight ? 'bg-slate-200' : 'bg-slate-800'
-                }`}
-              >
-                <div
-                  style={{ width: `${earningsTodayByApp.goalProgressPct}%` }}
-                  className="h-full rounded-full bg-cyan-500 transition-all duration-300"
-                />
-              </div>
+            {/* Meta Diária: centered slim 4px track with glow start dot (symmetric px-14 keeps it clear of the floating Buddy) */}
+            <div className="pt-2 px-14 overflow-x-hidden">
+              <MetaDiariaProgress
+                pct={earningsTodayByApp.goalProgressPct}
+                currentLabel={formatEurPt(earningsTodayByApp.total)}
+                targetLabel={formatEurPt(earningsTodayByApp.goalTargetEur)}
+                isDaylight={isDaylight}
+              />
             </div>
           </section>
         </>
@@ -1064,7 +1117,7 @@ export const ScannerAndSplitModule: React.FC = () => {
               borderColor: isDaylight ? '#E2E8F0' : 'rgba(0, 229, 255, 0.28)',
               color: isDaylight ? '#0F172A' : '#FFFFFF',
             }}
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border p-5 flex flex-col justify-between gap-5 cursor-pointer shadow-2xl"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-3xl border p-5 flex flex-col justify-between gap-5 cursor-pointer shadow-2xl"
             onClick={(e) => {
               e.stopPropagation();
               stopBuddySpeech();
@@ -1173,57 +1226,34 @@ export const ScannerAndSplitModule: React.FC = () => {
                     isDaylight ? 'divide-slate-100' : 'divide-slate-800/80'
                   }`}
                 >
-                  <div className="flex items-center justify-between py-2">
-                    <span
-                      className={`text-base font-bold flex items-center gap-2.5 ${
-                        isDaylight ? 'text-slate-900' : 'text-white'
-                      }`}
+                  {enabledProfilePlatforms.map((plat) => (
+                    <div
+                      key={plat}
+                      className="flex items-center justify-between py-2"
                     >
-                      <span className="h-2.5 w-2.5 rounded-full bg-cyan-500" />
-                      Uber Eats
-                    </span>
-                    <span
-                      className={`text-lg font-black whitespace-nowrap ${
-                        isDaylight ? 'text-slate-900' : 'text-white'
-                      }`}
-                    >
-                      {formatEurPt(earningsTodayByApp.uber)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <span
-                      className={`text-base font-bold flex items-center gap-2.5 ${
-                        isDaylight ? 'text-slate-900' : 'text-white'
-                      }`}
-                    >
-                      <span className="h-2.5 w-2.5 rounded-full bg-cyan-600" />
-                      Glovo
-                    </span>
-                    <span
-                      className={`text-lg font-black whitespace-nowrap ${
-                        isDaylight ? 'text-slate-900' : 'text-white'
-                      }`}
-                    >
-                      {formatEurPt(earningsTodayByApp.glovo)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <span
-                      className={`text-base font-bold flex items-center gap-2.5 ${
-                        isDaylight ? 'text-slate-900' : 'text-white'
-                      }`}
-                    >
-                      <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-                      Bolt Food
-                    </span>
-                    <span
-                      className={`text-lg font-black whitespace-nowrap ${
-                        isDaylight ? 'text-slate-900' : 'text-white'
-                      }`}
-                    >
-                      {formatEurPt(earningsTodayByApp.bolt)}
-                    </span>
-                  </div>
+                      <span
+                        className={`text-base font-bold flex items-center gap-2.5 ${
+                          isDaylight ? 'text-slate-900' : 'text-white'
+                        }`}
+                      >
+                        <PlatformBrandDot platform={plat} size={11} />
+                        {plat}
+                      </span>
+                      <span
+                        className={`text-lg font-black whitespace-nowrap ${
+                          isDaylight ? 'text-slate-900' : 'text-white'
+                        }`}
+                      >
+                        {formatEurPt(
+                          plat === 'Glovo'
+                            ? earningsTodayByApp.glovo
+                            : plat === 'Uber Eats'
+                              ? earningsTodayByApp.uber
+                              : earningsTodayByApp.bolt
+                        )}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -1303,37 +1333,14 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </div>
               </div>
 
-              {/* 4. Meta Diária % + Última Entrega (Flat Sheet Section — No Box) */}
-              <div className="pt-1 space-y-2">
-                <div className="flex items-center justify-between text-sm gap-2">
-                  <span
-                    className={`font-bold ${
-                      isDaylight ? 'text-slate-700' : 'text-slate-300'
-                    }`}
-                  >
-                    Meta Diária ({earningsTodayByApp.goalProgressPct}%)
-                  </span>
-                  <span
-                    className={`font-black whitespace-nowrap ${
-                      isDaylight ? 'text-slate-900' : 'text-cyan-400'
-                    }`}
-                  >
-                    {formatEurPt(earningsTodayByApp.total)} /{' '}
-                    {formatEurPt(earningsTodayByApp.goalTargetEur)}
-                  </span>
-                </div>
-                <div
-                  className={`w-full h-2 rounded-full overflow-hidden ${
-                    isDaylight ? 'bg-slate-200' : 'bg-slate-800'
-                  }`}
-                >
-                  <div
-                    style={{
-                      width: `${earningsTodayByApp.goalProgressPct}%`,
-                    }}
-                    className="h-full rounded-full bg-cyan-500 transition-all duration-300"
-                  />
-                </div>
+              {/* 4. Meta Diária % (centered slim track) + Última Entrega */}
+              <div className="pt-1 space-y-3 overflow-x-hidden">
+                <MetaDiariaProgress
+                  pct={earningsTodayByApp.goalProgressPct}
+                  currentLabel={formatEurPt(earningsTodayByApp.total)}
+                  targetLabel={formatEurPt(earningsTodayByApp.goalTargetEur)}
+                  isDaylight={isDaylight}
+                />
                 {earningsTodayByApp.lastDelivery ? (
                   <div
                     className={`pt-2 flex items-center justify-between gap-2 text-sm ${

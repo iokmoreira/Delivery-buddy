@@ -1512,7 +1512,7 @@ const OfficialManualAndCommandsModal: React.FC<{
                     {filteredVoiceCommands.map((cmd) => (
                       <tr key={cmd.phrase}>
                         <td
-                          style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                          style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                           className="py-2 pr-2 font-black"
                         >
                           {cmd.phrase}
@@ -2870,7 +2870,7 @@ export const MenuMaisHubView: React.FC = () => {
                     Voz Ativa:{' '}
                     <strong
                       style={{
-                        color: themeMode === 'DAYLIGHT' ? '#00838F' : '#00E5FF',
+                        color: themeMode === 'DAYLIGHT' ? '#0284C7' : '#00E5FF',
                       }}
                     >
                       {resolvedPtBrVoiceName}

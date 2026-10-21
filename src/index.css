@@ -24,6 +24,27 @@
   --color-green-800: #0369a1;
   --color-green-900: #075985;
   --color-green-950: #042f49;
+
+  /* True Buddy Electric Cyan / Sky Blue (zero greenish-teal tint) */
+  --color-cyan-400: #00e5ff;
+  --color-cyan-500: #00b8d4;
+  --color-cyan-600: #0096c7;
+  --color-cyan-700: #0284c7;
+  --color-cyan-800: #0369a1;
+  --color-cyan-900: #075985;
+  --color-cyan-950: #042f49;
+
+  --color-teal-50: #e0f7ff;
+  --color-teal-100: #b3ecff;
+  --color-teal-200: #80e1ff;
+  --color-teal-300: #5eeaff;
+  --color-teal-400: #00e5ff;
+  --color-teal-500: #00b8d4;
+  --color-teal-600: #0096c7;
+  --color-teal-700: #0284c7;
+  --color-teal-800: #0369a1;
+  --color-teal-900: #075985;
+  --color-teal-950: #042f49;
 }
 
 @layer base {
@@ -216,7 +237,7 @@
 #app-audit-root.theme-daylight .text-emerald-400,
 #app-audit-root.theme-daylight .text-sky-300,
 #app-audit-root.theme-daylight .text-sky-400 {
-  color: #00838f !important;
+  color: #0284C7 !important;
 }
 
 #app-audit-root.theme-daylight .text-amber-200,
@@ -227,7 +248,7 @@
 
 #app-audit-root.theme-daylight .text-indigo-300,
 #app-audit-root.theme-daylight .text-indigo-400 {
-  color: #00838f !important;
+  color: #0284C7 !important;
 }
 
 #app-audit-root.theme-daylight .text-rose-300 {

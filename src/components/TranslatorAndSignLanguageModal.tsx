@@ -1010,7 +1010,7 @@ const Buddy3DRoboticHandSvg: React.FC<{
           <radialGradient id={`${uid}_neonCore`} cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="#E0FFFF" />
             <stop offset="45%" stopColor="#00E5FF" />
-            <stop offset="100%" stopColor="#00838F" stopOpacity="0.15" />
+            <stop offset="100%" stopColor="#0284C7" stopOpacity="0.15" />
           </radialGradient>
         </defs>
 
@@ -1812,7 +1812,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   Idioma do Cliente:
                 </span>
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-black truncate"
                 >
                   {selectedLangOption.flag} {selectedLangOption.namePt}
@@ -1862,7 +1862,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
                 >
                   <span>
@@ -1944,7 +1944,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   className="rounded-xl border p-2.5 space-y-1"
                 >
                   <span
-                    style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                     className="text-[10px] font-extrabold uppercase block"
                   >
                     🗣️ Cliente disse (Traduzido p/ Português):
@@ -2065,7 +2065,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   ⚡ Frases Rápidas de Entrega ({DOORSTEP_PRESET_PHRASES.length})
                 </span>
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-black"
                 >
                   {isQuickPhrasesOpen ? '▲ Ocultar' : '▼ Abrir'}
@@ -2121,7 +2121,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                   💬 Respostas Rápidas do Cliente ({selectedLangOption.namePt})
                 </span>
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-black"
                 >
                   {isCustomerRepliesOpen ? '▲ Ocultar' : '▼ Abrir'}
@@ -2151,7 +2151,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                         {item.byLang[translatorTargetLang]}
                       </span>
                       <span
-                        style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                        style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                         className="text-[10px] font-extrabold shrink-0"
                       >
                         Ouvir PT
@@ -2264,7 +2264,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
                     : currentCoreSign.ptCaption}
                 </p>
                 <p
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-bold"
                 >
                   {spellingInfo
@@ -2448,7 +2448,7 @@ export const TranslatorAndSignLanguageModal: React.FC = () => {
             >
               <div>
                 <span
-                  style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
+                  style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
                   className="text-xs font-black uppercase tracking-wider block"
                 >
                   🤝 Área do Cliente Surdo — Resposta Rápida &amp; Código PIN
