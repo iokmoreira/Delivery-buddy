@@ -1,7 +1,12 @@
 import React from 'react';
 import { useEstafetas } from '../context/EstafetasContext';
 import { isCourierAdminByName } from '../services/cloudSync';
-import { BUDDY_AVATARS, requestBuddyLaunchReplay } from '../utils/buddyAvatars';
+import {
+  getActiveBuddyAvatar,
+  requestBuddyLaunchReplay,
+  resolveBuddyShiftVisualState,
+  useBuddySkin,
+} from '../utils/buddyAvatars';
 
 export const CockpitHeader: React.FC = () => {
   const {
@@ -17,6 +22,7 @@ export const CockpitHeader: React.FC = () => {
     verifiedAccount,
   } = useEstafetas();
 
+  const [buddySkin] = useBuddySkin();
   const isDaylight = themeMode === 'DAYLIGHT';
   const isAnonymous = Boolean(userPrefs?.anonymousMode);
   const activeCourierName =
@@ -24,6 +30,13 @@ export const CockpitHeader: React.FC = () => {
     verifiedAccount?.courierName?.trim() ||
     '';
   const isFounderAdmin = isCourierAdminByName(activeCourierName);
+
+  const visualState = resolveBuddyShiftVisualState({
+    isAppPaused,
+    isNinja: isAnonymous,
+    isDelivery: currentMascotState === 'DELIVERY',
+  });
+  const headerBuddyAvatarUrl = getActiveBuddyAvatar(visualState, buddySkin);
 
   // Cycle: Online -> Ausente (Pausa) -> Modo Ninja (Anónimo) -> Online
   const handleCycleHeaderStatus = () => {
@@ -67,10 +80,10 @@ export const CockpitHeader: React.FC = () => {
             onClick={requestBuddyLaunchReplay}
             title="Toque no Buddy para ver a animação de lançamento"
             aria-label="Rever animação de lançamento do Buddy"
-            className="relative h-[46px] w-[46px] shrink-0 rounded-full overflow-hidden bg-black ring-[1.5px] ring-[#00E5FF]/60 shadow-[0_0_10px_rgba(0,229,255,0.35)] cursor-pointer transition-transform hover:scale-105 active:scale-95 border-0 p-0"
+            className="relative h-[44px] w-[44px] shrink-0 rounded-full overflow-hidden bg-black ring-[1.5px] ring-[#00E5FF]/60 shadow-[0_0_10px_rgba(0,229,255,0.35)] cursor-pointer transition-transform hover:scale-105 active:scale-95 border-0 p-0"
           >
             <img
-              src={BUDDY_AVATARS.flying}
+              src={headerBuddyAvatarUrl}
               alt="Buddy Mascote"
               className="h-full w-full object-cover scale-110 select-none pointer-events-none"
             />

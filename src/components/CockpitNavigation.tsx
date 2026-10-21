@@ -8,6 +8,11 @@ import {
 import { AppTabId } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
 import { playBuddyOpenChime } from '../services/voiceEngine';
+import {
+  getActiveBuddyAvatar,
+  resolveBuddyShiftVisualState,
+  useBuddySkin,
+} from '../utils/buddyAvatars';
 
 const CURRENT_OTA_BUILD_VERSION = 'v3.6.0-neural-perfil';
 const LAST_SEEN_OTA_BUILD_KEY = 'buddy_last_seen_ota_build_v1';
@@ -22,10 +27,11 @@ export const CockpitNavigation: React.FC = () => {
     setCourierWorkspaceSection,
     themeMode,
     currentMascotState,
-    currentMascotImageUrl,
+    isAppPaused,
     userPrefs,
   } = useEstafetas();
 
+  const [buddySkin] = useBuddySkin();
   const [showOtaUpdatedPopup, setShowOtaUpdatedPopup] = useState(false);
 
   useEffect(() => {
@@ -78,6 +84,14 @@ export const CockpitNavigation: React.FC = () => {
 
   const isDaylight = themeMode === 'DAYLIGHT';
   const isAnonymous = Boolean(userPrefs?.anonymousMode);
+  const visualState = resolveBuddyShiftVisualState({
+    isAppPaused,
+    isNinja: isAnonymous,
+    isDelivery: currentMascotState === 'DELIVERY',
+  });
+  const navBuddyCutoutUrl = getActiveBuddyAvatar(visualState, buddySkin, {
+    cutout: true,
+  });
 
   // Dynamic Buddy Mascot status badge & glow ring config
   const buddyStatusConfig = isAnonymous
@@ -232,22 +246,24 @@ export const CockpitNavigation: React.FC = () => {
                   }`}
                 >
                   <img
-                    src={currentMascotImageUrl}
+                    src={navBuddyCutoutUrl}
                     alt={`Buddy ${buddyStatusConfig.statusShort}`}
                     style={{
-                      height: '52px',
-                      width: '52px',
+                      height: '58px',
+                      width: '58px',
                       objectFit: 'contain',
                       filter: 'none',
                       boxShadow: 'none',
                       backgroundColor: 'transparent',
                     }}
-                    className="select-none pointer-events-none block mx-auto"
+                    className="w-[58px] h-[58px] scale-[1.15] select-none pointer-events-none block mx-auto"
                   />
                   <span
                     style={{
                       color: isActive
-                        ? '#00E5FF'
+                        ? isDaylight
+                          ? '#0284C7'
+                          : '#00E5FF'
                         : isDaylight
                           ? '#090D16'
                           : '#FFFFFF',

@@ -29,6 +29,8 @@ let activeSpeechGenerationId = 0;
 let lastSpokenText = '';
 let lastSpokenAt = 0;
 export const DUPLICATE_SPEECH_DEBOUNCE_MS = 1200;
+export const SPEECH_TRIGGER_DEBOUNCE_MS = 300;
+let pendingSpeechDebounceTimer: number | null = null;
 
 function getOrCreateSingletonAudioElement(): HTMLAudioElement | null {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') {
@@ -938,18 +940,52 @@ export function speakWithBuddyVoiceEngine(
   const normalizedText = text.trim().replace(/\s+/g, ' ');
   const nowMs = Date.now();
 
-  // Hard Singleton Debounce Lock: ignore any duplicate speak() call fired within 1200ms of the previous call!
+  // Hard Singleton Lock: ignore an identical phrase fired again within 1200ms (echo guard)
   if (
     nowMs - lastSpokenAt < DUPLICATE_SPEECH_DEBOUNCE_MS &&
-    (normalizedText.toLowerCase() === lastSpokenText.toLowerCase() ||
-      nowMs - lastSpokenAt < 650)
+    normalizedText.toLowerCase() === lastSpokenText.toLowerCase()
   ) {
     return;
   }
   lastSpokenText = normalizedText;
   lastSpokenAt = nowMs;
 
-  // Always cancel any ongoing speech & pause/reset activeAudioRef BEFORE starting a new phrase
+  // 1) Immediately silence ANY ongoing audio stream / speechSynthesis / native TTS
+  cancelBuddySpeechNow(true);
+  if (pendingSpeechDebounceTimer !== null) {
+    window.clearTimeout(pendingSpeechDebounceTimer);
+    pendingSpeechDebounceTimer = null;
+  }
+
+  // 2) Debounce 300ms (latest call wins) so two triggers never overlap or echo
+  const debouncedGenId = activeSpeechGenerationId;
+  pendingSpeechDebounceTimer = window.setTimeout(() => {
+    pendingSpeechDebounceTimer = null;
+    if (debouncedGenId !== activeSpeechGenerationId) return;
+    startBuddySpeechNow(
+      normalizedText,
+      rate,
+      pitch,
+      skipChime,
+      onStart,
+      onEnd,
+      onError,
+      onVoiceResolved
+    );
+  }, SPEECH_TRIGGER_DEBOUNCE_MS);
+}
+
+function startBuddySpeechNow(
+  normalizedText: string,
+  rate: number | undefined,
+  _pitch: number,
+  skipChime: boolean,
+  onStart?: () => void,
+  onEnd?: () => void,
+  onError?: () => void,
+  onVoiceResolved?: (voiceLabel: string) => void
+): void {
+  // Final safety: make sure nothing else is speaking right before we start
   cancelBuddySpeechNow(true);
   const currentGenId = activeSpeechGenerationId;
   activeOnEndCallback = onEnd || null;

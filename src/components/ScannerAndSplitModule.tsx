@@ -750,7 +750,13 @@ export const ScannerAndSplitModule: React.FC = () => {
     : totalAuditedWeightKg;
 
   return (
-    <div className="space-y-3">
+    <div
+      className={
+        hasActiveOrder
+          ? 'space-y-3 pt-2.5 pb-24'
+          : 'h-[calc(100dvh-124px)] overflow-hidden flex flex-col gap-2.5 pt-2 pb-1'
+      }
+    >
       {/* Hidden Screenshot File Input for "📷 Ler Pedido / Print" */}
       <input
         ref={fileInputRef}
@@ -769,7 +775,7 @@ export const ScannerAndSplitModule: React.FC = () => {
         <>
           {/* 1. TOP SUMMARY BAR (Balanced, centered 2-column header — no outer border lines) */}
           <div
-            className={`grid grid-cols-2 py-4 px-3 rounded-2xl overflow-x-hidden ${
+            className={`grid grid-cols-2 py-3 px-3 rounded-2xl overflow-x-hidden shrink-0 ${
               isDaylight
                 ? 'bg-slate-50 text-slate-900'
                 : 'bg-slate-900/80 text-slate-100'
@@ -859,8 +865,8 @@ export const ScannerAndSplitModule: React.FC = () => {
           </div>
 
           {/* 2. ÚLTIMA ENTREGA SECTION (Clean Structured Header + Segmented SVG Action Bar + Proportional Surface) */}
-          <section className="pt-3 space-y-3">
-            <div className="flex flex-col items-center gap-2.5 text-center">
+          <section className="space-y-2 shrink-0">
+            <div className="flex flex-col items-center gap-1.5 text-center">
               <div className="flex items-center justify-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#00B8D4] shadow-[0_0_6px_rgba(0,229,255,0.7)] shrink-0" />
                 <h2
@@ -911,7 +917,7 @@ export const ScannerAndSplitModule: React.FC = () => {
 
             {earningsTodayByApp.lastDelivery ? (
               <div
-                className={`py-3 px-4 rounded-2xl space-y-1.5 text-center ${
+                className={`py-2.5 px-4 rounded-2xl space-y-1 text-center ${
                   isDaylight ? 'bg-slate-50' : 'bg-slate-900/60'
                 }`}
               >
@@ -977,7 +983,7 @@ export const ScannerAndSplitModule: React.FC = () => {
               </div>
             ) : (
               <div
-                className={`py-3.5 px-4 rounded-2xl text-center ${
+                className={`py-2.5 px-4 rounded-2xl text-center ${
                   isDaylight ? 'bg-slate-50' : 'bg-slate-900/60'
                 }`}
               >
@@ -1001,7 +1007,7 @@ export const ScannerAndSplitModule: React.FC = () => {
           </section>
 
           {/* 3. ESTATÍSTICA DIÁRIA & META DIÁRIA (Centered 2x2 metrics — no divider lines, whitespace only) */}
-          <section className="pt-4 space-y-3 overflow-x-hidden">
+          <section className="space-y-2 overflow-x-hidden shrink-0">
             <h2
               className={`text-base font-extrabold tracking-tight text-center ${
                 isDaylight ? 'text-slate-900' : 'text-white'
@@ -1011,11 +1017,11 @@ export const ScannerAndSplitModule: React.FC = () => {
             </h2>
 
             <div
-              className={`grid grid-cols-2 gap-x-3 gap-y-2 rounded-2xl py-2 ${
+              className={`grid grid-cols-2 gap-x-3 gap-y-0.5 rounded-2xl py-1 ${
                 isDaylight ? 'bg-slate-50' : 'bg-slate-900/60'
               }`}
             >
-              <div className="py-2.5 px-2 text-center">
+              <div className="py-1.5 px-2 text-center">
                 <span
                   className={`text-xs font-medium block ${
                     isDaylight ? 'text-slate-500' : 'text-slate-400'
@@ -1032,7 +1038,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </span>
               </div>
 
-              <div className="py-2.5 px-2 text-center">
+              <div className="py-1.5 px-2 text-center">
                 <span
                   className={`text-xs font-medium block ${
                     isDaylight ? 'text-slate-500' : 'text-slate-400'
@@ -1049,7 +1055,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </span>
               </div>
 
-              <div className="py-2.5 px-2 text-center">
+              <div className="py-1.5 px-2 text-center">
                 <span
                   className={`text-xs font-medium block ${
                     isDaylight ? 'text-slate-500' : 'text-slate-400'
@@ -1067,7 +1073,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </span>
               </div>
 
-              <div className="py-2.5 px-2 text-center">
+              <div className="py-1.5 px-2 text-center">
                 <span
                   className={`text-xs font-medium block ${
                     isDaylight ? 'text-slate-500' : 'text-slate-400'
@@ -1087,7 +1093,7 @@ export const ScannerAndSplitModule: React.FC = () => {
             </div>
 
             {/* Meta Diária: centered slim 4px track with glow start dot (symmetric px-14 keeps it clear of the floating Buddy) */}
-            <div className="pt-2 px-14 overflow-x-hidden">
+            <div className="pt-1 pb-1 px-14 overflow-x-hidden">
               <MetaDiariaProgress
                 pct={earningsTodayByApp.goalProgressPct}
                 currentLabel={formatEurPt(earningsTodayByApp.total)}
@@ -1117,7 +1123,7 @@ export const ScannerAndSplitModule: React.FC = () => {
               borderColor: isDaylight ? '#E2E8F0' : 'rgba(0, 229, 255, 0.28)',
               color: isDaylight ? '#0F172A' : '#FFFFFF',
             }}
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-3xl border p-5 flex flex-col justify-between gap-5 cursor-pointer shadow-2xl"
+            className="w-[92vw] max-w-[400px] rounded-3xl border p-5 overflow-hidden flex flex-col justify-between gap-3.5 cursor-pointer shadow-2xl"
             onClick={(e) => {
               e.stopPropagation();
               stopBuddySpeech();
@@ -1125,15 +1131,15 @@ export const ScannerAndSplitModule: React.FC = () => {
             }}
             title="Toque em qualquer área deste quadro para silenciar a voz imediatamente"
           >
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* Clean Header (No Contabilidade Diária pill) */}
               <div
-                className={`flex items-center justify-between gap-3 pb-3 border-b ${
+                className={`flex items-center justify-between gap-2 pb-2.5 border-b ${
                   isDaylight ? 'border-slate-100' : 'border-slate-800'
                 }`}
               >
                 <h3
-                  className={`text-2xl font-black tracking-tight leading-snug ${
+                  className={`text-xl font-black tracking-tight leading-snug ${
                     isDaylight ? 'text-slate-900' : 'text-white'
                   }`}
                 >
@@ -1160,7 +1166,7 @@ export const ScannerAndSplitModule: React.FC = () => {
 
               {/* 1. Lucro Líquido Hoje + Bruto vs. Custos (Flat Row with Hairline Divider & Slate Grey Costs) */}
               <div
-                className={`pb-4 border-b flex items-baseline justify-between gap-3 ${
+                className={`pb-3 border-b flex items-baseline justify-between gap-3 ${
                   isDaylight ? 'border-slate-100' : 'border-slate-800'
                 }`}
               >
@@ -1173,8 +1179,8 @@ export const ScannerAndSplitModule: React.FC = () => {
                     Lucro Líquido Hoje
                   </span>
                   <span
-                    className={`text-3xl font-black leading-tight block mt-0.5 whitespace-nowrap ${
-                      isDaylight ? 'text-slate-900' : 'text-cyan-400'
+                    className={`text-2xl font-black leading-tight block mt-0.5 whitespace-nowrap ${
+                      isDaylight ? 'text-slate-900' : 'text-[#00E5FF]'
                     }`}
                   >
                     {formatEurPt(earningsTodayByApp.total)}
@@ -1210,7 +1216,7 @@ export const ScannerAndSplitModule: React.FC = () => {
 
               {/* 2. Ganhos por Plataforma (No outer box, no Valor Líquido pill) */}
               <div
-                className={`pb-4 border-b space-y-2 ${
+                className={`pb-3 border-b space-y-1 ${
                   isDaylight ? 'border-slate-100' : 'border-slate-800'
                 }`}
               >
@@ -1229,7 +1235,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                   {enabledProfilePlatforms.map((plat) => (
                     <div
                       key={plat}
-                      className="flex items-center justify-between py-2"
+                      className="flex items-center justify-between py-1.5"
                     >
                       <span
                         className={`text-base font-bold flex items-center gap-2.5 ${
@@ -1265,7 +1271,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                     : 'divide-slate-800 border-slate-800'
                 }`}
               >
-                <div className="py-3 pr-3">
+                <div className="py-2 pr-3">
                   <span
                     className={`text-sm font-medium block ${
                       isDaylight ? 'text-slate-600' : 'text-slate-400'
@@ -1274,14 +1280,14 @@ export const ScannerAndSplitModule: React.FC = () => {
                     Entregas hoje
                   </span>
                   <span
-                    className={`text-xl font-black mt-0.5 block whitespace-nowrap ${
+                    className={`text-lg font-black mt-0.5 block whitespace-nowrap ${
                       isDaylight ? 'text-slate-900' : 'text-white'
                     }`}
                   >
                     {realCompletedDeliveries.length} entregas
                   </span>
                 </div>
-                <div className="py-3 pl-3">
+                <div className="py-2 pl-3">
                   <span
                     className={`text-sm font-medium block ${
                       isDaylight ? 'text-slate-600' : 'text-slate-400'
@@ -1290,14 +1296,14 @@ export const ScannerAndSplitModule: React.FC = () => {
                     Distância hoje
                   </span>
                   <span
-                    className={`text-xl font-black mt-0.5 block whitespace-nowrap ${
+                    className={`text-lg font-black mt-0.5 block whitespace-nowrap ${
                       isDaylight ? 'text-slate-900' : 'text-white'
                     }`}
                   >
                     {earningsTodayByApp.totalKm.toFixed(1)} km
                   </span>
                 </div>
-                <div className="py-3 pr-3">
+                <div className="py-2 pr-3">
                   <span
                     className={`text-sm font-medium block ${
                       isDaylight ? 'text-slate-600' : 'text-slate-400'
@@ -1306,15 +1312,15 @@ export const ScannerAndSplitModule: React.FC = () => {
                     Média Líquida
                   </span>
                   <span
-                    className={`text-xl font-black mt-0.5 block whitespace-nowrap ${
-                      isDaylight ? 'text-cyan-700' : 'text-cyan-400'
+                    className={`text-lg font-black mt-0.5 block whitespace-nowrap ${
+                      isDaylight ? 'text-[#0284C7]' : 'text-[#00E5FF]'
                     }`}
                   >
                     {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')}{' '}
                     €/km
                   </span>
                 </div>
-                <div className="py-3 pl-3">
+                <div className="py-2 pl-3">
                   <span
                     className={`text-sm font-medium block ${
                       isDaylight ? 'text-slate-600' : 'text-slate-400'
@@ -1323,7 +1329,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                     Média por Hora
                   </span>
                   <span
-                    className={`text-xl font-black mt-0.5 block whitespace-nowrap ${
+                    className={`text-lg font-black mt-0.5 block whitespace-nowrap ${
                       isDaylight ? 'text-slate-900' : 'text-white'
                     }`}
                   >
@@ -1334,7 +1340,7 @@ export const ScannerAndSplitModule: React.FC = () => {
               </div>
 
               {/* 4. Meta Diária % (centered slim track) + Última Entrega */}
-              <div className="pt-1 space-y-3 overflow-x-hidden">
+              <div className="pt-0.5 space-y-2 overflow-x-hidden">
                 <MetaDiariaProgress
                   pct={earningsTodayByApp.goalProgressPct}
                   currentLabel={formatEurPt(earningsTodayByApp.total)}
@@ -1359,7 +1365,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                     </span>
                     <span
                       className={`font-black shrink-0 whitespace-nowrap ${
-                        isDaylight ? 'text-cyan-700' : 'text-cyan-400'
+                        isDaylight ? 'text-[#0284C7]' : 'text-[#00E5FF]'
                       }`}
                     >
                       +{formatEurPt(earningsTodayByApp.lastDelivery.netProfitEur)}
@@ -1386,7 +1392,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 cancelSpeechNow();
                 setIsEarningsModalOpen(false);
               }}
-              className="py-3.5 text-base font-black rounded-2xl w-full bg-slate-900 text-cyan-400 border border-cyan-500/30 shadow-md cursor-pointer transition active:scale-[0.99]"
+              className="py-3 text-sm font-black rounded-2xl w-full bg-slate-900 text-[#00E5FF] border border-[#00E5FF]/30 shadow-md cursor-pointer transition active:scale-[0.99]"
             >
               Fechar Resumo
             </button>

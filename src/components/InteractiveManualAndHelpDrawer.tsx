@@ -46,6 +46,7 @@ import {
   FolderOpen,
   Ghost,
   Sparkles,
+  Crown,
 } from 'lucide-react';
 import {
   CONTEXTUAL_HELP_BY_TAB,
@@ -98,6 +99,7 @@ import {
 } from '../services/cloudSync';
 import {
   BUDDY_AVATARS,
+  getActiveBuddyAvatar,
   getBuddyAvatarForState,
   useBuddySkin,
 } from '../utils/buddyAvatars';
@@ -2021,7 +2023,7 @@ export const MenuMaisHubView: React.FC = () => {
       : 'ONLINE';
 
   const isPresidenteProfile = isCourierAdminByName(currentUserName);
-  const perfilStatusAvatarUrl = getBuddyAvatarForState(currentShiftMode, buddySkin);
+  const perfilStatusAvatarUrl = getActiveBuddyAvatar(currentShiftMode, buddySkin);
 
   const handleSelectShiftMode = (mode: 'ONLINE' | 'AUSENTE' | 'NINJA') => {
     if (mode === 'ONLINE') {
@@ -2258,7 +2260,7 @@ export const MenuMaisHubView: React.FC = () => {
               </div>
             </div>
 
-            {/* Buddy Visual: live 3D status preview + seasonal skin selector (Padrão | Halloween) */}
+            {/* Buddy Visual: live 3D status preview + seasonal skin selector (Padrão | Presidente | Halloween) */}
             <div className="pt-2.5 border-t border-slate-800/80 flex items-center gap-3">
               <div className="h-14 w-14 rounded-xl overflow-hidden bg-black ring-1 ring-[#00E5FF]/40 shrink-0">
                 <img
@@ -2277,33 +2279,47 @@ export const MenuMaisHubView: React.FC = () => {
                         ? 'Buddy de Costas (Ausente)'
                         : buddySkin === 'HALLOWEEN'
                           ? 'Buddy Halloween'
-                          : 'Buddy Explorador'}
+                          : buddySkin === 'PRESIDENTE'
+                            ? 'Buddy Presidente'
+                            : 'Buddy Explorador'}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
                     onClick={() => setBuddySkinPref('DEFAULT')}
-                    className={`rounded-lg py-1.5 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
+                    className={`rounded-lg py-1.5 px-1.5 text-[11px] font-extrabold flex items-center justify-center gap-1 cursor-pointer transition border ${
                       buddySkin === 'DEFAULT'
                         ? 'bg-slate-950 border-[#00E5FF] text-[#00E5FF]'
                         : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                    <Sparkles className="h-3 w-3 shrink-0" />
                     <span>Padrão</span>
                   </button>
                   <button
                     type="button"
+                    onClick={() => setBuddySkinPref('PRESIDENTE')}
+                    className={`rounded-lg py-1.5 px-1.5 text-[11px] font-extrabold flex items-center justify-center gap-1 cursor-pointer transition border ${
+                      buddySkin === 'PRESIDENTE'
+                        ? 'bg-slate-950 border-[#00E5FF] text-[#00E5FF]'
+                        : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Crown className="h-3 w-3 shrink-0" />
+                    <span>Presidente</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setBuddySkinPref('HALLOWEEN')}
-                    className={`rounded-lg py-1.5 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
+                    className={`rounded-lg py-1.5 px-1.5 text-[11px] font-extrabold flex items-center justify-center gap-1 cursor-pointer transition border ${
                       buddySkin === 'HALLOWEEN'
                         ? 'bg-slate-950 border-amber-400 text-amber-300'
                         : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <Ghost className="h-3.5 w-3.5 shrink-0" />
-                    <span>Modo Halloween</span>
+                    <Ghost className="h-3 w-3 shrink-0" />
+                    <span>Halloween</span>
                   </button>
                 </div>
               </div>

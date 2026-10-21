@@ -849,7 +849,9 @@ const AppCockpitShell: React.FC = () => {
                   ? isMapRoadFullscreen
                     ? 'flex-1 w-full p-0 overflow-hidden flex flex-col'
                     : 'flex-1 w-full px-1.5 pt-1 pb-[68px] overflow-hidden flex flex-col'
-                  : 'flex-1 w-full px-3.5 pt-2.5 pb-24'
+                  : !isAdminView && activeTab === 'scanner'
+                    ? 'flex-1 w-full px-3.5 pt-0 pb-0'
+                    : 'flex-1 w-full px-3.5 pt-2.5 pb-24'
               }
             >
               {isAdminView ? (

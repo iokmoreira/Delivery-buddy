@@ -17,7 +17,7 @@ export interface BuddyMascotImagesSet {
 }
 
 export const BUDDY_MASCOT_IMAGES_STORAGE_KEY =
-  'delivery_buddy_mascot_3poses_v4_neon_blue';
+  'delivery_buddy_mascot_3poses_v5_cyan_3d';
 
 export const BUBBLE_RESTING_PRESET_STORAGE_KEY =
   'delivery_buddy_bubble_resting_preset_v1';
@@ -269,38 +269,21 @@ const MASCOT_BASE_URL =
     : './';
 
 export const DEFAULT_BUILTIN_MASCOT_IMAGES: BuddyMascotImagesSet = {
-  mascotActive: `${MASCOT_BASE_URL}mascot/buddy-active.png?v=neon4`,
-  mascotInactive: `${MASCOT_BASE_URL}mascot/buddy-pause.png?v=neon4`,
-  mascotDelivery: `${MASCOT_BASE_URL}mascot/buddy-delivery.png?v=neon4`,
+  mascotActive: `${MASCOT_BASE_URL}assets/buddy-online-cutout.png?v=3d3`,
+  mascotInactive: `${MASCOT_BASE_URL}assets/buddy-ausente-cutout.png?v=3d3`,
+  mascotDelivery: `${MASCOT_BASE_URL}assets/buddy-flying-cutout.png?v=3d3`,
   isCustomUploaded: false,
 };
 
 export function loadSavedMascotImages(): BuddyMascotImagesSet {
-  if (typeof window === 'undefined') return DEFAULT_BUILTIN_MASCOT_IMAGES;
-  try {
-    const raw = window.localStorage.getItem(BUDDY_MASCOT_IMAGES_STORAGE_KEY);
-    if (!raw) return DEFAULT_BUILTIN_MASCOT_IMAGES;
-    const parsed = JSON.parse(raw) as Partial<BuddyMascotImagesSet>;
-    if (
-      parsed &&
-      parsed.isCustomUploaded &&
-      typeof parsed.mascotActive === 'string' &&
-      parsed.mascotActive.length > 5 &&
-      !parsed.mascotActive.startsWith('data:image/svg+xml') &&
-      typeof parsed.mascotInactive === 'string' &&
-      parsed.mascotInactive.length > 5 &&
-      typeof parsed.mascotDelivery === 'string' &&
-      parsed.mascotDelivery.length > 5
-    ) {
-      return {
-        mascotActive: parsed.mascotActive,
-        mascotInactive: parsed.mascotInactive,
-        mascotDelivery: parsed.mascotDelivery,
-        isCustomUploaded: true,
-      };
+  // Always use the official synchronized 3D Cyan Buddy assets by default;
+  // purge any legacy v4/v3 SVG or greenish-teal cached images from localStorage.
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.removeItem('delivery_buddy_mascot_3poses_v4_neon_blue');
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore storage errors
   }
   return DEFAULT_BUILTIN_MASCOT_IMAGES;
 }

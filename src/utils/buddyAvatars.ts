@@ -12,7 +12,7 @@ const ASSET_BASE_URL =
     ? (import.meta as unknown as { env: { BASE_URL: string } }).env.BASE_URL
     : './';
 
-const ASSET_VERSION = 'v=3d1';
+const ASSET_VERSION = 'v=3d3';
 
 export const BUDDY_AVATARS = {
   flying: `${ASSET_BASE_URL}assets/buddy-flying.jpg?${ASSET_VERSION}`,
@@ -23,11 +23,20 @@ export const BUDDY_AVATARS = {
   halloween: `${ASSET_BASE_URL}assets/buddy-halloween.jpg?${ASSET_VERSION}`,
 } as const;
 
+export const BUDDY_CUTOUT_AVATARS = {
+  flying: `${ASSET_BASE_URL}assets/buddy-flying-cutout.png?${ASSET_VERSION}`,
+  online: `${ASSET_BASE_URL}assets/buddy-online-cutout.png?${ASSET_VERSION}`,
+  ausente: `${ASSET_BASE_URL}assets/buddy-ausente-cutout.png?${ASSET_VERSION}`,
+  ninja: `${ASSET_BASE_URL}assets/buddy-ninja-cutout.png?${ASSET_VERSION}`,
+  presidente: `${ASSET_BASE_URL}assets/buddy-presidente-cutout.png?${ASSET_VERSION}`,
+  halloween: `${ASSET_BASE_URL}assets/buddy-halloween-cutout.png?${ASSET_VERSION}`,
+} as const;
+
 /** Optional external 3D launch video (drop a file in public/assets/ to enable). */
 export const BUDDY_LAUNCH_VIDEO_SRC = `${ASSET_BASE_URL}assets/buddy-launch.mp4`;
 
 export type BuddyShiftVisualState = 'ONLINE' | 'AUSENTE' | 'NINJA' | 'DELIVERY';
-export type BuddySkin = 'DEFAULT' | 'HALLOWEEN';
+export type BuddySkin = 'DEFAULT' | 'PRESIDENTE' | 'HALLOWEEN';
 
 export const BUDDY_SKIN_STORAGE_KEY = 'delivery_buddy_visual_skin_v1';
 const BUDDY_SKIN_EVENT = 'buddy-visual-skin-changed';
@@ -44,28 +53,40 @@ export function resolveBuddyShiftVisualState(input: {
 }
 
 /**
- * Avatar for the current shift state:
- * Online -> Buddy Explorador • Ausente -> Buddy de Costas • Modo Ninja -> Buddy Ninja
- * Em entrega -> Buddy a voar. The Halloween skin replaces the Online/Entrega poses only,
- * so Ausente and Modo Ninja keep communicating the real shift state.
+ * Single Source of Truth for the Buddy Mascot Avatar across all 3 locations:
+ * 1. Top-Left Header icon
+ * 2. Floating Bubble button
+ * 3. Bottom Navigation Bar center `Buddys` icon (uses cutout=true for transparent background)
  */
+export function getActiveBuddyAvatar(
+  state: BuddyShiftVisualState,
+  skin: BuddySkin = 'DEFAULT',
+  options?: { cutout?: boolean }
+): string {
+  const pack = options?.cutout ? BUDDY_CUTOUT_AVATARS : BUDDY_AVATARS;
+  if (state === 'NINJA') return pack.ninja;
+  if (state === 'AUSENTE') return pack.ausente;
+  if (skin === 'HALLOWEEN') return pack.halloween;
+  if (skin === 'PRESIDENTE') return pack.presidente;
+  if (state === 'DELIVERY') return pack.flying;
+  return pack.online;
+}
+
 export function getBuddyAvatarForState(
   state: BuddyShiftVisualState,
-  skin: BuddySkin = 'DEFAULT'
+  skin: BuddySkin = 'DEFAULT',
+  options?: { cutout?: boolean }
 ): string {
-  if (state === 'NINJA') return BUDDY_AVATARS.ninja;
-  if (state === 'AUSENTE') return BUDDY_AVATARS.ausente;
-  if (skin === 'HALLOWEEN') return BUDDY_AVATARS.halloween;
-  if (state === 'DELIVERY') return BUDDY_AVATARS.flying;
-  return BUDDY_AVATARS.online;
+  return getActiveBuddyAvatar(state, skin, options);
 }
 
 export function readBuddySkin(): BuddySkin {
   if (typeof window === 'undefined') return 'DEFAULT';
   try {
-    return window.localStorage.getItem(BUDDY_SKIN_STORAGE_KEY) === 'HALLOWEEN'
-      ? 'HALLOWEEN'
-      : 'DEFAULT';
+    const val = window.localStorage.getItem(BUDDY_SKIN_STORAGE_KEY);
+    if (val === 'HALLOWEEN') return 'HALLOWEEN';
+    if (val === 'PRESIDENTE') return 'PRESIDENTE';
+    return 'DEFAULT';
   } catch {
     return 'DEFAULT';
   }
