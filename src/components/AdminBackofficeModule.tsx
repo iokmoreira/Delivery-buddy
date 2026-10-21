@@ -55,6 +55,7 @@ import {
 } from './AuthAndVerificationGate';
 import {
   CloudApprovalRequest,
+  isCourierAdminByName,
   loadCloudSharedState,
   publishAccountRegistrationToCloud,
   publishAdminApprovalDecisionToCloud,
@@ -264,23 +265,88 @@ export const AdminBackofficeModule: React.FC = () => {
 
   const handleToggleLocalAccountStatus = (
     usernameKey: string,
-    status: 'APROVADO' | 'BLOQUEADO'
+    status: 'APROVADO' | 'BLOQUEADO',
+    explicitCourierId?: string
   ) => {
-    const updated = localAccounts.map((acc) =>
-      acc.username === usernameKey ? { ...acc, status } : acc
+    const cleanKey = usernameKey.trim().toLowerCase();
+    const matchingCloud = cloudRequests.find(
+      (r) =>
+        (explicitCourierId && r.id === explicitCourierId) ||
+        r.username.trim().toLowerCase() === cleanKey
     );
+    const resolvedId =
+      explicitCourierId ||
+      matchingCloud?.id ||
+      `courier_acc_${cleanKey.replace(/[^a-z0-9]/g, '') || 'user'}`;
+
+    const existingLocal = loadSavedAccounts();
+    const hasLocal = existingLocal.some(
+      (a) => a.username.trim().toLowerCase() === cleanKey
+    );
+    const updated: SavedLocalAccountRecord[] = hasLocal
+      ? existingLocal.map((acc) =>
+          acc.username.trim().toLowerCase() === cleanKey
+            ? { ...acc, courierId: acc.courierId || resolvedId, status }
+            : acc
+        )
+      : [
+          {
+            courierId: resolvedId,
+            role: isCourierAdminByName(usernameKey) ? 'admin' : 'courier',
+            username: usernameKey.trim(),
+            emailOrPhone: matchingCloud?.emailOrPhone || usernameKey.trim(),
+            pinOrPassword: '1234',
+            vehicle: (matchingCloud?.vehicle as CourierRegistrationVehicle) || 'Mota 125cc',
+            platforms:
+              Array.isArray(matchingCloud?.platforms) &&
+              matchingCloud.platforms.length > 0
+                ? matchingCloud.platforms
+                : ['Uber Eats', 'Glovo'],
+            zone:
+              (matchingCloud?.zone as AmaranteBaseZoneOption) ||
+              'Amarante Centro / São Gonçalo',
+            status,
+          },
+          ...existingLocal,
+        ];
+
     setLocalAccounts(updated);
     try {
       localStorage.setItem(SAVED_ACCOUNTS_STORAGE_KEY, JSON.stringify(updated));
     } catch {
       // ignore
     }
-    const matchingCloud = cloudRequests.find(
-      (r) => r.username.trim().toLowerCase() === usernameKey.trim().toLowerCase()
+
+    setCloudRequests((prev) =>
+      prev.map((r) =>
+        r.id === resolvedId || r.username.trim().toLowerCase() === cleanKey
+          ? {
+              ...r,
+              approvalStatus: status === 'APROVADO' ? 'approved' : 'blocked',
+              updatedAt: new Date().toISOString(),
+            }
+          : r
+      )
     );
+
+    const matchingAdminCourier = adminManagedCouriers.find(
+      (c) =>
+        c.id === resolvedId ||
+        c.fullName.replace(/\s*\(Tu\)\s*$/i, '').trim().toLowerCase() ===
+          cleanKey
+    );
+    if (matchingAdminCourier) {
+      updateAdminCourierKycStatus(
+        matchingAdminCourier.id,
+        status === 'APROVADO' ? 'Ativo' : 'Suspenso'
+      );
+    }
+
     void publishAdminApprovalDecisionToCloud({
-      courierId: matchingCloud?.id || usernameKey,
-      username: usernameKey,
+      courierId: resolvedId,
+      targetCourierId: resolvedId,
+      username: usernameKey.trim(),
+      targetUsername: usernameKey.trim(),
       approvalStatus: status === 'APROVADO' ? 'approved' : 'blocked',
     });
   };
@@ -327,8 +393,83 @@ export const AdminBackofficeModule: React.FC = () => {
   const normalizeCourierNameKey = (rawName: string): string =>
     rawName.replace(/\s*\(Tu\)\s*$/i, '').trim().toLowerCase();
 
+  // Merge local saved accounts AND cloud approval requests so any second phone registering/logging in appears immediately!
+  const unifiedCloudAndLocalAccounts = React.useMemo<
+    Array<SavedLocalAccountRecord & { isCloudOnly?: boolean }>
+  >(() => {
+    const byKey = new Map<
+      string,
+      SavedLocalAccountRecord & { isCloudOnly?: boolean }
+    >();
+
+    localAccounts.forEach((acc) => {
+      const key = normalizeCourierNameKey(acc.username);
+      if (!key) return;
+      const isFounder = isCourierAdminByName(acc.username);
+      byKey.set(key, {
+        ...acc,
+        role: isFounder ? 'admin' : 'courier',
+        status: isFounder ? 'APROVADO' : acc.status || 'PENDENTE',
+        isCloudOnly: false,
+      });
+    });
+
+    cloudRequests.forEach((req) => {
+      const key = normalizeCourierNameKey(req.username);
+      if (!key) return;
+      const isFounder = isCourierAdminByName(req.username);
+      const cloudStatus: 'APROVADO' | 'PENDENTE' | 'BLOQUEADO' = isFounder
+        ? 'APROVADO'
+        : req.approvalStatus === 'approved'
+          ? 'APROVADO'
+          : req.approvalStatus === 'blocked'
+            ? 'BLOQUEADO'
+            : 'PENDENTE';
+      const existing = byKey.get(key);
+      if (existing) {
+        byKey.set(key, {
+          ...existing,
+          courierId: req.id || existing.courierId,
+          status:
+            existing.status === 'APROVADO' || cloudStatus === 'APROVADO'
+              ? 'APROVADO'
+              : existing.status === 'BLOQUEADO' || cloudStatus === 'BLOQUEADO'
+                ? 'BLOQUEADO'
+                : 'PENDENTE',
+        });
+      } else {
+        byKey.set(key, {
+          courierId: req.id,
+          role: isFounder ? 'admin' : 'courier',
+          username: req.username.trim(),
+          emailOrPhone: req.emailOrPhone || 'Sincronizado via Cloud Realtime',
+          pinOrPassword: '••••',
+          vehicle: (req.vehicle as CourierRegistrationVehicle) || 'Mota 125cc',
+          platforms:
+            Array.isArray(req.platforms) && req.platforms.length > 0
+              ? req.platforms
+              : ['Uber Eats', 'Glovo'],
+          zone:
+            (req.zone as AmaranteBaseZoneOption) ||
+            'Amarante Centro / São Gonçalo',
+          status: cloudStatus,
+          isCloudOnly: true,
+        });
+      }
+    });
+
+    // Sort so PENDENTE DE APROVAÇÃO appears at the very top
+    return Array.from(byKey.values()).sort((a, b) => {
+      const aPend = a.status === 'PENDENTE' ? 0 : 1;
+      const bPend = b.status === 'PENDENTE' ? 0 : 1;
+      return aPend - bPend;
+    });
+  }, [localAccounts, cloudRequests]);
+
   const localAccountKeySet = new Set(
-    localAccounts.map((acc) => normalizeCourierNameKey(acc.username))
+    unifiedCloudAndLocalAccounts.map((acc) =>
+      normalizeCourierNameKey(acc.username)
+    )
   );
 
   const seenRealtimeNames = new Set<string>();
@@ -344,14 +485,15 @@ export const AdminBackofficeModule: React.FC = () => {
   const liveOnlineCount = Math.max(
     1,
     onlineDirectoryCouriers.length,
-    localAccounts.length + deduplicatedAdminCouriers.length
+    unifiedCloudAndLocalAccounts.length + deduplicatedAdminCouriers.length
   );
   const totalRegisteredCount = Math.max(
     1,
-    localAccounts.length + deduplicatedAdminCouriers.length
+    unifiedCloudAndLocalAccounts.length + deduplicatedAdminCouriers.length
   );
   const pendingApprovalsCount =
-    localAccounts.filter((acc) => acc.status === 'PENDENTE').length +
+    unifiedCloudAndLocalAccounts.filter((acc) => acc.status === 'PENDENTE')
+      .length +
     deduplicatedAdminCouriers.filter((c) => c.kycStatus === 'Pendente IA').length;
 
   const visibleComplaints = complaints.filter(
@@ -1805,18 +1947,18 @@ export const AdminBackofficeModule: React.FC = () => {
           </div>
 
           {/* Local & Cloud Synced Registered Accounts */}
-          {localAccounts.length > 0 && (
+          {unifiedCloudAndLocalAccounts.length > 0 && (
             <div className="space-y-2">
               <span className="text-xs font-extrabold text-[#00E5FF] block">
                 Contas Registadas &amp; Requisições da Nuvem (Acesso App &amp; Mapa):
               </span>
-              {localAccounts.map((acc) => {
+              {unifiedCloudAndLocalAccounts.map((acc) => {
                 const status = acc.status || 'APROVADO';
                 const isPending = status === 'PENDENTE';
                 const isBlocked = status === 'BLOQUEADO';
                 return (
                   <div
-                    key={acc.username}
+                    key={acc.courierId || acc.username}
                     className={`rounded-xl bg-zinc-950 border p-3 flex items-center justify-between gap-2 flex-wrap ${
                       isPending
                         ? 'border-[#00E5FF] shadow-[0_0_12px_rgba(0,229,255,0.2)]'
@@ -1852,6 +1994,11 @@ export const AdminBackofficeModule: React.FC = () => {
                               ? '⏳ PENDENTE DE APROVAÇÃO'
                               : '✓ APROVADO'}
                         </span>
+                        {acc.isCloudOnly && (
+                          <span className="rounded-md px-1.5 py-0.5 text-[9px] font-bold bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/40">
+                            ☁️ Telemóvel Remoto
+                          </span>
+                        )}
                       </div>
                       <span className="text-xs text-zinc-400 block">
                         {acc.emailOrPhone || 'Sem contacto'} • {acc.vehicle} •{' '}
@@ -1874,7 +2021,7 @@ export const AdminBackofficeModule: React.FC = () => {
                       <button
                         type="button"
                         onClick={() =>
-                          handleToggleLocalAccountStatus(acc.username, 'APROVADO')
+                          handleToggleLocalAccountStatus(acc.username, 'APROVADO', acc.courierId)
                         }
                         style={
                           status === 'APROVADO'
@@ -1902,7 +2049,7 @@ export const AdminBackofficeModule: React.FC = () => {
                       <button
                         type="button"
                         onClick={() =>
-                          handleToggleLocalAccountStatus(acc.username, 'BLOQUEADO')
+                          handleToggleLocalAccountStatus(acc.username, 'BLOQUEADO', acc.courierId)
                         }
                         className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
                           isBlocked

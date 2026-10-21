@@ -10,9 +10,11 @@ import {
 } from '../types/models';
 import { AmaranteCrosswalkPoint } from '../utils/amaranteCopilotTelemetry';
 
-export const LIVE_SYNC_TOPIC = 'db_amarante_live_sync_v2';
+export const FLEET_SYNC_TOPIC = 'db_amarante_fleet_v3';
+export const LIVE_SYNC_TOPIC = 'db_amarante_fleet_v3';
+export const LEGACY_LIVE_SYNC_TOPIC = 'db_amarante_live_sync_v2';
 export const ACCOUNTS_SYNC_TOPIC = 'db_amarante_accounts_v2';
-export const CLOUD_SHARED_STATE_STORAGE_KEY = 'buddy_cloud_shared_state_v2';
+export const CLOUD_SHARED_STATE_STORAGE_KEY = 'buddy_cloud_shared_state_v3';
 
 export type CourierApprovalStatus = 'approved' | 'pending' | 'blocked';
 export type CourierCloudRole = 'admin' | 'courier';
@@ -80,6 +82,8 @@ export interface CloudSharedState {
 export type CloudSharedStateSnapshot = CloudSharedState;
 
 type CloudPacketType =
+  | 'SYNC_COURIER'
+  | 'APPROVAL_UPDATE'
   | 'COURIER_PRESENCE'
   | 'APPROVAL_REQUEST'
   | 'ADMIN_APPROVAL_DECISION'
@@ -91,27 +95,44 @@ type CloudPacketType =
   | 'COURIER_LOGOUT';
 
 interface CloudSyncEnvelope {
-  v: 2;
+  v?: 2;
   type: CloudPacketType;
-  senderId: string;
-  ts: number;
-  payload: unknown;
+  senderId?: string;
+  ts?: number;
+  timestamp?: number;
+  payload?: unknown;
+  courier?: CloudCourierPresence;
+  courierId?: string;
+  targetCourierId?: string;
+  targetUsername?: string;
+  approvalStatus?: CourierApprovalStatus;
+  decision?: CourierApprovalStatus;
 }
 
 const DEFAULT_AMARANTE_LAT = 41.2704;
 const DEFAULT_AMARANTE_LNG = -8.0818;
 
+export const FOUNDER_ADMIN_COURIER_ID = 'courier_founder_presidente';
+
+/**
+ * STRICT ADMIN LOCK:
+ * Only the founder account whose name/handle is strictly 'Presidente' (case-insensitive)
+ * gets role: 'admin' and access to the Admin button/dashboard.
+ */
 export function isCourierAdminByName(name: string): boolean {
-  const clean = (name || '').trim().toLowerCase();
-  return (
-    clean === 'presidente' ||
-    clean === 'admin' ||
-    clean === 'administrador' ||
-    clean === 'ceo' ||
-    clean.includes('presidente') ||
-    clean.includes('(admin)') ||
-    clean.includes('ceo')
-  );
+  const clean = (name || '')
+    .replace(/\s*\(Tu\)\s*$/i, '')
+    .trim()
+    .toLowerCase();
+  return clean === 'presidente';
+}
+
+export function generateUniqueCourierIdForName(name?: string): string {
+  if (name && isCourierAdminByName(name)) {
+    return FOUNDER_ADMIN_COURIER_ID;
+  }
+  const randomSuffix = Math.random().toString(36).slice(2, 7);
+  return `courier_${Date.now()}_${randomSuffix}`;
 }
 
 export function normalizeAccountKey(rawNameOrId: string): string {
@@ -382,16 +403,20 @@ export async function publishCourierPresenceToCloud(
 
   if (!presence.id || !presence.name.trim()) return;
 
+  const isFounderAdmin = isCourierAdminByName(presence.name);
+  const effectiveId = isFounderAdmin ? FOUNDER_ADMIN_COURIER_ID : presence.id;
+
   const resolvedApproval = resolveApprovalStatusForCourier(
-    presence.id,
+    effectiveId,
     presence.name,
-    presence.approvalStatus
+    isFounderAdmin ? 'approved' : presence.approvalStatus || 'pending'
   );
 
   const cleanPresence: CloudCourierPresence = {
     ...presence,
+    id: effectiveId,
     name: presence.name.trim(),
-    role: isCourierAdminByName(presence.name) ? 'admin' : presence.role || 'courier',
+    role: isFounderAdmin ? 'admin' : 'courier',
     approvalStatus: resolvedApproval,
     lat:
       Number.isFinite(presence.lat) && presence.lat !== 0
@@ -406,6 +431,29 @@ export async function publishCourierPresenceToCloud(
   };
 
   inMemoryCloudState.couriers[cleanPresence.id] = cleanPresence;
+
+  // Deduplicate any older entry with the same normalized username but a legacy acc-* ID
+  const cleanNameKey = normalizeAccountKey(cleanPresence.name);
+  Object.keys(inMemoryCloudState.approvalRequestsMap).forEach((k) => {
+    const item = inMemoryCloudState.approvalRequestsMap[k];
+    if (
+      k !== cleanPresence.id &&
+      item &&
+      normalizeAccountKey(item.username) === cleanNameKey
+    ) {
+      delete inMemoryCloudState.approvalRequestsMap[k];
+    }
+  });
+  Object.keys(inMemoryCloudState.couriers).forEach((k) => {
+    const item = inMemoryCloudState.couriers[k];
+    if (
+      k !== cleanPresence.id &&
+      item &&
+      normalizeAccountKey(item.name) === cleanNameKey
+    ) {
+      delete inMemoryCloudState.couriers[k];
+    }
+  });
 
   const existingReq = inMemoryCloudState.approvalRequestsMap[cleanPresence.id];
   const reqRecord: CloudApprovalRequest = {
@@ -430,11 +478,14 @@ export async function publishCourierPresenceToCloud(
 
   persistAndNotifyCloudState();
 
-  await postPacketToNtfyTopic(LIVE_SYNC_TOPIC, {
+  const nowTs = Date.now();
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
     v: 2,
-    type: 'COURIER_PRESENCE',
+    type: 'SYNC_COURIER',
     senderId: cleanPresence.id,
-    ts: Date.now(),
+    ts: nowTs,
+    timestamp: nowTs,
+    courier: cleanPresence,
     payload: cleanPresence,
   });
 }
@@ -457,20 +508,35 @@ export async function publishAccountRegistrationToCloud(
 ): Promise<void> {
   if (!account.username || !account.username.trim()) return;
   const cleanName = account.username.trim();
-  const id =
-    account.id ||
-    `acc-${normalizeAccountKey(cleanName).replace(/[^a-z0-9]/g, '') || 'user'}`;
+  const isFounderAdmin = isCourierAdminByName(cleanName);
+  const cleanNameKey = normalizeAccountKey(cleanName);
+
+  // Reuse existing courier ID for this username if already known, so we never duplicate
+  const existingCourierMatch = Object.values(inMemoryCloudState.couriers).find(
+    (c) => c && normalizeAccountKey(c.name) === cleanNameKey
+  );
+  const existingReqMatch = Object.values(
+    inMemoryCloudState.approvalRequestsMap
+  ).find((r) => r && normalizeAccountKey(r.username) === cleanNameKey);
+
+  const id = isFounderAdmin
+    ? FOUNDER_ADMIN_COURIER_ID
+    : account.id ||
+      existingCourierMatch?.id ||
+      existingReqMatch?.id ||
+      `courier_${Date.now()}_${cleanNameKey.replace(/[^a-z0-9]/g, '').slice(0, 6) || 'user'}`;
+
   const resolvedApproval = resolveApprovalStatusForCourier(
     id,
     cleanName,
-    account.approvalStatus
+    isFounderAdmin ? 'approved' : account.approvalStatus || 'pending'
   );
 
   const cleanReq: CloudApprovalRequest = {
     ...account,
     id,
     username: cleanName,
-    role: isCourierAdminByName(cleanName) ? 'admin' : account.role || 'courier',
+    role: isFounderAdmin ? 'admin' : 'courier',
     approvalStatus: resolvedApproval,
     lat:
       typeof account.lat === 'number' && Number.isFinite(account.lat) && account.lat !== 0
@@ -484,22 +550,53 @@ export async function publishAccountRegistrationToCloud(
     updatedAt: account.updatedAt || new Date().toISOString(),
   };
 
+  Object.keys(inMemoryCloudState.approvalRequestsMap).forEach((k) => {
+    const item = inMemoryCloudState.approvalRequestsMap[k];
+    if (k !== id && item && normalizeAccountKey(item.username) === cleanNameKey) {
+      delete inMemoryCloudState.approvalRequestsMap[k];
+    }
+  });
+
   inMemoryCloudState.approvalRequestsMap[id] = cleanReq;
+
+  const courierObj: CloudCourierPresence = {
+    id,
+    name: cleanName,
+    role: isFounderAdmin ? 'admin' : 'courier',
+    vehicle: String(cleanReq.vehicle || 'Mota 125cc'),
+    platforms:
+      Array.isArray(cleanReq.platforms) && cleanReq.platforms.length > 0
+        ? cleanReq.platforms
+        : ['Uber Eats', 'Glovo'],
+    zone: String(cleanReq.zone || 'Amarante Centro / São Gonçalo'),
+    status: inMemoryCloudState.couriers[id]?.status || 'online',
+    approvalStatus: resolvedApproval,
+    lat: cleanReq.lat,
+    lng: cleanReq.lng,
+    deviceModel: cleanReq.deviceModel,
+    lastSeen: cleanReq.updatedAt,
+  };
+  inMemoryCloudState.couriers[id] = courierObj;
+
   persistAndNotifyCloudState();
 
+  const nowTs = Date.now();
   await Promise.all([
+    postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
+      v: 2,
+      type: 'SYNC_COURIER',
+      senderId: id,
+      ts: nowTs,
+      timestamp: nowTs,
+      courier: courierObj,
+      payload: cleanReq,
+    }),
     postPacketToNtfyTopic(ACCOUNTS_SYNC_TOPIC, {
       v: 2,
       type: 'APPROVAL_REQUEST',
       senderId: id,
-      ts: Date.now(),
-      payload: cleanReq,
-    }),
-    postPacketToNtfyTopic(LIVE_SYNC_TOPIC, {
-      v: 2,
-      type: 'APPROVAL_REQUEST',
-      senderId: id,
-      ts: Date.now(),
+      ts: nowTs,
+      timestamp: nowTs,
       payload: cleanReq,
     }),
   ]);
@@ -545,26 +642,36 @@ export async function publishAdminApprovalDecisionToCloud(params: {
 
   persistAndNotifyCloudState();
 
+  const nowTs = Date.now();
   const decisionPayload = {
     targetCourierId: effectiveCourierId,
+    courierId: effectiveCourierId,
     targetUsername: effectiveUsername.trim(),
+    approvalStatus: effectiveDecision,
     decision: effectiveDecision,
     updatedAt: new Date().toISOString(),
   };
 
   await Promise.all([
+    postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
+      v: 2,
+      type: 'APPROVAL_UPDATE',
+      senderId: params.adminSenderId || FOUNDER_ADMIN_COURIER_ID,
+      ts: nowTs,
+      timestamp: nowTs,
+      courierId: effectiveCourierId,
+      targetCourierId: effectiveCourierId,
+      targetUsername: effectiveUsername.trim(),
+      approvalStatus: effectiveDecision,
+      decision: effectiveDecision,
+      payload: decisionPayload,
+    }),
     postPacketToNtfyTopic(ACCOUNTS_SYNC_TOPIC, {
       v: 2,
       type: 'ADMIN_APPROVAL_DECISION',
-      senderId: params.adminSenderId || 'ADMIN_CEO',
-      ts: Date.now(),
-      payload: decisionPayload,
-    }),
-    postPacketToNtfyTopic(LIVE_SYNC_TOPIC, {
-      v: 2,
-      type: 'ADMIN_APPROVAL_DECISION',
-      senderId: params.adminSenderId || 'ADMIN_CEO',
-      ts: Date.now(),
+      senderId: params.adminSenderId || FOUNDER_ADMIN_COURIER_ID,
+      ts: nowTs,
+      timestamp: nowTs,
       payload: decisionPayload,
     }),
   ]);
@@ -577,11 +684,12 @@ export async function publishCourierLogoutToCloud(
   delete inMemoryCloudState.couriers[courierId];
   persistAndNotifyCloudState();
 
-  await postPacketToNtfyTopic(LIVE_SYNC_TOPIC, {
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
     v: 2,
     type: 'COURIER_LOGOUT',
     senderId: courierId,
     ts: Date.now(),
+    timestamp: Date.now(),
     payload: { id: courierId },
   });
 }
@@ -602,11 +710,12 @@ export function findExistingCourierInCloudState(
 export async function publishPeerDiscoveryPing(
   myDeviceId = 'local_device'
 ): Promise<void> {
-  await postPacketToNtfyTopic(LIVE_SYNC_TOPIC, {
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
     v: 2,
     type: 'PEER_DISCOVERY_PING',
     senderId: myDeviceId,
     ts: Date.now(),
+    timestamp: Date.now(),
     payload: { requesterId: myDeviceId },
   });
 }
@@ -618,11 +727,12 @@ export async function publishTaughtCrosswalkToCloud(
   inMemoryCloudState.crosswalks[crosswalk.id] = crosswalk;
   persistAndNotifyCloudState();
 
-  await postPacketToNtfyTopic(LIVE_SYNC_TOPIC, {
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
     v: 2,
     type: 'CROSSWALK_TAUGHT',
     senderId,
     ts: Date.now(),
+    timestamp: Date.now(),
     payload: crosswalk,
   });
 }
@@ -639,11 +749,12 @@ export async function publishWalkieMessageToCloud(
     persistAndNotifyCloudState();
   }
 
-  await postPacketToNtfyTopic(LIVE_SYNC_TOPIC, {
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
     v: 2,
     type: 'WALKIE_MSG',
     senderId,
     ts: Date.now(),
+    timestamp: Date.now(),
     payload: msg,
   });
 }
@@ -671,11 +782,12 @@ export async function publishDirectMessageToCloud(
     persistAndNotifyCloudState();
   }
 
-  await postPacketToNtfyTopic(LIVE_SYNC_TOPIC, {
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
     v: 2,
     type: 'DIRECT_MSG',
     senderId: normalizedDm.senderId,
     ts: Date.now(),
+    timestamp: Date.now(),
     payload: normalizedDm,
   });
 }
@@ -692,11 +804,12 @@ export async function publishRoadHazardToCloud(
     persistAndNotifyCloudState();
   }
 
-  await postPacketToNtfyTopic(LIVE_SYNC_TOPIC, {
+  await postPacketToNtfyTopic(FLEET_SYNC_TOPIC, {
     v: 2,
     type: 'ROAD_HAZARD',
     senderId,
     ts: Date.now(),
+    timestamp: Date.now(),
     payload: hazard,
   });
 }
@@ -705,67 +818,120 @@ function ingestEnvelope(
   envelope: CloudSyncEnvelope,
   myDeviceId: string
 ): boolean {
-  if (!envelope || envelope.v !== 2 || !envelope.type) return false;
+  if (!envelope || !envelope.type) return false;
   let stateChanged = false;
+  const packetTs = Number(envelope.timestamp || envelope.ts || Date.now());
 
   switch (envelope.type) {
+    case 'SYNC_COURIER':
     case 'COURIER_PRESENCE': {
-      const p = envelope.payload as CloudCourierPresence;
-      if (!p || typeof p.id !== 'string' || typeof p.name !== 'string' || !p.name.trim()) {
+      const rawCourier = (envelope.courier ||
+        envelope.payload) as Partial<CloudCourierPresence> & {
+        username?: string;
+        emailOrPhone?: string;
+      };
+      const resolvedName = (rawCourier?.name || rawCourier?.username || '').trim();
+      if (!rawCourier || !resolvedName) {
         break;
       }
-      const resolvedApproval = resolveApprovalStatusForCourier(
-        p.id,
-        p.name,
-        p.approvalStatus
-      );
-      const existing = inMemoryCloudState.couriers[p.id];
-      const existingMs = existing?.lastSeen ? Date.parse(existing.lastSeen) : 0;
-      const incomingMs = p.lastSeen ? Date.parse(p.lastSeen) : envelope.ts;
+      const isFounder = isCourierAdminByName(resolvedName);
+      const resolvedId = isFounder
+        ? FOUNDER_ADMIN_COURIER_ID
+        : rawCourier.id ||
+          envelope.senderId ||
+          `courier_${packetTs}_${normalizeAccountKey(resolvedName).replace(/[^a-z0-9]/g, '').slice(0, 6)}`;
 
-      if (!existing || incomingMs >= existingMs - 2000) {
-        inMemoryCloudState.couriers[p.id] = {
+      const resolvedApproval = resolveApprovalStatusForCourier(
+        resolvedId,
+        resolvedName,
+        isFounder ? 'approved' : rawCourier.approvalStatus || 'pending'
+      );
+      const existing = inMemoryCloudState.couriers[resolvedId];
+      const existingMs = existing?.lastSeen ? Date.parse(existing.lastSeen) : 0;
+      const incomingMs = rawCourier.lastSeen
+        ? Date.parse(rawCourier.lastSeen)
+        : packetTs;
+
+      if (!existing || incomingMs >= existingMs - 5000) {
+        const cleanNameKey = normalizeAccountKey(resolvedName);
+        Object.keys(inMemoryCloudState.couriers).forEach((k) => {
+          const item = inMemoryCloudState.couriers[k];
+          if (
+            k !== resolvedId &&
+            item &&
+            normalizeAccountKey(item.name) === cleanNameKey
+          ) {
+            delete inMemoryCloudState.couriers[k];
+          }
+        });
+        Object.keys(inMemoryCloudState.approvalRequestsMap).forEach((k) => {
+          const item = inMemoryCloudState.approvalRequestsMap[k];
+          if (
+            k !== resolvedId &&
+            item &&
+            normalizeAccountKey(item.username) === cleanNameKey
+          ) {
+            delete inMemoryCloudState.approvalRequestsMap[k];
+          }
+        });
+
+        inMemoryCloudState.couriers[resolvedId] = {
           ...existing,
-          ...p,
-          name: p.name.trim(),
-          role: isCourierAdminByName(p.name) ? 'admin' : p.role || 'courier',
+          ...rawCourier,
+          id: resolvedId,
+          name: resolvedName,
+          role: isFounder ? 'admin' : 'courier',
+          vehicle: rawCourier.vehicle || existing?.vehicle || 'Mota 125cc',
+          platforms:
+            Array.isArray(rawCourier.platforms) && rawCourier.platforms.length > 0
+              ? rawCourier.platforms
+              : existing?.platforms || ['Uber Eats', 'Glovo'],
+          zone:
+            rawCourier.zone ||
+            existing?.zone ||
+            'Amarante Centro / São Gonçalo',
+          status: rawCourier.status || existing?.status || 'online',
           approvalStatus: resolvedApproval,
           lat:
-            Number.isFinite(p.lat) && p.lat !== 0
-              ? Number(p.lat)
-              : DEFAULT_AMARANTE_LAT,
+            Number.isFinite(rawCourier.lat) && Number(rawCourier.lat) !== 0
+              ? Number(rawCourier.lat)
+              : existing?.lat || DEFAULT_AMARANTE_LAT,
           lng:
-            Number.isFinite(p.lng) && p.lng !== 0
-              ? Number(p.lng)
-              : DEFAULT_AMARANTE_LNG,
-          avatar: p.avatar || existing?.avatar,
-          lastSeen: p.lastSeen || new Date(envelope.ts).toISOString(),
+            Number.isFinite(rawCourier.lng) && Number(rawCourier.lng) !== 0
+              ? Number(rawCourier.lng)
+              : existing?.lng || DEFAULT_AMARANTE_LNG,
+          heading: rawCourier.heading ?? existing?.heading ?? null,
+          speed: rawCourier.speed ?? existing?.speed ?? 0,
+          avatar: rawCourier.avatar || existing?.avatar,
+          deviceModel: rawCourier.deviceModel || existing?.deviceModel,
+          lastSeen: rawCourier.lastSeen || new Date(packetTs).toISOString(),
         };
 
-        const prevReq = inMemoryCloudState.approvalRequestsMap[p.id];
-        inMemoryCloudState.approvalRequestsMap[p.id] = {
-          id: p.id,
-          username: p.name.trim(),
-          emailOrPhone: prevReq?.emailOrPhone || p.name.trim(),
-          vehicle: p.vehicle || prevReq?.vehicle || 'Mota 125cc',
+        const prevReq = inMemoryCloudState.approvalRequestsMap[resolvedId];
+        inMemoryCloudState.approvalRequestsMap[resolvedId] = {
+          id: resolvedId,
+          username: resolvedName,
+          emailOrPhone:
+            rawCourier.emailOrPhone || prevReq?.emailOrPhone || resolvedName,
+          vehicle: rawCourier.vehicle || prevReq?.vehicle || 'Mota 125cc',
           platforms:
-            Array.isArray(p.platforms) && p.platforms.length > 0
-              ? p.platforms
+            Array.isArray(rawCourier.platforms) && rawCourier.platforms.length > 0
+              ? rawCourier.platforms
               : prevReq?.platforms || ['Uber Eats', 'Glovo'],
-          zone: p.zone || prevReq?.zone || 'Amarante Centro / São Gonçalo',
-          role: isCourierAdminByName(p.name) ? 'admin' : 'courier',
+          zone:
+            rawCourier.zone ||
+            prevReq?.zone ||
+            'Amarante Centro / São Gonçalo',
+          role: isFounder ? 'admin' : 'courier',
           approvalStatus: resolvedApproval,
-          lat:
-            Number.isFinite(p.lat) && p.lat !== 0
-              ? Number(p.lat)
-              : DEFAULT_AMARANTE_LAT,
-          lng:
-            Number.isFinite(p.lng) && p.lng !== 0
-              ? Number(p.lng)
-              : DEFAULT_AMARANTE_LNG,
-          deviceModel: p.deviceModel || prevReq?.deviceModel,
-          createdAt: prevReq?.createdAt || p.lastSeen || new Date().toISOString(),
-          updatedAt: p.lastSeen || new Date().toISOString(),
+          lat: inMemoryCloudState.couriers[resolvedId].lat,
+          lng: inMemoryCloudState.couriers[resolvedId].lng,
+          deviceModel: rawCourier.deviceModel || prevReq?.deviceModel,
+          createdAt:
+            prevReq?.createdAt ||
+            rawCourier.lastSeen ||
+            new Date(packetTs).toISOString(),
+          updatedAt: rawCourier.lastSeen || new Date(packetTs).toISOString(),
         };
         stateChanged = true;
       }
@@ -777,21 +943,39 @@ function ingestEnvelope(
       if (!req || typeof req.username !== 'string' || !req.username.trim()) {
         break;
       }
-      const reqId =
-        req.id ||
-        `acc-${normalizeAccountKey(req.username).replace(/[^a-z0-9]/g, '')}`;
+      const cleanName = req.username.trim();
+      const isFounder = isCourierAdminByName(cleanName);
+      const cleanNameKey = normalizeAccountKey(cleanName);
+      const existingCourierMatch = Object.values(
+        inMemoryCloudState.couriers
+      ).find((c) => c && normalizeAccountKey(c.name) === cleanNameKey);
+
+      const reqId = isFounder
+        ? FOUNDER_ADMIN_COURIER_ID
+        : existingCourierMatch?.id ||
+          req.id ||
+          `courier_${packetTs}_${cleanNameKey.replace(/[^a-z0-9]/g, '').slice(0, 6)}`;
+
       const resolvedApproval = resolveApprovalStatusForCourier(
         reqId,
-        req.username,
-        req.approvalStatus
+        cleanName,
+        isFounder ? 'approved' : req.approvalStatus || 'pending'
       );
+
+      Object.keys(inMemoryCloudState.approvalRequestsMap).forEach((k) => {
+        const item = inMemoryCloudState.approvalRequestsMap[k];
+        if (k !== reqId && item && normalizeAccountKey(item.username) === cleanNameKey) {
+          delete inMemoryCloudState.approvalRequestsMap[k];
+        }
+      });
+
       const prev = inMemoryCloudState.approvalRequestsMap[reqId];
       inMemoryCloudState.approvalRequestsMap[reqId] = {
         ...prev,
         ...req,
         id: reqId,
-        username: req.username.trim(),
-        role: isCourierAdminByName(req.username) ? 'admin' : 'courier',
+        username: cleanName,
+        role: isFounder ? 'admin' : 'courier',
         approvalStatus: resolvedApproval,
         lat:
           Number.isFinite(req.lat) && req.lat !== 0
@@ -802,17 +986,17 @@ function ingestEnvelope(
             ? Number(req.lng)
             : prev?.lng || DEFAULT_AMARANTE_LNG,
         createdAt: prev?.createdAt || req.createdAt || new Date().toISOString(),
-        updatedAt: req.updatedAt || new Date(envelope.ts).toISOString(),
+        updatedAt: req.updatedAt || new Date(packetTs).toISOString(),
       };
 
       if (
         !inMemoryCloudState.couriers[reqId] &&
-        Date.now() - envelope.ts <= 2 * 60 * 60 * 1000
+        Date.now() - packetTs <= 2 * 60 * 60 * 1000
       ) {
         inMemoryCloudState.couriers[reqId] = {
           id: reqId,
-          name: req.username.trim(),
-          role: isCourierAdminByName(req.username) ? 'admin' : 'courier',
+          name: cleanName,
+          role: isFounder ? 'admin' : 'courier',
           vehicle: String(req.vehicle || 'Mota 125cc'),
           platforms:
             Array.isArray(req.platforms) && req.platforms.length > 0
@@ -830,38 +1014,55 @@ function ingestEnvelope(
               ? Number(req.lng)
               : DEFAULT_AMARANTE_LNG,
           deviceModel: req.deviceModel,
-          lastSeen: req.updatedAt || new Date(envelope.ts).toISOString(),
+          lastSeen: req.updatedAt || new Date(packetTs).toISOString(),
         };
       }
       stateChanged = true;
       break;
     }
 
+    case 'APPROVAL_UPDATE':
     case 'ADMIN_APPROVAL_DECISION': {
-      const dec = envelope.payload as {
+      const payloadObj = (envelope.payload || {}) as {
         targetCourierId?: string;
+        courierId?: string;
         targetUsername?: string;
         decision?: CourierApprovalStatus;
+        approvalStatus?: CourierApprovalStatus;
       };
-      if (!dec || !dec.decision) break;
-      const nameKey = normalizeAccountKey(dec.targetUsername || '');
+      const targetId =
+        envelope.courierId ||
+        envelope.targetCourierId ||
+        payloadObj.courierId ||
+        payloadObj.targetCourierId;
+      const targetUser =
+        envelope.targetUsername || payloadObj.targetUsername || '';
+      const decisionVal =
+        envelope.approvalStatus ||
+        envelope.decision ||
+        payloadObj.approvalStatus ||
+        payloadObj.decision;
+
+      if (!decisionVal) break;
+      const nameKey = normalizeAccountKey(targetUser);
       if (nameKey) {
-        inMemoryCloudState.approvalDecisionsByName[nameKey] = dec.decision;
+        inMemoryCloudState.approvalDecisionsByName[nameKey] = decisionVal;
       }
       Object.values(inMemoryCloudState.approvalRequestsMap).forEach((r) => {
         if (
-          (dec.targetCourierId && r.id === dec.targetCourierId) ||
+          (targetId && r.id === targetId) ||
           (nameKey && normalizeAccountKey(r.username) === nameKey)
         ) {
-          r.approvalStatus = dec.decision!;
+          r.approvalStatus = decisionVal;
+          r.updatedAt = new Date().toISOString();
         }
       });
       Object.values(inMemoryCloudState.couriers).forEach((c) => {
         if (
-          (dec.targetCourierId && c.id === dec.targetCourierId) ||
+          (targetId && c.id === targetId) ||
           (nameKey && normalizeAccountKey(c.name) === nameKey)
         ) {
-          c.approvalStatus = dec.decision!;
+          c.approvalStatus = decisionVal;
         }
       });
       stateChanged = true;
@@ -881,20 +1082,22 @@ function ingestEnvelope(
       if (
         envelope.senderId &&
         envelope.senderId !== myDeviceId &&
-        Date.now() - envelope.ts < 30000 &&
-        Date.now() - lastDiscoveryReplyMs > 3500 &&
-        localIdentityProvider
+        Date.now() - packetTs < 30000 &&
+        Date.now() - lastDiscoveryReplyMs > 3500
       ) {
         lastDiscoveryReplyMs = Date.now();
-        const localData = localIdentityProvider();
-        if (localData && typeof localData === 'object') {
-          if (localData.presence) {
-            void publishCourierPresenceToCloud(localData.presence);
-          }
-          if (Array.isArray(localData.accounts)) {
-            localData.accounts.forEach((acc) => {
-              void publishAccountRegistrationToCloud(acc);
-            });
+        broadcastLocalStorageAccountsAndProfileNow();
+        if (localIdentityProvider) {
+          const localData = localIdentityProvider();
+          if (localData && typeof localData === 'object') {
+            if (localData.presence) {
+              void publishCourierPresenceToCloud(localData.presence);
+            }
+            if (Array.isArray(localData.accounts)) {
+              localData.accounts.forEach((acc) => {
+                void publishAccountRegistrationToCloud(acc);
+              });
+            }
           }
         }
       }
@@ -977,29 +1180,39 @@ function ingestEnvelope(
 
 export function broadcastLocalStorageAccountsAndProfileNow(): void {
   if (typeof window === 'undefined') return;
+  let activeProfileId: string | null = null;
+  let activeProfileNameKey: string | null = null;
+
   try {
-    const rawProfile = window.localStorage.getItem('real_courier_profile_v1');
+    const rawProfile =
+      window.localStorage.getItem('buddy_my_profile') ||
+      window.localStorage.getItem('delivery_buddy_real_courier_profile_v1') ||
+      window.localStorage.getItem('real_courier_profile_v1');
     if (rawProfile) {
       const parsedProfile = JSON.parse(rawProfile) as RealCourierMapProfile;
-      if (parsedProfile && parsedProfile.id && parsedProfile.name) {
+      if (
+        parsedProfile &&
+        parsedProfile.isRegistered !== false &&
+        parsedProfile.id &&
+        parsedProfile.name &&
+        parsedProfile.name.trim()
+      ) {
+        const cleanName = parsedProfile.name.trim();
+        const isFounder = isCourierAdminByName(cleanName);
+        const resolvedId = isFounder
+          ? FOUNDER_ADMIN_COURIER_ID
+          : parsedProfile.id;
+        activeProfileId = resolvedId;
+        activeProfileNameKey = normalizeAccountKey(cleanName);
+
         void publishCourierPresenceToCloud({
-          profile: parsedProfile,
+          profile: {
+            ...parsedProfile,
+            id: resolvedId,
+            name: cleanName,
+          },
           status: parsedProfile.has_order ? 'busy' : 'online',
-        });
-        void publishAccountRegistrationToCloud({
-          id: parsedProfile.id,
-          username: parsedProfile.name,
-          emailOrPhone: parsedProfile.name,
-          vehicle: parsedProfile.vehicle || 'Mota 125cc',
-          platforms:
-            Array.isArray(parsedProfile.active_platforms) &&
-            parsedProfile.active_platforms.length > 0
-              ? parsedProfile.active_platforms
-              : ['Uber Eats', 'Glovo'],
-          zone: parsedProfile.zone || 'Amarante Centro / São Gonçalo',
-          lat: Number(parsedProfile.lat || DEFAULT_AMARANTE_LAT),
-          lng: Number(parsedProfile.lng || DEFAULT_AMARANTE_LNG),
-          deviceModel: parsedProfile.device_model,
+          approvalStatus: isFounder ? 'approved' : undefined,
         });
       }
     }
@@ -1011,6 +1224,7 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
     const rawAccounts = window.localStorage.getItem('buddy_saved_accounts_v1');
     if (rawAccounts) {
       const parsedAccounts = JSON.parse(rawAccounts) as Array<{
+        courierId?: string;
         username?: string;
         emailOrPhone?: string;
         vehicle?: CourierRegistrationVehicle;
@@ -1022,7 +1236,18 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
         parsedAccounts.forEach((acc) => {
           if (!acc || !acc.username || !acc.username.trim()) return;
           const cleanName = acc.username.trim();
-          const accId = `acc-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'user'}`;
+          const nameKey = normalizeAccountKey(cleanName);
+          // Skip if we already published the active profile above
+          if (activeProfileNameKey && nameKey === activeProfileNameKey) {
+            return;
+          }
+          const isFounder = isCourierAdminByName(cleanName);
+          const accId = isFounder
+            ? FOUNDER_ADMIN_COURIER_ID
+            : acc.courierId ||
+              (activeProfileId && nameKey === activeProfileNameKey
+                ? activeProfileId
+                : `courier_acc_${nameKey.replace(/[^a-z0-9]/g, '') || 'user'}`);
           void publishAccountRegistrationToCloud({
             id: accId,
             username: cleanName,
@@ -1033,12 +1258,13 @@ export function broadcastLocalStorageAccountsAndProfileNow(): void {
                 ? acc.platforms
                 : ['Uber Eats', 'Glovo'],
             zone: acc.zone || 'Amarante Centro / São Gonçalo',
-            approvalStatus:
-              acc.status === 'BLOQUEADO'
+            approvalStatus: isFounder
+              ? 'approved'
+              : acc.status === 'BLOQUEADO'
                 ? 'blocked'
                 : acc.status === 'APROVADO'
                   ? 'approved'
-                  : undefined,
+                  : 'pending',
             lat: DEFAULT_AMARANTE_LAT,
             lng: DEFAULT_AMARANTE_LNG,
           });
@@ -1079,12 +1305,15 @@ async function fetchNtfyPollJsonWithTimeout(
 
 export async function pollCloudSyncTopicsOnce(
   myDeviceId = 'local_device',
-  includeAccountsHistory = true
+  includeAccountsHistory = false
 ): Promise<CloudSharedState> {
   const urls = [
-    `https://ntfy.sh/${LIVE_SYNC_TOPIC}/json?poll=1&since=48h`,
+    `https://ntfy.sh/${FLEET_SYNC_TOPIC}/json?poll=1&since=24h`,
     ...(includeAccountsHistory
-      ? [`https://ntfy.sh/${ACCOUNTS_SYNC_TOPIC}/json?poll=1&since=48h`]
+      ? [
+          `https://ntfy.sh/${ACCOUNTS_SYNC_TOPIC}/json?poll=1&since=48h`,
+          `https://ntfy.sh/${LEGACY_LIVE_SYNC_TOPIC}/json?poll=1&since=24h`,
+        ]
       : []),
   ];
 
@@ -1157,17 +1386,17 @@ export function startRealtimeCloudSyncStream(
 ): () => void {
   if (typeof window === 'undefined') return () => {};
 
-  let liveEventSource: EventSource | null = null;
+  let fleetEventSource: EventSource | null = null;
   let accountsEventSource: EventSource | null = null;
   let stopped = false;
 
   const connectStreams = () => {
     if (stopped || typeof EventSource === 'undefined') return;
     try {
-      liveEventSource = new EventSource(
-        `https://ntfy.sh/${LIVE_SYNC_TOPIC}/sse?since=30m`
+      fleetEventSource = new EventSource(
+        `https://ntfy.sh/${FLEET_SYNC_TOPIC}/sse?since=2h`
       );
-      liveEventSource.onmessage = (ev) => {
+      fleetEventSource.onmessage = (ev) => {
         try {
           const ntfyRow = JSON.parse(ev.data) as { message?: string };
           if (!ntfyRow?.message) return;
@@ -1213,7 +1442,11 @@ export function startRealtimeCloudSyncStream(
   const pollTimer = window.setInterval(() => {
     if (stopped) return;
     tickCount += 1;
-    // Poll live sync every 4s, and accounts topic every 12s
+    // Publish current user's live profile & GPS every 12 seconds so peers always stay synced
+    if (tickCount % 3 === 1) {
+      broadcastLocalStorageAccountsAndProfileNow();
+    }
+    // Poll db_amarante_fleet_v3 every 4s, and legacy/accounts topics every 12s
     void pollCloudSyncTopicsOnce(myDeviceId, tickCount % 3 === 0);
   }, 4000);
 
@@ -1221,7 +1454,7 @@ export function startRealtimeCloudSyncStream(
     stopped = true;
     window.clearInterval(pollTimer);
     try {
-      liveEventSource?.close();
+      fleetEventSource?.close();
     } catch {
       // ignore
     }
@@ -1291,8 +1524,8 @@ export function getActiveCloudCourierRows(
 }
 
 /**
- * Computes a deterministic visual offset (±0.00018 lat/lng) when two or more couriers
- * are within < 15 meters of each other (e.g., two phones inside the same house)
+ * Computes a deterministic visual offset (±0.00022 lat/lng) when two or more couriers
+ * are within < 25 meters of each other (e.g., two phones inside the same house or on Amarante fallback)
  * so both 3D Buddy pins and name badges sit clearly side-by-side on the map.
  */
 export function computeSameLocationPinOffset(
@@ -1320,7 +1553,7 @@ export function computeSameLocationPinOffset(
       const dLng =
         (pLng - safeLng) * 111320 * Math.cos((safeLat * Math.PI) / 180);
       const distMeters = Math.sqrt(dLat * dLat + dLng * dLng);
-      return distMeters < 15;
+      return distMeters < 25;
     })
     .sort((a, b) => a.id.localeCompare(b.id));
 
@@ -1332,12 +1565,12 @@ export function computeSameLocationPinOffset(
   const resolvedIdx = idx >= 0 ? idx : 0;
   const count = nearbyCluster.length;
 
-  // Deterministic side-by-side spread (±0.00018 deg ≈ 18 meters)
-  const radius = 0.00018;
+  // Deterministic side-by-side spread (±0.00022 deg ≈ 22 meters)
+  const radius = 0.00022;
   if (count === 2) {
     const sign = resolvedIdx === 0 ? -1 : 1;
     return {
-      lat: Number((safeLat + sign * 0.00007).toFixed(6)),
+      lat: Number((safeLat + sign * 0.00009).toFixed(6)),
       lng: Number((safeLng + sign * radius).toFixed(6)),
       isOffsetApplied: true,
     };
@@ -1358,22 +1591,22 @@ export function buildRealCourierPresencePayload(params: {
   heading?: number | null;
   speed?: number;
 }): CloudCourierPresence {
-  const role: CourierCloudRole = isCourierAdminByName(params.profile.name)
-    ? 'admin'
-    : 'courier';
+  const isFounder = isCourierAdminByName(params.profile.name);
+  const role: CourierCloudRole = isFounder ? 'admin' : 'courier';
+  const effectiveId = isFounder ? FOUNDER_ADMIN_COURIER_ID : params.profile.id;
   const status: CourierLivePresenceStatus = params.isPaused
     ? 'paused'
     : params.hasActiveOrder || params.profile.has_order
       ? 'busy'
       : 'online';
   const approvalStatus = resolveApprovalStatusForCourier(
-    params.profile.id,
+    effectiveId,
     params.profile.name,
     role === 'admin' ? 'approved' : 'pending'
   );
 
   return {
-    id: params.profile.id,
+    id: effectiveId,
     name: params.profile.name.trim(),
     role,
     vehicle: params.profile.vehicle || 'Mota 125cc',

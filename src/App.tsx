@@ -23,6 +23,7 @@ import {
 } from './components/InteractiveManualAndHelpDrawer';
 import { TranslatorAndSignLanguageModal } from './components/TranslatorAndSignLanguageModal';
 import { DeliverySpeedRealitySummary } from './utils/amaranteCopilotTelemetry';
+import { isCourierAdminByName } from './services/cloudSync';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -102,7 +103,15 @@ const AppCockpitShell: React.FC = () => {
     isBatteryCharging,
     toggleBatterySurvivalMode,
     speakTextPt,
+    realCourierProfile,
+    verifiedAccount,
   } = useEstafetas();
+
+  const isFounderAdmin = isCourierAdminByName(
+    realCourierProfile?.name?.trim() ||
+      verifiedAccount?.courierName?.trim() ||
+      ''
+  );
 
   const [deliveryRealitySummary, setDeliveryRealitySummary] =
     React.useState<DeliverySpeedRealitySummary | null>(null);
@@ -259,7 +268,8 @@ const AppCockpitShell: React.FC = () => {
   }
 
   const isAdminView =
-    viewMode === 'PAINEL_ADMIN' || activeTab === 'admin_backoffice';
+    isFounderAdmin &&
+    (viewMode === 'PAINEL_ADMIN' || activeTab === 'admin_backoffice');
   const isMapFullscreenCockpit = !isAdminView && activeTab === 'radar';
 
   return (

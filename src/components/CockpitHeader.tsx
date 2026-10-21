@@ -1,5 +1,6 @@
 import React from 'react';
 import { useEstafetas } from '../context/EstafetasContext';
+import { isCourierAdminByName } from '../services/cloudSync';
 
 export const CockpitHeader: React.FC = () => {
   const {
@@ -12,10 +13,17 @@ export const CockpitHeader: React.FC = () => {
     currentMascotImageUrl,
     setViewMode,
     setActiveTab,
+    realCourierProfile,
+    verifiedAccount,
   } = useEstafetas();
 
   const isDaylight = themeMode === 'DAYLIGHT';
   const isAnonymous = Boolean(userPrefs?.anonymousMode);
+  const activeCourierName =
+    realCourierProfile?.name?.trim() ||
+    verifiedAccount?.courierName?.trim() ||
+    '';
+  const isFounderAdmin = isCourierAdminByName(activeCourierName);
 
   // Cycle: 🟢 Online -> ⚪ Pausa -> 🥷 Anónimo -> 🟢 Online
   const handleCycleHeaderStatus = () => {
@@ -84,74 +92,76 @@ export const CockpitHeader: React.FC = () => {
           </div>
         </button>
 
-        {/* Right: Sleek Obsidian Black & Light Neon Blue Admin Capsule (No Crown, Tech Buddy HUD Icon) */}
-        <button
-          type="button"
-          onClick={() => {
-            setViewMode('PAINEL_ADMIN');
-            setActiveTab('admin_backoffice');
-          }}
-          style={{
-            backgroundColor: '#0B0F17',
-            border: '1.5px solid #00E5FF',
-            color: '#00E5FF',
-            boxShadow: '0 2px 10px rgba(0, 229, 255, 0.22)',
-          }}
-          className="rounded-full px-3 py-1.5 text-sm font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:brightness-110 active:scale-95 shrink-0"
-          title="Abrir Painel de Administrador (CEO Dashboard)"
-        >
-          {/* Mini Buddy Admin Avatar Icon (Robot Head/Visor in Light Neon Blue #00E5FF) */}
-          <svg
-            viewBox="0 0 24 24"
-            className="h-4 w-4 shrink-0"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
+        {/* Right: Sleek Obsidian Black & Light Neon Blue Admin Capsule — STRICTLY restricted to Founder ('Presidente') */}
+        {isFounderAdmin && (
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('PAINEL_ADMIN');
+              setActiveTab('admin_backoffice');
+            }}
+            style={{
+              backgroundColor: '#0B0F17',
+              border: '1.5px solid #00E5FF',
+              color: '#00E5FF',
+              boxShadow: '0 2px 10px rgba(0, 229, 255, 0.22)',
+            }}
+            className="rounded-full px-3 py-1.5 text-sm font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:brightness-110 active:scale-95 shrink-0"
+            title="Abrir Painel de Administrador (CEO Dashboard)"
           >
-            {/* Antenna */}
-            <line
-              x1="12"
-              y1="2"
-              x2="12"
-              y2="5"
-              stroke="#00E5FF"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <circle cx="12" cy="1.8" r="1.5" fill="#00E5FF" />
-            {/* Buddy Helmet Shell */}
-            <rect
-              x="3.5"
-              y="5"
-              width="17"
-              height="13.5"
-              rx="6.75"
-              fill="#0B0F17"
-              stroke="#00E5FF"
-              strokeWidth="1.8"
-            />
-            {/* Dark Visor */}
-            <rect
-              x="6.2"
-              y="8"
-              width="11.6"
-              height="6.8"
-              rx="3.4"
-              fill="#05070B"
-              stroke="#00E5FF"
-              strokeWidth="1.2"
-            />
-            {/* Glowing Neon Blue Eyes */}
-            <circle cx="9.6" cy="11.4" r="1.4" fill="#00E5FF" />
-            <circle cx="14.4" cy="11.4" r="1.4" fill="#00E5FF" />
-          </svg>
-          <span
-            style={{ color: '#00E5FF' }}
-            className="tracking-tight font-extrabold"
-          >
-            Admin
-          </span>
-        </button>
+            {/* Mini Buddy Admin Avatar Icon (Robot Head/Visor in Light Neon Blue #00E5FF) */}
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4 shrink-0"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              {/* Antenna */}
+              <line
+                x1="12"
+                y1="2"
+                x2="12"
+                y2="5"
+                stroke="#00E5FF"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <circle cx="12" cy="1.8" r="1.5" fill="#00E5FF" />
+              {/* Buddy Helmet Shell */}
+              <rect
+                x="3.5"
+                y="5"
+                width="17"
+                height="13.5"
+                rx="6.75"
+                fill="#0B0F17"
+                stroke="#00E5FF"
+                strokeWidth="1.8"
+              />
+              {/* Dark Visor */}
+              <rect
+                x="6.2"
+                y="8"
+                width="11.6"
+                height="6.8"
+                rx="3.4"
+                fill="#05070B"
+                stroke="#00E5FF"
+                strokeWidth="1.2"
+              />
+              {/* Glowing Neon Blue Eyes */}
+              <circle cx="9.6" cy="11.4" r="1.4" fill="#00E5FF" />
+              <circle cx="14.4" cy="11.4" r="1.4" fill="#00E5FF" />
+            </svg>
+            <span
+              style={{ color: '#00E5FF' }}
+              className="tracking-tight font-extrabold"
+            >
+              Admin
+            </span>
+          </button>
+        )}
       </div>
     </header>
   );

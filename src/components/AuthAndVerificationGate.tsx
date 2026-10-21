@@ -17,11 +17,14 @@ import {
 } from '../types/models';
 import {
   findExistingCourierByNameInSupabaseRest,
-  getOrCreatePersistentCourierUuid,
 } from '../services/geminiAgent';
 import {
+  FOUNDER_ADMIN_COURIER_ID,
+  generateUniqueCourierIdForName,
+  isCourierAdminByName,
   publishAccountRegistrationToCloud,
   publishCourierPresenceToCloud,
+  resolveApprovalStatusForCourier,
 } from '../services/cloudSync';
 import {
   cancelBuddySpeechNow,
@@ -42,6 +45,8 @@ export const BUDDY_LOGIN_INTRO_SENTENCES: string[] = [
 ];
 
 export interface SavedLocalAccountRecord {
+  courierId?: string;
+  role?: 'admin' | 'courier';
   username: string;
   emailOrPhone?: string;
   pinOrPassword: string;
@@ -73,47 +78,84 @@ export function loadSavedAccounts(): SavedLocalAccountRecord[] {
   }
 }
 
-function saveAccountLocally(record: SavedLocalAccountRecord) {
+function saveAccountLocally(record: SavedLocalAccountRecord): string {
+  const cleanName = record.username.trim();
+  const isFounder = isCourierAdminByName(cleanName);
+  const allSaved = loadSavedAccounts();
+  const existingMatch = allSaved.find(
+    (a) => a.username.trim().toLowerCase() === cleanName.toLowerCase()
+  );
+
+  const resolvedCourierId = isFounder
+    ? FOUNDER_ADMIN_COURIER_ID
+    : record.courierId ||
+      (existingMatch?.courierId &&
+      existingMatch.courierId !== FOUNDER_ADMIN_COURIER_ID
+        ? existingMatch.courierId
+        : generateUniqueCourierIdForName(cleanName));
+
+  const resolvedApproval = isFounder
+    ? 'approved'
+    : resolveApprovalStatusForCourier(
+        resolvedCourierId,
+        cleanName,
+        record.status === 'APROVADO' || existingMatch?.status === 'APROVADO'
+          ? 'approved'
+          : record.status === 'BLOQUEADO' ||
+              existingMatch?.status === 'BLOQUEADO'
+            ? 'blocked'
+            : 'pending'
+      );
+
+  const resolvedLocalStatus: 'APROVADO' | 'PENDENTE' | 'BLOQUEADO' =
+    resolvedApproval === 'approved'
+      ? 'APROVADO'
+      : resolvedApproval === 'blocked'
+        ? 'BLOQUEADO'
+        : 'PENDENTE';
+
+  const enrichedRecord: SavedLocalAccountRecord = {
+    ...record,
+    courierId: resolvedCourierId,
+    role: isFounder ? 'admin' : 'courier',
+    username: cleanName,
+    status: resolvedLocalStatus,
+  };
+
   try {
-    const existing = loadSavedAccounts().filter(
+    const existing = allSaved.filter(
       (a) =>
-        a.username.toLowerCase() !== record.username.toLowerCase() &&
+        a.username.trim().toLowerCase() !== cleanName.toLowerCase() &&
         (!record.emailOrPhone ||
-          (a.emailOrPhone || '').toLowerCase() !==
-            record.emailOrPhone.toLowerCase())
+          (a.emailOrPhone || '').trim().toLowerCase() !==
+            record.emailOrPhone.trim().toLowerCase())
     );
     localStorage.setItem(
       SAVED_ACCOUNTS_STORAGE_KEY,
-      JSON.stringify([record, ...existing])
+      JSON.stringify([enrichedRecord, ...existing])
     );
-    // Broadcast new or logged-in account & live presence immediately to the Zero-Config Cloud Sync Relay
-    const persistentId = getOrCreatePersistentCourierUuid();
-    const resolvedApproval =
-      record.status === 'APROVADO'
-        ? 'approved'
-        : record.status === 'BLOQUEADO'
-        ? 'blocked'
-        : undefined;
+    localStorage.setItem('buddy_my_courier_id', resolvedCourierId);
+
+    // Broadcast new or logged-in account & live presence immediately to db_amarante_fleet_v3
     void publishAccountRegistrationToCloud({
-      id: persistentId,
-      username: record.username,
-      emailOrPhone: record.emailOrPhone || record.username,
+      id: resolvedCourierId,
+      username: cleanName,
+      emailOrPhone: record.emailOrPhone || cleanName,
       vehicle: record.vehicle,
       platforms: record.platforms,
       zone: record.zone,
+      role: isFounder ? 'admin' : 'courier',
       approvalStatus: resolvedApproval,
     });
     void publishCourierPresenceToCloud({
-      id: persistentId,
-      name: record.username,
-      role: record.username.trim().toLowerCase().includes('presidente')
-        ? 'admin'
-        : 'courier',
+      id: resolvedCourierId,
+      name: cleanName,
+      role: isFounder ? 'admin' : 'courier',
       vehicle: record.vehicle,
       platforms: record.platforms,
       zone: record.zone,
       status: 'online',
-      approvalStatus: resolvedApproval || 'pending',
+      approvalStatus: resolvedApproval,
       lat: 41.2704,
       lng: -8.0818,
       lastSeen: new Date().toISOString(),
@@ -121,6 +163,7 @@ function saveAccountLocally(record: SavedLocalAccountRecord) {
   } catch {
     // ignore
   }
+  return resolvedCourierId;
 }
 
 export function loadSupportChatMessages(): SupportChatMessage[] {
@@ -739,6 +782,8 @@ export const AuthAndVerificationGate: React.FC = () => {
           : ['Uber Eats', 'Glovo'];
       let resolvedZone: AmaranteBaseZoneOption = selectedZone;
 
+      let resolvedCourierId: string | undefined;
+
       if (authMode === 'ENTRAR') {
         const localSaved = loadSavedAccounts().find(
           (a) =>
@@ -746,10 +791,13 @@ export const AuthAndVerificationGate: React.FC = () => {
             (a.emailOrPhone &&
               a.emailOrPhone.toLowerCase() === cleanName.toLowerCase())
         );
+        const isFounderPinAllowed =
+          isCourierAdminByName(cleanName) && cleanPin === '1990';
         if (
           localSaved &&
           localSaved.pinOrPassword &&
-          localSaved.pinOrPassword !== cleanPin
+          localSaved.pinOrPassword !== cleanPin &&
+          !isFounderPinAllowed
         ) {
           setErrorMsg(
             'Palavra-passe / PIN incorreto para esta conta neste telemóvel.'
@@ -762,6 +810,7 @@ export const AuthAndVerificationGate: React.FC = () => {
           resolvedVehicle = localSaved.vehicle;
           resolvedPlatforms = localSaved.platforms;
           resolvedZone = localSaved.zone;
+          resolvedCourierId = localSaved.courierId;
         } else {
           const remoteRow = await findExistingCourierByNameInSupabaseRest({
             supabaseUrl: aiAgentConfig.supabaseUrl,
@@ -770,6 +819,7 @@ export const AuthAndVerificationGate: React.FC = () => {
           });
           if (remoteRow) {
             resolvedName = remoteRow.name || cleanName;
+            resolvedCourierId = remoteRow.id;
             if (
               [
                 'Mota 125cc',
@@ -790,7 +840,8 @@ export const AuthAndVerificationGate: React.FC = () => {
         }
       }
 
-      saveAccountLocally({
+      const assignedId = saveAccountLocally({
+        courierId: resolvedCourierId,
         username: resolvedName,
         emailOrPhone: cleanContact || cleanName,
         pinOrPassword: cleanPin,
@@ -800,6 +851,7 @@ export const AuthAndVerificationGate: React.FC = () => {
       });
 
       await saveAndRegisterRealCourierProfile({
+        id: assignedId,
         name: resolvedName,
         vehicle: resolvedVehicle,
         zone: resolvedZone,
@@ -1025,6 +1077,50 @@ export const AuthAndVerificationGate: React.FC = () => {
         ) : (
           /* OPTION 1 (LOGIN) & OPTION 2 (CRIAR CONTA) FORM */
           <form onSubmit={handleAuthSubmit} className="space-y-2.5">
+            {/* Quick Role Selector: Regular Courier vs Founder (Presidente) */}
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  stopBuddyIntroPresentation(true);
+                  if (username.trim().toLowerCase() === 'presidente') {
+                    setUsername('');
+                    setPinOrPassword('');
+                  }
+                  setErrorMsg(null);
+                }}
+                className={`flex-1 py-1.5 px-2.5 rounded-xl border text-[11px] font-extrabold transition cursor-pointer ${
+                  username.trim().toLowerCase() !== 'presidente'
+                    ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400'
+                    : isDay
+                      ? 'bg-slate-50 border-slate-200 text-slate-600'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                }`}
+              >
+                🛵 Conta de Estafeta
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  stopBuddyIntroPresentation(true);
+                  setUsername('Presidente');
+                  if (!pinOrPassword) {
+                    setPinOrPassword('1990');
+                  }
+                  setErrorMsg(null);
+                }}
+                className={`flex-1 py-1.5 px-2.5 rounded-xl border text-[11px] font-extrabold transition cursor-pointer ${
+                  username.trim().toLowerCase() === 'presidente'
+                    ? 'bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]'
+                    : isDay
+                      ? 'bg-slate-50 border-slate-200 text-slate-600'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                }`}
+              >
+                👑 Fundador (Presidente)
+              </button>
+            </div>
+
             <div>
               <label
                 className={`block text-[11px] font-black uppercase tracking-wider mb-1 ${

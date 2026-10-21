@@ -138,14 +138,19 @@ import {
 } from '../services/geminiAgent';
 import {
   CloudSharedStateSnapshot,
+  FOUNDER_ADMIN_COURIER_ID,
+  generateUniqueCourierIdForName,
   getActiveCloudCourierRows,
+  isCourierAdminByName,
   loadCloudSharedState,
+  normalizeAccountKey,
   publishAccountRegistrationToCloud,
   publishAdminApprovalDecisionToCloud,
   publishCourierPresenceToCloud,
   publishRoadHazardToCloud,
   publishWalkieMessageToCloud,
   registerLocalCloudIdentityProvider,
+  resolveApprovalStatusForCourier,
   startRealtimeCloudSyncStream,
   subscribeToCloudSharedState,
 } from '../services/cloudSync';
@@ -863,6 +868,7 @@ interface EstafetasContextValue {
   isCourierRegistrationModalOpen: boolean;
   setIsCourierRegistrationModalOpen: (open: boolean) => void;
   saveAndRegisterRealCourierProfile: (input: {
+    id?: string;
     name: string;
     vehicle: CourierRegistrationVehicle;
     zone: AmaranteBaseZoneOption;
@@ -2632,14 +2638,6 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // ignore
     }
-    const oldId = realCourierProfileRef.current.id;
-    if (oldId) {
-      void deleteCourierFromSupabaseRest({
-        supabaseUrl: state.aiAgentConfig.supabaseUrl,
-        supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
-        courierId: oldId,
-      });
-    }
     const freshDeviceId = resetAndGenerateNewCourierUuid();
     setRealCourierProfile({
       id: freshDeviceId,
@@ -2663,6 +2661,8 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
     setActiveDirectChatCourierId(null);
     setActiveBuddyPopupCourierId(null);
     setIsCourierRegistrationModalOpen(false);
+    setViewModeState('MODO_ESTAFETA');
+    setActiveTab('scanner');
     setState((prev) => ({
       ...prev,
       isAuthenticated: false,
@@ -2672,7 +2672,7 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
         courierName: 'Novo Estafeta',
       },
     }));
-  }, [state.aiAgentConfig.supabaseAnonKey, state.aiAgentConfig.supabaseUrl]);
+  }, [setActiveTab]);
 
   const toggleAppPauseMode = useCallback(() => {
     setState((prev) => {
@@ -7410,14 +7410,6 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     } catch {
       // ignore
     }
-    const oldId = realCourierProfileRef.current.id;
-    if (oldId) {
-      void deleteCourierFromSupabaseRest({
-        supabaseUrl: state.aiAgentConfig.supabaseUrl,
-        supabaseAnonKey: state.aiAgentConfig.supabaseAnonKey,
-        courierId: oldId,
-      });
-    }
     const freshDeviceId = resetAndGenerateNewCourierUuid();
     const blankProfile: RealCourierMapProfile = {
       id: freshDeviceId,
@@ -7442,6 +7434,8 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     setActiveDirectChatCourierId(null);
     setActiveBuddyPopupCourierId(null);
     setIsCourierRegistrationModalOpen(false);
+    setViewModeState('MODO_ESTAFETA');
+    setActiveTab('scanner');
     setState((prev) => ({
       ...prev,
       isAuthenticated: false,
@@ -7451,11 +7445,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       },
     }));
     speakTextPt('Sessão terminada.');
-  }, [
-    speakTextPt,
-    state.aiAgentConfig.supabaseAnonKey,
-    state.aiAgentConfig.supabaseUrl,
-  ]);
+  }, [setActiveTab, speakTextPt]);
 
   const isGhostDuplicateOfSelf = useCallback(
     (rowId: string, rowName: string, selfId: string, _selfName: string) => {
@@ -7514,6 +7504,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const saveAndRegisterRealCourierProfile = useCallback(
     async (input: {
+      id?: string;
       name: string;
       vehicle: CourierRegistrationVehicle;
       zone: AmaranteBaseZoneOption;
@@ -7532,8 +7523,21 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           profile: realCourierProfileRef.current,
         };
       }
-      const persistentId =
-        realCourierProfileRef.current.id || getOrCreatePersistentCourierUuid();
+      const isFounder = isCourierAdminByName(cleanName);
+      const currentStoredId =
+        input.id ||
+        realCourierProfileRef.current.id ||
+        getOrCreatePersistentCourierUuid();
+      const persistentId = isFounder
+        ? FOUNDER_ADMIN_COURIER_ID
+        : currentStoredId === FOUNDER_ADMIN_COURIER_ID
+          ? generateUniqueCourierIdForName(cleanName)
+          : currentStoredId;
+
+      if (!isFounder) {
+        setViewModeState('MODO_ESTAFETA');
+      }
+
       const isAvailableNow = state.userOrderAvailabilityStatus === 'DISPONIVEL';
       const zoneFallback =
         AMARANTE_ZONE_COORDS_MAP[input.zone] || AMARANTE_DEFAULT_COORDS;
@@ -7550,6 +7554,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       if (input.active_platforms && input.active_platforms.length > 0) {
         setActivePlatformsState(resolvedPlatforms);
       }
+
+      const resolvedApproval = resolveApprovalStatusForCourier(
+        persistentId,
+        cleanName,
+        isFounder ? 'approved' : 'pending'
+      );
 
       const nextProfile: RealCourierMapProfile = {
         ...realCourierProfileRef.current,
@@ -7568,7 +7578,10 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
             ? realCourierProfileRef.current.lng
             : zoneFallback.lng,
         reputation: 100,
-        buddy_since: 'Fundador • Out 2026',
+        buddy_since:
+          resolvedApproval === 'pending'
+            ? '⏳ Pendente Aprovação'
+            : 'Fundador • Out 2026',
         updated_at: new Date().toISOString(),
         avatar_url: resolvedAvatarUrl,
         active_platforms: resolvedPlatforms,
@@ -7586,6 +7599,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           JSON.stringify({
             active: true,
             username: cleanName,
+            role: isFounder ? 'admin' : 'courier',
             loggedInAt: new Date().toISOString(),
           })
         );
@@ -7618,6 +7632,26 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         },
       }));
 
+      // Immediately broadcast presence & registration to db_amarante_fleet_v3
+      void publishCourierPresenceToCloud({
+        profile: nextProfile,
+        status: isAvailableNow ? 'online' : 'busy',
+        approvalStatus: resolvedApproval,
+      });
+      void publishAccountRegistrationToCloud({
+        id: persistentId,
+        username: cleanName,
+        emailOrPhone: cleanName,
+        vehicle: input.vehicle,
+        platforms: resolvedPlatforms,
+        zone: input.zone,
+        role: isFounder ? 'admin' : 'courier',
+        approvalStatus: resolvedApproval,
+        lat: nextProfile.lat,
+        lng: nextProfile.lng,
+        deviceModel: deviceScreenProfile.deviceModel,
+      });
+
       startOrRefreshGeolocationWatch(input.zone);
       const upsertRes = await syncProfileToSupabaseAndLocalCache(nextProfile);
 
@@ -7645,9 +7679,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
         modelUsed: state.aiAgentConfig.activeResolvedModelName,
       });
 
-      speakTextPt(
-        `Sessão iniciada como ${cleanName}.`
-      );
+      speakTextPt(`Sessão iniciada como ${cleanName}.`);
 
       return {
         ok: upsertRes.ok,
@@ -7674,20 +7706,27 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
   const broadcastAllLocalIdentitiesToCloud = useCallback(() => {
     const prof = realCourierProfileRef.current;
-    const persistentId = prof.id || getOrCreatePersistentCourierUuid();
+    const isFounder = isCourierAdminByName(prof.name);
+    const persistentId = isFounder
+      ? FOUNDER_ADMIN_COURIER_ID
+      : prof.id || getOrCreatePersistentCourierUuid();
 
     if (prof.isRegistered && prof.name.trim().length > 0 && !state.isAppPaused) {
-      void publishCourierPresenceToCloud({ profile: prof });
+      const cleanName = prof.name.trim();
+      void publishCourierPresenceToCloud({
+        profile: { ...prof, id: persistentId, name: cleanName },
+      });
       void publishAccountRegistrationToCloud({
         id: persistentId,
-        username: prof.name.trim(),
-        emailOrPhone: prof.name.trim(),
+        username: cleanName,
+        emailOrPhone: cleanName,
         vehicle: prof.vehicle,
         platforms:
           prof.active_platforms && prof.active_platforms.length > 0
             ? prof.active_platforms
             : activePlatforms,
         zone: prof.zone,
+        role: isFounder ? 'admin' : 'courier',
         lat: prof.lat || AMARANTE_DEFAULT_COORDS.lat,
         lng: prof.lng || AMARANTE_DEFAULT_COORDS.lng,
         deviceModel: prof.device_model || deviceScreenProfile.deviceModel,
@@ -7701,18 +7740,23 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
       if (savedRaw) {
         const savedList = JSON.parse(savedRaw);
         if (Array.isArray(savedList)) {
-          savedList.forEach((acc, idx) => {
+          savedList.forEach((acc) => {
             if (!acc || typeof acc.username !== 'string' || !acc.username.trim()) {
               return;
             }
             const uname = acc.username.trim();
-            const isPrimary =
-              idx === 0 ||
-              (prof.name &&
-                uname.toLowerCase() === prof.name.trim().toLowerCase());
-            const accId = isPrimary
-              ? persistentId
-              : `${persistentId}-${uname
+            if (
+              prof.isRegistered &&
+              prof.name &&
+              uname.toLowerCase() === prof.name.trim().toLowerCase()
+            ) {
+              return;
+            }
+            const accIsFounder = isCourierAdminByName(uname);
+            const accId = accIsFounder
+              ? FOUNDER_ADMIN_COURIER_ID
+              : acc.courierId ||
+                `courier_acc_${uname
                   .toLowerCase()
                   .replace(/[^a-z0-9]/g, '')
                   .slice(0, 8)}`;
@@ -7727,6 +7771,14 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
                   : activePlatforms,
               zone:
                 acc.zone || prof.zone || 'Amarante Centro / São Gonçalo',
+              role: accIsFounder ? 'admin' : 'courier',
+              approvalStatus: accIsFounder
+                ? 'approved'
+                : acc.status === 'BLOQUEADO'
+                  ? 'blocked'
+                  : acc.status === 'APROVADO'
+                    ? 'approved'
+                    : 'pending',
               lat: prof.lat || AMARANTE_DEFAULT_COORDS.lat,
               lng: prof.lng || AMARANTE_DEFAULT_COORDS.lng,
               deviceModel: deviceScreenProfile.deviceModel,
@@ -7746,7 +7798,47 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     broadcastAllLocalIdentitiesToCloud();
 
     const unsub = subscribeToCloudSharedState((nextCloud) => {
-      setCloudSharedState(nextCloud);
+      setCloudSharedState({
+        ...nextCloud,
+        couriers: { ...nextCloud.couriers },
+        approvalRequests: [...nextCloud.approvalRequests],
+      });
+
+      // Sync cloud approval decisions into local buddy_saved_accounts_v1 so both phones update in real time
+      try {
+        const savedRaw = localStorage.getItem('buddy_saved_accounts_v1');
+        if (savedRaw) {
+          const savedList = JSON.parse(savedRaw);
+          if (Array.isArray(savedList)) {
+            let updatedAny = false;
+            const nextList = savedList.map((acc) => {
+              if (!acc || !acc.username) return acc;
+              const unameKey = normalizeAccountKey(acc.username);
+              const dec = nextCloud.approvalDecisionsByName?.[unameKey];
+              if (!dec) return acc;
+              const mappedStatus =
+                dec === 'approved'
+                  ? 'APROVADO'
+                  : dec === 'blocked'
+                    ? 'BLOQUEADO'
+                    : 'PENDENTE';
+              if (acc.status !== mappedStatus) {
+                updatedAny = true;
+                return { ...acc, status: mappedStatus };
+              }
+              return acc;
+            });
+            if (updatedAny) {
+              localStorage.setItem(
+                'buddy_saved_accounts_v1',
+                JSON.stringify(nextList)
+              );
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
 
       // Immediately update live couriers from cloud state
       const cloudRows = getActiveCloudCourierRows(nextCloud);
@@ -12343,11 +12435,23 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
     // 2. Append all other real couriers synced from Supabase public.couriers & Cloud Sync (active within last 2 hours)
     const nowMs = Date.now();
-    supabaseLiveCouriers.forEach((row) => {
-      if (seen.has(row.id) || !row.name || !row.name.trim()) return;
+    const seenNames = new Set<string>();
+    if (isSelfRegistered && realCourierProfile?.name) {
+      seenNames.add(normalizeAccountKey(realCourierProfile.name));
+    }
+    const mergedLiveRows: SupabaseCourierRow[] = [
+      ...getActiveCloudCourierRows(cloudSharedState),
+      ...supabaseLiveCouriers,
+    ];
+
+    mergedLiveRows.forEach((row) => {
+      if (!row || seen.has(row.id) || !row.name || !row.name.trim()) return;
+      const nameKey = normalizeAccountKey(row.name);
+      if (!nameKey || seenNames.has(nameKey)) return;
       const updatedMs = row.updated_at ? Date.parse(row.updated_at) : 0;
       if (
-        !Number.isFinite(updatedMs) ||
+        updatedMs > 0 &&
+        Number.isFinite(updatedMs) &&
         nowMs - updatedMs > 2 * 60 * 60 * 1000
       ) {
         return;
@@ -12399,6 +12503,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           : buildFallbackDirectoryEntry(row, false)
       );
       seen.add(row.id);
+      seenNames.add(nameKey);
     });
 
     // 3. Append remaining directory couriers (filtering out mocks & non-remote stale entries when in Production Mode)
@@ -12417,9 +12522,11 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     state.userOrderAvailabilityStatus,
     realCourierProfile,
     supabaseLiveCouriers,
+    cloudSharedState,
     mapZoneToAmaranteCellId,
     realCompletedDeliveries.length,
     activePlatforms,
+    isGhostDuplicateOfSelf,
   ]);
 
   const effectiveWalkieMessages = useMemo(() => {
@@ -12806,11 +12913,7 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
             c.id === row.id ||
             c.name.trim().toLowerCase() === row.name.trim().toLowerCase()
         );
-        const isAdminRole =
-          row.name.trim().toLowerCase().includes('presidente') ||
-          row.name.trim().toLowerCase() === 'admin' ||
-          cloudReq?.role === 'admin' ||
-          cloudCourier?.role === 'admin';
+        const isAdminRole = isCourierAdminByName(row.name);
         const effectiveCloudApproval = isAdminRole
           ? 'approved'
           : cloudReq?.approvalStatus || cloudCourier?.approvalStatus || 'pending';
