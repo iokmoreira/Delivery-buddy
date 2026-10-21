@@ -6668,10 +6668,25 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
           }
         }
 
+        const fixedLat = Number(rawLat.toFixed(6));
+        const fixedLng = Number(rawLng.toFixed(6));
+        try {
+          localStorage.setItem(
+            'lastKnownOwnCoords',
+            JSON.stringify({
+              lat: fixedLat,
+              lng: fixedLng,
+              updatedAt: Date.now(),
+            })
+          );
+        } catch {
+          // ignore
+        }
+
         const updated: RealCourierMapProfile = {
           ...prev,
-          lat: Number(rawLat.toFixed(6)),
-          lng: Number(rawLng.toFixed(6)),
+          lat: fixedLat,
+          lng: fixedLng,
           gpsSource: 'LIVE_GPS',
           updated_at: new Date().toISOString(),
         };
@@ -8198,8 +8213,49 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
 
     if (prof.isRegistered && prof.name.trim().length > 0 && !state.isAppPaused) {
       const cleanName = prof.name.trim();
+      // If courier is in Ninja Mode (anonymousMode === true), broadcast offline so pin is hidden on Map
+      if (state.userPrefs.anonymousMode) {
+        void publishCourierOfflineToCloud(persistentId, cleanName);
+        return;
+      }
+
+      let ownLat = prof.lat;
+      let ownLng = prof.lng;
+      if (prof.gpsSource !== 'LIVE_GPS') {
+        try {
+          const cachedOwn = localStorage.getItem('lastKnownOwnCoords');
+          if (cachedOwn) {
+            const parsedOwn = JSON.parse(cachedOwn) as {
+              lat?: number;
+              lng?: number;
+            };
+            if (
+              typeof parsedOwn?.lat === 'number' &&
+              Number.isFinite(parsedOwn.lat) &&
+              typeof parsedOwn?.lng === 'number' &&
+              Number.isFinite(parsedOwn.lng)
+            ) {
+              ownLat = parsedOwn.lat;
+              ownLng = parsedOwn.lng;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       void publishCourierPresenceToCloud({
-        profile: { ...prof, id: persistentId, name: cleanName },
+        profile: {
+          ...prof,
+          id: persistentId,
+          name: cleanName,
+          lat: ownLat,
+          lng: ownLng,
+        },
+        status:
+          state.userOrderAvailabilityStatus === 'DISPONIVEL'
+            ? 'online'
+            : 'busy',
       });
       void publishAccountRegistrationToCloud({
         id: persistentId,
@@ -8212,12 +8268,18 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
             : activePlatforms,
         zone: prof.zone,
         role: isFounder ? 'admin' : 'courier',
-        lat: prof.lat || AMARANTE_DEFAULT_COORDS.lat,
-        lng: prof.lng || AMARANTE_DEFAULT_COORDS.lng,
+        lat: ownLat || AMARANTE_DEFAULT_COORDS.lat,
+        lng: ownLng || AMARANTE_DEFAULT_COORDS.lng,
         deviceModel: prof.device_model || deviceScreenProfile.deviceModel,
       });
     }
-  }, [activePlatforms, deviceScreenProfile.deviceModel, state.isAppPaused]);
+  }, [
+    activePlatforms,
+    deviceScreenProfile.deviceModel,
+    state.isAppPaused,
+    state.userOrderAvailabilityStatus,
+    state.userPrefs.anonymousMode,
+  ]);
 
   // Start Zero-Config Automatic Cloud Sync Engine on mount & subscribe to incoming real-time updates
   useEffect(() => {
@@ -8400,14 +8462,85 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     broadcastAllLocalIdentitiesToCloud,
   ]);
 
-  // Immediately broadcast GPS coordinate updates whenever realCourierProfile.lat / lng changes
+  // Immediately broadcast GPS coordinate updates & Instant (<0.5s) Map Presence on Login/App Open (unless in Ninja Mode)
   useEffect(() => {
     if (
       realCourierProfile.isRegistered &&
       realCourierProfile.name.trim().length > 0 &&
       !state.isAppPaused
     ) {
-      void publishCourierPresenceToCloud({ profile: realCourierProfile });
+      if (state.userPrefs.anonymousMode) {
+        void publishCourierOfflineToCloud(
+          realCourierProfile.id,
+          realCourierProfile.name.trim()
+        );
+        return;
+      }
+
+      // 1. Immediate (<0.5s) broadcast using current/lastKnownOwnCoords
+      let immediateProfile = realCourierProfile;
+      if (realCourierProfile.gpsSource !== 'LIVE_GPS') {
+        try {
+          const cachedOwn = localStorage.getItem('lastKnownOwnCoords');
+          if (cachedOwn) {
+            const parsedOwn = JSON.parse(cachedOwn) as {
+              lat?: number;
+              lng?: number;
+            };
+            if (
+              typeof parsedOwn?.lat === 'number' &&
+              Number.isFinite(parsedOwn.lat) &&
+              typeof parsedOwn?.lng === 'number' &&
+              Number.isFinite(parsedOwn.lng)
+            ) {
+              immediateProfile = {
+                ...realCourierProfile,
+                lat: parsedOwn.lat,
+                lng: parsedOwn.lng,
+              };
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      void publishCourierPresenceToCloud({
+        profile: immediateProfile,
+        status:
+          state.userOrderAvailabilityStatus === 'DISPONIVEL'
+            ? 'online'
+            : 'busy',
+      });
+
+      // 2. Fast coarse network location (<2000ms timeout) if satellite GPS hasn't locked yet
+      if (
+        realCourierProfile.gpsSource !== 'LIVE_GPS' &&
+        typeof navigator !== 'undefined' &&
+        'geolocation' in navigator
+      ) {
+        try {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              applyLiveDeviceGpsFix(
+                pos.coords.latitude,
+                pos.coords.longitude,
+                pos.coords.accuracy
+              );
+            },
+            () => {
+              // ignore and wait for satellite watchPosition
+            },
+            {
+              enableHighAccuracy: false,
+              timeout: 2000,
+              maximumAge: 60000,
+            }
+          );
+        } catch {
+          // ignore
+        }
+      }
     }
   }, [
     realCourierProfile.lat,
@@ -8416,7 +8549,12 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     realCourierProfile.has_order,
     realCourierProfile.isRegistered,
     realCourierProfile.name,
+    realCourierProfile.id,
+    realCourierProfile.gpsSource,
     state.isAppPaused,
+    state.userPrefs.anonymousMode,
+    state.userOrderAvailabilityStatus,
+    applyLiveDeviceGpsFix,
   ]);
 
   // Poll & subscribe via WebSockets (postgres_changes) to public.couriers and public.direct_messages

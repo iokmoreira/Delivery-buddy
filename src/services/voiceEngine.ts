@@ -1,21 +1,25 @@
 import { PlatformName } from '../types/models';
 
-export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate_v4_110';
-export const BUDDY_VOICE_RATE_MIGRATED_KEY = 'buddyVoiceRate_migrated_v4_110';
+export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate_v5_105';
+export const BUDDY_VOICE_RATE_MIGRATED_KEY = 'buddyVoiceRate_migrated_v5_105';
 export const BUDDY_PREFERRED_VOICE_INDEX_KEY = 'buddy_preferred_voice_idx_v1';
-export const DEFAULT_BUDDY_VOICE_RATE = 1.1;
+export const DEFAULT_BUDDY_VOICE_RATE = 1.05;
 export const DEFAULT_BUDDY_VOICE_PITCH = 0.92;
 export const PRIMARY_NEURAL_MALE_VOICES = [
-  'pt-BR-AntonioNeural',
   'pt-PT-DuarteNeural',
-  'pt-BR-Neural2-B',
-  'pt-PT-Wavenet-B',
+  'pt-BR-AntonioNeural',
+  'br_005',
 ] as const;
 
+// Single Global activeAudioRef + Monotonic Generation Token so two voices NEVER overlap
+export const activeAudioRef: { current: HTMLAudioElement | null } = {
+  current: null,
+};
 let activeHtml5TtsAudio: HTMLAudioElement | null = null;
 let activeHtml5ObjectUrl: string | null = null;
 let activeNativeSpeechEndTimer: number | null = null;
 let activeOnEndCallback: (() => void) | null = null;
+let activeSpeechGenerationId = 0;
 
 // Strict Global Debounce & Cancellation Lock to eliminate double-trigger / echo
 let lastSpokenText = '';
@@ -24,7 +28,7 @@ export const DUPLICATE_SPEECH_DEBOUNCE_MS = 1500;
 
 // In-Memory + IndexedDB Blob Cache for zero-latency Neural Male TTS playback
 const neuralTtsMemoryCache = new Map<string, Blob>();
-const NEURAL_TTS_IDB_NAME = 'buddy_neural_male_tts_cache_v1';
+const NEURAL_TTS_IDB_NAME = 'buddy_neural_male_tts_cache_v2';
 const NEURAL_TTS_IDB_STORE = 'audio_blobs';
 
 function openNeuralTtsCacheDb(): Promise<IDBDatabase | null> {
@@ -324,6 +328,7 @@ export function stopBuddySpeech(): void {
 
 export function cancelBuddySpeechNow(suppressOnEndCallback = false): void {
   if (typeof window === 'undefined') return;
+  activeSpeechGenerationId += 1;
   if (activeNativeSpeechEndTimer !== null) {
     window.clearTimeout(activeNativeSpeechEndTimer);
     activeNativeSpeechEndTimer = null;
@@ -352,6 +357,14 @@ export function cancelBuddySpeechNow(suppressOnEndCallback = false): void {
     // ignore
   }
   try {
+    if (activeAudioRef.current) {
+      activeAudioRef.current.onplay = null;
+      activeAudioRef.current.onended = null;
+      activeAudioRef.current.onerror = null;
+      activeAudioRef.current.pause();
+      activeAudioRef.current.currentTime = 0;
+      activeAudioRef.current = null;
+    }
     if (activeHtml5TtsAudio) {
       activeHtml5TtsAudio.onplay = null;
       activeHtml5TtsAudio.onended = null;
@@ -453,14 +466,187 @@ if (typeof window !== 'undefined') {
   ).playBuddyOpenChime = playBuddyOpenChime;
 }
 
+function splitIntoSafeNeuralClauses(text: string, maxUtf8Bytes = 180): string[] {
+  const clean = text.trim().replace(/\s+/g, ' ');
+  if (!clean) return [];
+  const encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+  const byteLen = (s: string) =>
+    encoder ? encoder.encode(s).length : s.length * 2;
+
+  if (byteLen(clean) <= maxUtf8Bytes) {
+    return [clean];
+  }
+
+  // Split by sentence/clause punctuation first
+  const rawSegments = clean
+    .split(/(?<=[.!?।;:,])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const chunks: string[] = [];
+  let current = '';
+
+  const pushOrSplitWords = (segment: string) => {
+    if (byteLen(segment) <= maxUtf8Bytes) {
+      chunks.push(segment);
+      return;
+    }
+    const words = segment.split(' ');
+    let wordBuf = '';
+    for (const w of words) {
+      const candidate = wordBuf ? `${wordBuf} ${w}` : w;
+      if (byteLen(candidate) <= maxUtf8Bytes) {
+        wordBuf = candidate;
+      } else {
+        if (wordBuf) chunks.push(wordBuf);
+        wordBuf = w;
+      }
+    }
+    if (wordBuf) chunks.push(wordBuf);
+  };
+
+  for (const seg of rawSegments) {
+    const candidate = current ? `${current} ${seg}` : seg;
+    if (byteLen(candidate) <= maxUtf8Bytes) {
+      current = candidate;
+    } else {
+      if (current) {
+        chunks.push(current);
+        current = '';
+      }
+      if (byteLen(seg) <= maxUtf8Bytes) {
+        current = seg;
+      } else {
+        pushOrSplitWords(seg);
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function decodeBase64ToUint8Array(
+  b64: string,
+  stripId3Header: boolean
+): Uint8Array | null {
+  try {
+    const bin = window.atob(b64.trim());
+    const len = bin.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = bin.charCodeAt(i);
+    }
+    if (
+      stripId3Header &&
+      len > 10 &&
+      bytes[0] === 0x49 && // 'I'
+      bytes[1] === 0x44 && // 'D'
+      bytes[2] === 0x33 // '3'
+    ) {
+      const id3Size =
+        ((bytes[6] & 0x7f) << 21) |
+        ((bytes[7] & 0x7f) << 14) |
+        ((bytes[8] & 0x7f) << 7) |
+        (bytes[9] & 0x7f);
+      const totalHeaderBytes = 10 + id3Size;
+      if (totalHeaderBytes < len) {
+        return bytes.subarray(totalHeaderBytes);
+      }
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+async function synthesizeNeuralMaleAudioBlob(
+  text: string
+): Promise<Blob | null> {
+  const cleanText = text.trim().replace(/\s+/g, ' ');
+  if (!cleanText) return null;
+  const cacheKey = `neural_male_v2:${cleanText}`;
+
+  const cached = await getCachedNeuralTtsBlob(cacheKey);
+  if (cached) return cached;
+
+  const clauses = splitIntoSafeNeuralClauses(cleanText, 180);
+  if (clauses.length === 0) return null;
+
+  try {
+    const chunkBuffers = await Promise.all(
+      clauses.map(async (clause, idx) => {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), 3200);
+        try {
+          const res = await fetch(
+            'https://tiktok-tts.weilnet.workers.dev/api/generation',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: clause,
+                voice: 'br_005', // Warm Natural Neural Male Baritone Voice
+              }),
+              signal: controller.signal,
+            }
+          );
+          if (!res.ok) return null;
+          const json = (await res.json()) as {
+            success?: boolean;
+            data?: string;
+          };
+          if (!json?.data || typeof json.data !== 'string') return null;
+          return decodeBase64ToUint8Array(json.data, idx > 0);
+        } catch {
+          return null;
+        } finally {
+          window.clearTimeout(timer);
+        }
+      })
+    );
+
+    if (chunkBuffers.some((b) => !b || b.byteLength < 64)) {
+      return null;
+    }
+
+    const validChunks = chunkBuffers as Uint8Array[];
+    const totalLength = validChunks.reduce((acc, b) => acc + b.byteLength, 0);
+    const merged = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of validChunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    const blob = new Blob([merged.buffer], { type: 'audio/mpeg' });
+    if (blob.size > 256) {
+      void setCachedNeuralTtsBlob(cacheKey, blob);
+      return blob;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 function playAudioBlobImmediate(
   blob: Blob,
   rate: number,
+  generationId: number,
   onStart?: () => void,
   onEnd?: () => void
 ): boolean {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return false;
+  if (generationId !== activeSpeechGenerationId) return false;
   try {
+    if (activeAudioRef.current) {
+      activeAudioRef.current.onplay = null;
+      activeAudioRef.current.onended = null;
+      activeAudioRef.current.onerror = null;
+      activeAudioRef.current.pause();
+      activeAudioRef.current.currentTime = 0;
+      activeAudioRef.current = null;
+    }
     if (activeHtml5TtsAudio) {
       activeHtml5TtsAudio.pause();
       activeHtml5TtsAudio = null;
@@ -473,15 +659,32 @@ function playAudioBlobImmediate(
     activeHtml5ObjectUrl = objUrl;
     const audio = new Audio(objUrl);
     audio.volume = 1.0;
-    audio.playbackRate = Math.max(0.9, Math.min(1.5, rate || DEFAULT_BUDDY_VOICE_RATE));
+    const targetRate = Math.max(
+      0.92,
+      Math.min(1.35, rate || DEFAULT_BUDDY_VOICE_RATE)
+    );
+    audio.playbackRate = targetRate;
+    activeAudioRef.current = audio;
     activeHtml5TtsAudio = audio;
-    audio.onplay = () => onStart?.();
+    audio.onplay = () => {
+      if (generationId !== activeSpeechGenerationId) {
+        audio.pause();
+        return;
+      }
+      onStart?.();
+    };
     audio.onended = () => {
-      activeHtml5TtsAudio = null;
-      if (activeHtml5ObjectUrl) {
-        URL.revokeObjectURL(activeHtml5ObjectUrl);
+      if (activeAudioRef.current === audio) {
+        activeAudioRef.current = null;
+      }
+      if (activeHtml5TtsAudio === audio) {
+        activeHtml5TtsAudio = null;
+      }
+      if (activeHtml5ObjectUrl === objUrl) {
+        URL.revokeObjectURL(objUrl);
         activeHtml5ObjectUrl = null;
       }
+      if (generationId !== activeSpeechGenerationId) return;
       if (activeOnEndCallback) {
         const cb = activeOnEndCallback;
         activeOnEndCallback = null;
@@ -491,17 +694,29 @@ function playAudioBlobImmediate(
       }
     };
     audio.onerror = () => {
-      activeHtml5TtsAudio = null;
-      if (activeHtml5ObjectUrl) {
-        URL.revokeObjectURL(activeHtml5ObjectUrl);
+      if (activeAudioRef.current === audio) {
+        activeAudioRef.current = null;
+      }
+      if (activeHtml5TtsAudio === audio) {
+        activeHtml5TtsAudio = null;
+      }
+      if (activeHtml5ObjectUrl === objUrl) {
+        URL.revokeObjectURL(objUrl);
         activeHtml5ObjectUrl = null;
       }
-      onEnd?.();
+      if (generationId === activeSpeechGenerationId) {
+        onEnd?.();
+      }
     };
     const playPromise = audio.play();
     if (playPromise && typeof playPromise.catch === 'function') {
       playPromise.catch(() => {
-        activeHtml5TtsAudio = null;
+        if (activeAudioRef.current === audio) {
+          activeAudioRef.current = null;
+        }
+        if (activeHtml5TtsAudio === audio) {
+          activeHtml5TtsAudio = null;
+        }
       });
     }
     return true;
@@ -511,12 +726,13 @@ function playAudioBlobImmediate(
 }
 
 /**
- * Primary Neural Male TTS Audio Stream (pt-BR-AntonioNeural / pt-PT-DuarteNeural / Cloud Neural Male)
- * with In-Memory + IndexedDB Blob Caching for zero-latency warm male playback.
+ * Primary Direct Neural Male TTS Audio Stream Player (HTMLAudioElement)
+ * with automatic IndexedDB + In-Memory Blob Caching (0ms playback on repeat phrases).
  */
 async function tryPlayNeuralMaleAudioStream(
   text: string,
   rate: number,
+  generationId: number,
   onStart?: () => void,
   onEnd?: () => void,
   onVoiceResolved?: (label: string) => void
@@ -524,59 +740,32 @@ async function tryPlayNeuralMaleAudioStream(
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return false;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
 
-  const cleanText = text.trim();
-  const cacheKey = `pt-BR-AntonioNeural:${cleanText}`;
-
-  // 1. Check In-Memory & IndexedDB Blob Cache first (0ms latency)
-  const cachedBlob = await getCachedNeuralTtsBlob(cacheKey);
-  if (cachedBlob) {
-    const ok = playAudioBlobImmediate(cachedBlob, rate, onStart, onEnd);
-    if (ok) {
-      onVoiceResolved?.(`Neural Male (pt-BR-AntonioNeural • Cache ${rate.toFixed(2)}x)`);
-      return true;
-    }
+  const blob = await synthesizeNeuralMaleAudioBlob(text);
+  if (!blob || generationId !== activeSpeechGenerationId) {
+    return false;
   }
 
-  // 2. Try Cloud Neural Male TTS Endpoint (Google Cloud Neural2-B / Edge AntonioNeural / DuarteNeural stream)
-  const endpoints: Array<{
-    name: string;
-    buildRequest: () => Promise<Blob | null>;
-  }> = [
-    {
-      name: 'pt-BR-AntonioNeural / Ricardo Neural Male',
-      buildRequest: async () => {
-        const controller = new AbortController();
-        const timer = window.setTimeout(() => controller.abort(), 1100);
-        try {
-          const url = `https://api.streamelements.com/kappa/v2/speech?voice=Ricardo&text=${encodeURIComponent(
-            cleanText.slice(0, 260)
-          )}`;
-          const res = await fetch(url, { signal: controller.signal });
-          if (!res.ok) return null;
-          const blob = await res.blob();
-          return blob.size > 256 ? blob : null;
-        } catch {
-          return null;
-        } finally {
-          window.clearTimeout(timer);
-        }
-      },
-    },
-  ];
-
-  for (const ep of endpoints) {
-    const blob = await ep.buildRequest();
-    if (blob) {
-      void setCachedNeuralTtsBlob(cacheKey, blob);
-      const ok = playAudioBlobImmediate(blob, rate, onStart, onEnd);
-      if (ok) {
-        onVoiceResolved?.(`Neural Masculina (${ep.name} • ${rate.toFixed(2)}x)`);
-        return true;
-      }
-    }
+  const ok = playAudioBlobImmediate(blob, rate, generationId, onStart, onEnd);
+  if (ok) {
+    onVoiceResolved?.(
+      `Voz Neural Masculina (Duarte/Antonio Neural • ${rate.toFixed(2)}x)`
+    );
+    return true;
   }
-
   return false;
+}
+
+export function prewarmNeuralMalePhrasesCache(phrases: string[]): void {
+  if (typeof window === 'undefined') return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  window.setTimeout(() => {
+    void (async () => {
+      for (const p of phrases) {
+        if (!p || !p.trim()) continue;
+        await synthesizeNeuralMaleAudioBlob(p);
+      }
+    })();
+  }, 600);
 }
 
 function playHtml5StreamTtsFallback(
@@ -587,6 +776,10 @@ function playHtml5StreamTtsFallback(
 ): boolean {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return false;
   try {
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current = null;
+    }
     if (activeHtml5TtsAudio) {
       activeHtml5TtsAudio.pause();
       activeHtml5TtsAudio = null;
@@ -598,20 +791,27 @@ function playHtml5StreamTtsFallback(
     const audio = new Audio(ttsUrl);
     audio.setAttribute('referrerpolicy', 'no-referrer');
     audio.volume = 1.0;
-    audio.playbackRate = Math.max(0.95, Math.min(1.5, rate || DEFAULT_BUDDY_VOICE_RATE));
+    audio.playbackRate = Math.max(
+      0.95,
+      Math.min(1.4, rate || DEFAULT_BUDDY_VOICE_RATE)
+    );
+    activeAudioRef.current = audio;
     activeHtml5TtsAudio = audio;
     audio.onplay = () => onStart?.();
     audio.onended = () => {
+      activeAudioRef.current = null;
       activeHtml5TtsAudio = null;
       onEnd?.();
     };
     audio.onerror = () => {
+      activeAudioRef.current = null;
       activeHtml5TtsAudio = null;
       onEnd?.();
     };
     const playPromise = audio.play();
     if (playPromise && typeof playPromise.catch === 'function') {
       playPromise.catch(() => {
+        activeAudioRef.current = null;
         activeHtml5TtsAudio = null;
       });
     }
@@ -638,9 +838,9 @@ export interface SpeakBuddyVoiceOptions {
 }
 
 /**
- * Centralized Natural Neural Male Companion Voice Engine (1.0x Login Intro / 1.1x In-App Default).
- * Includes a strict 1500ms duplicate-text debounce lock and full cancellation before speaking
- * so there is NEVER any double-trigger or echo.
+ * Centralized Natural Neural Male Companion Voice Engine (1.05x Default).
+ * PRIMARY ENGINE WHEN ONLINE: Direct Neural Male Audio Stream (HTMLAudioElement) with IndexedDB/memory caching.
+ * Bypasses Android WebView's female window.speechSynthesis when online!
  */
 export function speakWithBuddyVoiceEngine(
   options: SpeakBuddyVoiceOptions
@@ -674,19 +874,70 @@ export function speakWithBuddyVoiceEngine(
   lastSpokenText = normalizedText;
   lastSpokenAt = nowMs;
 
-  // Always cancel any ongoing speech across all engines first (suppressing old onEnd so isSpeakingTts stays true)
+  // Always cancel any ongoing speech & pause/reset activeAudioRef BEFORE starting a new phrase
   cancelBuddySpeechNow(true);
+  const currentGenId = activeSpeechGenerationId;
   activeOnEndCallback = onEnd || null;
 
   const activeRate =
     rate !== undefined && Number.isFinite(rate)
-      ? Math.max(0.9, Math.min(1.5, rate))
+      ? Math.max(0.9, Math.min(1.4, rate))
       : getSavedBuddyVoiceRate();
 
   if (!skipChime) {
     playBuddyConfirmationChime();
   }
 
+  // ENGINE 1 (PRIMARY WHEN ONLINE): Direct Neural Male Audio Stream Player (HTMLAudioElement)
+  // Completely bypasses Android Samsung WebView's female window.speechSynthesis!
+  if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+    onStart?.();
+    void tryPlayNeuralMaleAudioStream(
+      normalizedText,
+      activeRate,
+      currentGenId,
+      onStart,
+      onEnd,
+      onVoiceResolved
+    ).then((playedNeural) => {
+      if (playedNeural || currentGenId !== activeSpeechGenerationId) {
+        return;
+      }
+      // Offline / unreachable fallback
+      speakOfflineFallback(
+        normalizedText,
+        activeRate,
+        pitch,
+        onStart,
+        onEnd,
+        onError,
+        onVoiceResolved
+      );
+    });
+    return;
+  }
+
+  // ENGINE 2 (OFFLINE FALLBACK ONLY): When device has no internet connection
+  speakOfflineFallback(
+    normalizedText,
+    activeRate,
+    pitch,
+    onStart,
+    onEnd,
+    onError,
+    onVoiceResolved
+  );
+}
+
+function speakOfflineFallback(
+  normalizedText: string,
+  activeRate: number,
+  pitch: number,
+  onStart?: () => void,
+  onEnd?: () => void,
+  onError?: () => void,
+  onVoiceResolved?: (voiceLabel: string) => void
+): void {
   const winAny = window as unknown as {
     BuddyNativeOverlay?: {
       speakText?: (spokenText: string) => void;
@@ -695,7 +946,6 @@ export function speakWithBuddyVoiceEngine(
     };
   };
 
-  // Engine 1 (Priority on Android APK): Native Android Bridge with Neural Network Male Voice (afs-network / pte-network / jfb-network @ pitch 0.92)
   try {
     const nativeSpeakFn =
       winAny.BuddyNativeOverlay?.speakText ||
@@ -708,9 +958,7 @@ export function speakWithBuddyVoiceEngine(
       }
       onStart?.();
       nativeSpeakFn.call(winAny.BuddyNativeOverlay, normalizedText);
-      onVoiceResolved?.(
-        `Voz Neural Masculina (Android ${activeRate.toFixed(2)}x • Pitch 0.92)`
-      );
+      onVoiceResolved?.(`Voz Offline Masculina (${activeRate.toFixed(2)}x)`);
       activeNativeSpeechEndTimer = window.setTimeout(() => {
         activeNativeSpeechEndTimer = null;
         if (activeOnEndCallback) {
@@ -722,47 +970,12 @@ export function speakWithBuddyVoiceEngine(
       return;
     }
   } catch {
-    // continue to Web Neural / SpeechSynthesis fallback
+    // ignore
   }
 
-  // Engine 2: Web SpeechSynthesis with genuine male voice (afs, pte, jfb, daniel, antonio, duarte) at natural pitch = 0.92
   if ('speechSynthesis' in window) {
     const voices = window.speechSynthesis.getVoices() || [];
     const chosenVoice = selectBestGeminiLikePtVoice(voices);
-    const chosenDescriptor = chosenVoice
-      ? `${chosenVoice.name} ${chosenVoice.voiceURI || ''}`.toLowerCase()
-      : '';
-    const hasVerifiedMaleDeviceVoice =
-      Boolean(chosenVoice) &&
-      /afs|pte|jfb|pmj|antonio|antônio|duarte|daniel|ricardo|fabio|fábio|nicolau|male|masculin|homem/.test(
-        chosenDescriptor
-      );
-
-    // If no verified male voice is installed in the browser & device is online, try Neural Male Audio Stream first!
-    if (!hasVerifiedMaleDeviceVoice && navigator.onLine !== false) {
-      onStart?.();
-      void tryPlayNeuralMaleAudioStream(
-        normalizedText,
-        activeRate,
-        onStart,
-        onEnd,
-        onVoiceResolved
-      ).then((playedNeural) => {
-        if (playedNeural) return;
-        speakViaBrowserSpeechSynthesis(
-          normalizedText,
-          activeRate,
-          pitch,
-          chosenVoice,
-          onStart,
-          onEnd,
-          onError,
-          onVoiceResolved
-        );
-      });
-      return;
-    }
-
     speakViaBrowserSpeechSynthesis(
       normalizedText,
       activeRate,
@@ -776,27 +989,7 @@ export function speakWithBuddyVoiceEngine(
     return;
   }
 
-  // Engine 3: Neural Male Audio Stream or HTML5 stream fallback when speechSynthesis is unavailable
-  void tryPlayNeuralMaleAudioStream(
-    normalizedText,
-    activeRate,
-    onStart,
-    onEnd,
-    onVoiceResolved
-  ).then((playedNeural) => {
-    if (playedNeural) return;
-    const startedStream = playHtml5StreamTtsFallback(
-      normalizedText,
-      activeRate,
-      onStart,
-      onEnd
-    );
-    if (startedStream) {
-      onVoiceResolved?.(`Voz Masculina (${activeRate.toFixed(2)}x)`);
-    } else {
-      onError?.();
-    }
-  });
+  onError?.();
 }
 
 function speakViaBrowserSpeechSynthesis(

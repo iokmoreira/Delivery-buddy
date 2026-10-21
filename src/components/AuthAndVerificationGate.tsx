@@ -35,7 +35,9 @@ import {
   DEFAULT_BUDDY_VOICE_PITCH,
   getSavedBuddyVoiceRate,
   playBuddyConfirmationChime,
+  prewarmNeuralMalePhrasesCache,
   selectBestGeminiLikePtVoice,
+  speakWithBuddyVoiceEngine,
 } from '../services/voiceEngine';
 
 export const LOGIN_INTRO_VOICE_RATE = 1.0;
@@ -647,6 +649,50 @@ export const AuthAndVerificationGate: React.FC = () => {
       setIsIntroSpeaking(true);
       clearIntroTimers();
 
+      // Primary: Direct Neural Male Audio Stream (HTMLAudioElement) when online, bypassing Android female speechSynthesis
+      if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+        let advanced = false;
+        const advanceNext = () => {
+          if (advanced || introSessionIdRef.current !== sessionId) return;
+          advanced = true;
+          clearIntroTimers();
+          speakSentenceAtIndex(idx + 1, sessionId);
+        };
+
+        // Prewarm the next sentence while current sentence is playing for 0ms gap
+        if (idx + 1 < BUDDY_LOGIN_INTRO_SENTENCES.length) {
+          prewarmNeuralMalePhrasesCache([BUDDY_LOGIN_INTRO_SENTENCES[idx + 1]]);
+        }
+
+        const fallbackMs = Math.max(
+          7500,
+          Math.round(sentence.length * 75) + 1500
+        );
+        sentenceTimerRef.current = window.setTimeout(() => {
+          advanceNext();
+        }, fallbackMs);
+
+        speakWithBuddyVoiceEngine({
+          text: sentence,
+          rate: LOGIN_INTRO_VOICE_RATE,
+          pitch: DEFAULT_BUDDY_VOICE_PITCH,
+          skipChime: true,
+          onStart: () => {
+            if (introSessionIdRef.current !== sessionId) return;
+            waitingForGestureRef.current = false;
+            setActiveSentenceIdx(idx);
+            setIsIntroSpeaking(true);
+          },
+          onEnd: () => {
+            advanceNext();
+          },
+          onError: () => {
+            advanceNext();
+          },
+        });
+        return;
+      }
+
       const winAny = window as unknown as {
         BuddyNativeOverlay?: {
           speakText?: (spokenText: string) => void;
@@ -775,7 +821,8 @@ export const AuthAndVerificationGate: React.FC = () => {
   // Auto-start the voice introduction when the Login screen opens
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // Warm up Web Speech voices list if needed
+    // Warm up Neural Male Audio Cache for login intro sentences immediately
+    prewarmNeuralMalePhrasesCache(BUDDY_LOGIN_INTRO_SENTENCES.slice(0, 2));
     try {
       window.speechSynthesis?.getVoices?.();
     } catch {

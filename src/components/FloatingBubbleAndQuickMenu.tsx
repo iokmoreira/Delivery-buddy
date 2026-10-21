@@ -1770,27 +1770,22 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
               title="Toque em qualquer área deste quadro para silenciar a voz imediatamente"
             >
               <div className="space-y-4">
-                <div className="flex items-start justify-between gap-3">
+                {/* Clean Header (No Open-Meteo top pill) */}
+                <div
+                  className={`flex items-start justify-between gap-3 pb-3 border-b ${
+                    isDaylight ? 'border-slate-100' : 'border-slate-800'
+                  }`}
+                >
                   <div>
-                    <span
-                      style={{
-                        backgroundColor: isDaylight ? '#ECFEFF' : '#0B0F17',
-                        borderColor: cardBorder,
-                        color: neonText,
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs sm:text-sm font-extrabold"
-                    >
-                      🌦️ Open-Meteo Tempo Real • Amarante
-                    </span>
                     <h3
                       style={{ color: primaryText }}
-                      className="text-2xl font-extrabold mt-2"
+                      className="text-2xl font-black tracking-tight"
                     >
                       Clima Atual em Amarante
                     </h3>
                     <p
                       style={{ color: secondaryText }}
-                      className="text-sm sm:text-base font-semibold mt-0.5"
+                      className="text-xs sm:text-sm font-medium mt-0.5"
                     >
                       Atualizado às {amaranteLiveWeather.updatedAt} • Raio 35 km
                     </p>
@@ -1808,179 +1803,158 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                       borderColor: subtleBorder,
                       color: primaryText,
                     }}
-                    className="rounded-xl border p-2.5 cursor-pointer shrink-0 transition hover:opacity-90"
+                    className="rounded-xl border p-2 cursor-pointer shrink-0 transition hover:opacity-90"
                     aria-label="Fechar Clima de Amarante"
                   >
                     <X className="h-5 w-5" />
                   </button>
                 </div>
 
-                {/* Primary Weather Metrics — Clean 2-Row Stacked Layout (Zero Text Overlap) */}
+                {/* Primary Weather Metrics — Clean Flat Inline Text (Zero Box Borders or Colored Pills) */}
                 <div
-                  style={{
-                    backgroundColor: cardBg,
-                    borderColor: cardBorder,
-                  }}
-                  className="rounded-2xl border-2 p-4 shadow-md"
+                  className={`pb-4 border-b space-y-1.5 ${
+                    isDaylight ? 'border-slate-100' : 'border-slate-800'
+                  }`}
                 >
-                  {/* Row 1 (Full Width): Weather Icon + Bold Temperature + Full Condition Badge on Right */}
-                  <div className="flex items-center justify-between gap-3 w-full">
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-4xl sm:text-5xl select-none shrink-0 leading-none">
-                        {amaranteLiveWeather.conditionEmoji}
-                      </span>
-                      <div
-                        style={{ color: primaryText }}
-                        className="text-3xl sm:text-4xl font-black tracking-tight whitespace-nowrap"
-                      >
-                        {isLoadingAmaranteWeather
-                          ? '...'
-                          : `${amaranteLiveWeather.temperatureC.toFixed(1)} °C`}
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        backgroundColor: pillBg,
-                        borderColor: subtleBorder,
-                        color: neonText,
-                      }}
-                      className="rounded-xl border px-3 py-1.5 text-sm sm:text-base font-extrabold text-right leading-snug"
-                    >
-                      {amaranteLiveWeather.conditionLabel}
-                    </div>
-                  </div>
-
-                  {/* Row 2 (2 Equal Columns): Chuva & Vento Side by Side */}
-                  <div className="grid grid-cols-2 gap-2 mt-3">
-                    <div
-                      style={{
-                        backgroundColor: pillBg,
-                        borderColor: subtleBorder,
-                        color: primaryText,
-                      }}
-                      className="rounded-xl border px-3 py-2 text-sm sm:text-base font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
-                    >
-                      <span>💧 Chuva:</span>
-                      <span style={{ color: neonText }}>
-                        {amaranteLiveWeather.rainMm.toFixed(1)} mm
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        backgroundColor: pillBg,
-                        borderColor: subtleBorder,
-                        color: primaryText,
-                      }}
-                      className="rounded-xl border px-3 py-2 text-sm sm:text-base font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
-                    >
-                      <span>💨 Vento:</span>
-                      <span style={{ color: primaryText }}>
-                        {amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Road & Safety Telemetry for Couriers in Amarante */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div
-                    style={{
-                      backgroundColor: cardBg,
-                      borderColor: subtleBorder,
-                    }}
-                    className="rounded-2xl border p-3.5"
-                  >
-                    <span
-                      style={{ color: secondaryText }}
-                      className="text-xs sm:text-sm font-extrabold block"
-                    >
-                      Estado do Piso (Amarante)
+                  <div className="flex items-baseline gap-2.5 flex-wrap">
+                    <span className="text-3xl select-none shrink-0 leading-none">
+                      {amaranteLiveWeather.conditionEmoji}
                     </span>
                     <span
                       style={{ color: primaryText }}
-                      className="text-sm sm:text-base font-black mt-1 block leading-snug"
+                      className="text-3xl font-black tracking-tight whitespace-nowrap"
+                    >
+                      {isLoadingAmaranteWeather
+                        ? '...'
+                        : `${amaranteLiveWeather.temperatureC.toFixed(1)} °C`}
+                    </span>
+                    <span
+                      style={{ color: secondaryText }}
+                      className="text-lg font-medium"
+                    >
+                      —
+                    </span>
+                    <span
+                      style={{ color: neonText }}
+                      className="text-lg font-bold leading-snug"
+                    >
+                      {amaranteLiveWeather.conditionLabel}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{ color: secondaryText }}
+                    className="text-sm sm:text-base font-medium pt-1 flex items-center gap-2 flex-wrap"
+                  >
+                    <span>
+                      Chuva:{' '}
+                      <strong
+                        style={{ color: primaryText }}
+                        className="font-bold"
+                      >
+                        {amaranteLiveWeather.rainMm.toFixed(1)} mm
+                      </strong>
+                    </span>
+                    <span className="opacity-50">•</span>
+                    <span>
+                      Vento:{' '}
+                      <strong
+                        style={{ color: primaryText }}
+                        className="font-bold"
+                      >
+                        {amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Clean Flat Rows for Estado do Piso, Visibilidade & Vento, and Modo Chuva separated by 1px dividers */}
+                <div
+                  className={`divide-y border-b ${
+                    isDaylight
+                      ? 'divide-slate-100 border-slate-100'
+                      : 'divide-slate-800 border-slate-800'
+                  }`}
+                >
+                  <div className="py-3 flex items-center justify-between gap-3">
+                    <span
+                      style={{ color: secondaryText }}
+                      className="text-sm font-medium"
+                    >
+                      Estado do Piso
+                    </span>
+                    <span
+                      style={{ color: primaryText }}
+                      className="text-sm sm:text-base font-bold text-right"
                     >
                       {amaranteLiveWeather.rainMm > 0
                         ? '🌧️ Calçada Molhada / Escorregadia'
                         : '🛣️ Piso Seco • Aderência Normal'}
                     </span>
                   </div>
-                  <div
-                    style={{
-                      backgroundColor: cardBg,
-                      borderColor: subtleBorder,
-                    }}
-                    className="rounded-2xl border p-3.5"
-                  >
+
+                  <div className="py-3 flex items-center justify-between gap-3">
                     <span
                       style={{ color: secondaryText }}
-                      className="text-xs sm:text-sm font-extrabold block"
+                      className="text-sm font-medium"
                     >
                       Visibilidade &amp; Vento
                     </span>
                     <span
                       style={{ color: neonText }}
-                      className="text-sm sm:text-base font-black mt-1 block leading-snug"
+                      className="text-sm sm:text-base font-bold text-right"
                     >
                       {amaranteLiveWeather.windSpeedKmh > 28
                         ? '⚠️ Rajadas na Ponte S. Gonçalo'
                         : '✓ Boa Visibilidade em Rota'}
                     </span>
                   </div>
-                </div>
 
-                {/* 1-Tap Rain Bonus Toggle in Finanças */}
-                <div
-                  style={{
-                    backgroundColor: cardBg,
-                    borderColor: subtleBorder,
-                  }}
-                  className="rounded-2xl border p-4 flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <div
-                      style={{ color: primaryText }}
-                      className="text-base sm:text-lg font-extrabold"
-                    >
-                      ☔ Modo Chuva / Bónus de Chuva (Finanças)
+                  <div className="py-3.5 flex items-center justify-between gap-3">
+                    <div>
+                      <div
+                        style={{ color: primaryText }}
+                        className="text-sm sm:text-base font-bold"
+                      >
+                        ☔ Modo Chuva / Bónus de Chuva (Finanças)
+                      </div>
+                      <p
+                        style={{ color: secondaryText }}
+                        className="text-xs sm:text-sm font-medium leading-snug mt-0.5"
+                      >
+                        Suplemento de piso molhado nas metas e lucro €/km.
+                      </p>
                     </div>
-                    <p
-                      style={{ color: secondaryText }}
-                      className="text-xs sm:text-sm font-semibold leading-snug mt-1"
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        stopBuddySpeech();
+                        cancelSpeechNow();
+                        toggleRainBonusFinanceActive();
+                      }}
+                      style={
+                        rainBonusFinanceActive
+                          ? {
+                              backgroundColor: neonAccent,
+                              borderColor: neonAccent,
+                              color: '#05070B',
+                            }
+                          : {
+                              backgroundColor: pillBg,
+                              borderColor: subtleBorder,
+                              color: primaryText,
+                            }
+                      }
+                      className="shrink-0 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-black transition cursor-pointer border"
                     >
-                      Ativa o suplemento de piso molhado nas metas e cálculos de
-                      lucro €/km.
-                    </p>
+                      {rainBonusFinanceActive ? 'ATIVO (ON)' : 'ATIVAR'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      stopBuddySpeech();
-                      cancelSpeechNow();
-                      toggleRainBonusFinanceActive();
-                    }}
-                    style={
-                      rainBonusFinanceActive
-                        ? {
-                            backgroundColor: neonAccent,
-                            borderColor: neonAccent,
-                            color: '#05070B',
-                          }
-                        : {
-                            backgroundColor: pillBg,
-                            borderColor: subtleBorder,
-                            color: primaryText,
-                          }
-                    }
-                    className="shrink-0 rounded-xl px-4 py-3 text-sm font-black transition cursor-pointer border shadow-xs"
-                  >
-                    {rainBonusFinanceActive ? 'ATIVO (ON)' : 'ATIVAR'}
-                  </button>
                 </div>
 
-                {/* Audio & Refresh Actions */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* Audio & Refresh Actions (Matte Black + Cyan Accent for Parar Fala — Zero Vibrant Red) */}
+                <div className="grid grid-cols-2 gap-3 pt-1">
                   {isSpeakingTts ? (
                     <button
                       type="button"
@@ -1989,10 +1963,9 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                         stopBuddySpeech();
                         cancelSpeechNow();
                       }}
-                      style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
-                      className="rounded-xl border border-red-400 py-3.5 px-3 text-sm sm:text-base font-extrabold text-white flex items-center justify-center gap-2 cursor-pointer"
+                      className="rounded-xl bg-slate-900 text-cyan-400 border border-cyan-500/30 py-3 px-3 text-sm sm:text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer transition hover:opacity-90"
                     >
-                      <VolumeX className="h-5 w-5" />
+                      <VolumeX className="h-5 w-5 text-cyan-400" />
                       <span>🔇 Parar Fala</span>
                     </button>
                   ) : (
@@ -2013,7 +1986,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                         borderColor: subtleBorder,
                         color: primaryText,
                       }}
-                      className="rounded-xl border py-3.5 px-3 text-sm sm:text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer transition hover:opacity-90"
+                      className="rounded-xl border py-3 px-3 text-sm sm:text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer transition hover:opacity-90"
                     >
                       <Volume2
                         style={{ color: neonText }}
@@ -2033,14 +2006,14 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                       borderColor: cardBorder,
                       color: neonText,
                     }}
-                    className="rounded-xl border py-3.5 px-3 text-sm sm:text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer transition hover:opacity-90"
+                    className="rounded-xl border py-3 px-3 text-sm sm:text-base font-extrabold flex items-center justify-center gap-2 cursor-pointer transition hover:opacity-90"
                   >
                     <span>🔄 Atualizar Agora</span>
                   </button>
                 </div>
               </div>
 
-              {/* Larger, Ergonomic Bottom Close Button */}
+              {/* Bottom Close Button */}
               <button
                 type="button"
                 onClick={(e) => {
@@ -2049,11 +2022,7 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                   cancelSpeechNow();
                   setIsAmaranteWeatherModalOpen(false);
                 }}
-                style={{
-                  backgroundColor: neonAccent,
-                  color: '#05070B',
-                }}
-                className="py-4 text-base sm:text-lg font-black rounded-2xl w-full shadow-lg cursor-pointer transition active:scale-[0.99]"
+                className="py-3.5 text-base font-black rounded-2xl w-full bg-slate-900 text-cyan-400 border border-cyan-500/30 shadow-md cursor-pointer transition active:scale-[0.99]"
               >
                 Fechar Clima
               </button>

@@ -668,8 +668,15 @@ export const ScannerAndSplitModule: React.FC = () => {
           ===================================================================== */}
       {!hasActiveOrder && (
         <>
-          <div className="grid grid-cols-2 gap-3">
-            {/* LEFT COMPACT CARD (GANHOS): Hero Number + Deliveries Badge — Click opens Detailed Earnings Modal */}
+          {/* CLEAN TWO-COLUMN MINIMAL HEADER STRIP (No inner pills or heavy borders) */}
+          <div
+            className={`grid grid-cols-2 divide-x border-b pb-3 pt-1 ${
+              isDaylight
+                ? 'divide-slate-200 border-slate-200 text-slate-900'
+                : 'divide-slate-800 border-slate-800 text-slate-100'
+            }`}
+          >
+            {/* LEFT COLUMN (GANHOS): €0,00 • 0 entregas — Click opens Detailed Earnings Modal */}
             <button
               type="button"
               onClick={() => {
@@ -679,204 +686,293 @@ export const ScannerAndSplitModule: React.FC = () => {
                 );
               }}
               title="Toque para abrir Resumo de Ganhos & Estatísticas de Hoje"
-              className={`rounded-3xl border px-4 py-3.5 flex items-center justify-between gap-2 cursor-pointer transition shadow-sm ${
-                isDaylight
-                  ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900'
-                  : 'bg-slate-800/95 hover:bg-slate-800 border-slate-700 text-slate-100'
-              }`}
+              className="pr-3 py-1.5 flex items-baseline justify-between gap-2 cursor-pointer transition text-left hover:opacity-85"
             >
-              <span className="text-2xl font-extrabold text-emerald-500 tracking-tight leading-none">
+              <span
+                className={`text-2xl font-black tracking-tight leading-none ${
+                  isDaylight ? 'text-slate-900' : 'text-white'
+                }`}
+              >
                 {formatEurPt(earningsTodayByApp.total)}
               </span>
               <span
-                className={`text-sm font-bold px-2.5 py-1 rounded-xl shrink-0 ${
-                  isDaylight
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/30'
+                className={`text-sm font-medium shrink-0 whitespace-nowrap ${
+                  isDaylight ? 'text-slate-600' : 'text-slate-400'
                 }`}
               >
-                {realCompletedDeliveries.length} ent.
+                • {realCompletedDeliveries.length} entregas
               </span>
             </button>
 
-            {/* RIGHT COMPACT CARD (CLIMA): Weather icon + Hero Temperature + City — Click opens Weather Modal */}
+            {/* RIGHT COLUMN (CLIMA): ⛅ 18.2 °C Amarante — Click opens Weather Modal */}
             <button
               type="button"
               onClick={() => void openAndFetchAmaranteWeather(true)}
               title="Toque para abrir Clima Atual em Amarante e ouvir previsão"
-              className={`rounded-3xl border px-4 py-3 flex items-center justify-between gap-2.5 cursor-pointer transition shadow-sm ${
-                isDaylight
-                  ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900'
-                  : 'bg-slate-800/95 hover:bg-slate-800 border-slate-700 text-slate-100'
-              }`}
+              className="pl-3 py-1.5 flex items-center justify-between gap-2 cursor-pointer transition text-left hover:opacity-85"
             >
-              <div className="flex items-center gap-2.5">
-                <span className="text-3xl leading-none select-none shrink-0">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-xl leading-none select-none shrink-0">
                   {amaranteLiveWeather.conditionEmoji}
                 </span>
-                <div className="flex flex-col items-start text-left leading-tight">
-                  <span
-                    style={{ color: isDaylight ? '#0f172a' : '#f8fafc' }}
-                    className="text-xl font-extrabold tracking-tight leading-none whitespace-nowrap"
-                  >
-                    {amaranteLiveWeather.temperatureC.toFixed(1)} °C
-                  </span>
-                  <span
-                    style={{ color: isDaylight ? '#334155' : '#cbd5e1' }}
-                    className="text-sm font-bold whitespace-nowrap mt-0.5"
-                  >
-                    Amarante
-                  </span>
-                </div>
+                <span
+                  className={`text-xl font-black tracking-tight leading-none whitespace-nowrap ${
+                    isDaylight ? 'text-slate-900' : 'text-white'
+                  }`}
+                >
+                  {amaranteLiveWeather.temperatureC.toFixed(1)} °C
+                </span>
+                <span
+                  className={`text-sm font-medium whitespace-nowrap ${
+                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  }`}
+                >
+                  Amarante
+                </span>
               </div>
             </button>
           </div>
 
-          {/* TOP SECTION: Última Entrega (Glovo Rider Rounded Style) */}
-          <section className="rounded-3xl bg-zinc-900/95 border border-zinc-800 p-4 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5 flex-wrap">
+          {/* TOP SECTION: Última Entrega (Clean Flat Surface — No nested inner card or heavy pill buttons) */}
+          <section
+            className={`py-3.5 border-b space-y-2.5 ${
+              isDaylight ? 'border-slate-200' : 'border-slate-800'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="h-3 w-3 rounded-full bg-[#00E5FF] shrink-0" />
-                <h2 className="text-xl font-bold text-zinc-100">
+                <span className="h-2.5 w-2.5 rounded-full bg-cyan-500 shrink-0" />
+                <h2
+                  className={`text-lg font-extrabold tracking-tight ${
+                    isDaylight ? 'text-slate-900' : 'text-white'
+                  }`}
+                >
                   Última Entrega
                 </h2>
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
                 <button
                   type="button"
                   onClick={() => openTranslatorModal('TRADUTOR')}
-                  style={{
-                    backgroundColor: '#0B0F17',
-                    borderColor: '#00E5FF',
-                    color: '#00E5FF',
-                  }}
-                  className="rounded-xl border px-3 py-1.5 text-xs sm:text-sm font-extrabold flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap shadow-[0_2px_10px_rgba(0,229,255,0.18)]"
+                  className={`text-xs sm:text-sm font-bold flex items-center gap-1 cursor-pointer transition whitespace-nowrap hover:underline ${
+                    isDaylight ? 'text-cyan-700' : 'text-cyan-400'
+                  }`}
                 >
                   <span>🌍 Tradutor &amp; Libras</span>
                 </button>
+                <span
+                  className={isDaylight ? 'text-slate-300' : 'text-slate-700'}
+                >
+                  |
+                </span>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    backgroundColor: isDaylight ? '#FFFFFF' : '#111827',
-                    borderColor: isDaylight
-                      ? '#CBD5E1'
-                      : 'rgba(0, 229, 255, 0.35)',
-                    color: isDaylight ? '#090D16' : '#FFFFFF',
-                  }}
-                  className="rounded-xl border px-3 py-1.5 text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+                  className={`text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap hover:underline ${
+                    isDaylight ? 'text-slate-700' : 'text-slate-200'
+                  }`}
                 >
-                  <Camera className="h-4 w-4 text-[#00E5FF] shrink-0" />
-                  <span>📷 Ler Pedido</span>
+                  <Camera className="h-4 w-4 text-cyan-500 shrink-0" />
+                  <span>Ler Pedido</span>
                 </button>
               </div>
             </div>
 
             {earningsTodayByApp.lastDelivery ? (
-              <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-3.5 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 text-base font-bold text-emerald-300">
+              <div className="pt-1 space-y-1.5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span
+                    className={`text-sm font-extrabold uppercase tracking-wide ${
+                      isDaylight ? 'text-cyan-700' : 'text-cyan-400'
+                    }`}
+                  >
                     {earningsTodayByApp.lastDelivery.platform}
                   </span>
-                  <span className="text-2xl font-extrabold text-emerald-400">
+                  <span
+                    className={`text-2xl font-black ${
+                      isDaylight ? 'text-slate-900' : 'text-white'
+                    }`}
+                  >
                     +{formatEurPt(earningsTodayByApp.lastDelivery.netProfitEur)}
                   </span>
                 </div>
-                <div className="text-lg font-bold text-zinc-100 truncate">
+                <div
+                  className={`text-base font-bold truncate ${
+                    isDaylight ? 'text-slate-800' : 'text-slate-100'
+                  }`}
+                >
                   {earningsTodayByApp.lastDelivery.segment}
                 </div>
-                <div className="flex items-center justify-between text-base text-zinc-400 pt-1.5 border-t border-zinc-900">
+                <div
+                  className={`flex items-center justify-between text-sm pt-1 ${
+                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  }`}
+                >
                   <span>
                     Distância:{' '}
-                    <strong className="text-zinc-100 font-bold">
+                    <strong
+                      className={
+                        isDaylight
+                          ? 'text-slate-900 font-bold'
+                          : 'text-white font-bold'
+                      }
+                    >
                       {earningsTodayByApp.lastDelivery.realKm.toFixed(1)} km
                     </strong>
                   </span>
                   <span>
                     Líquido:{' '}
-                    <strong className="text-emerald-400 font-bold">
-                      {earningsTodayByApp.lastDelivery.netEurPerKm.toFixed(2)} €/km
+                    <strong
+                      className={
+                        isDaylight
+                          ? 'text-cyan-700 font-bold'
+                          : 'text-cyan-400 font-bold'
+                      }
+                    >
+                      {earningsTodayByApp.lastDelivery.netEurPerKm.toFixed(2)}{' '}
+                      €/km
                     </strong>
                   </span>
                   <span>~18 min</span>
                 </div>
               </div>
             ) : (
-              <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-lg font-bold text-zinc-100">
-                    Nenhuma entrega registada hoje
-                  </p>
-                  <p className="text-base font-medium text-zinc-400 mt-1 leading-relaxed">
-                    Assim que aceitar ou ler um pedido, entrará automaticamente em modo de entrega.
-                  </p>
-                </div>
+              <div className="pt-0.5">
+                <p
+                  className={`text-base font-bold ${
+                    isDaylight ? 'text-slate-900' : 'text-slate-100'
+                  }`}
+                >
+                  Nenhuma entrega registada hoje
+                </p>
+                <p
+                  className={`text-sm font-medium mt-0.5 leading-relaxed ${
+                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  }`}
+                >
+                  Assim que aceitar ou ler um pedido, entrará automaticamente em
+                  modo de entrega.
+                </p>
               </div>
             )}
           </section>
 
-          {/* BOTTOM SECTION: Estatística Diária (Glovo Rider Rounded Style) */}
-          <section className="rounded-3xl bg-zinc-900/95 border border-zinc-800 p-4 space-y-3.5 shadow-sm">
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
-              <h2 className="text-xl font-bold text-zinc-100">
-                Estatística Diária
-              </h2>
-            </div>
+          {/* BOTTOM SECTION: Estatística Diária (Open 2x2 Typographic Grid with 1px Hairlines — Zero Colored Card Boxes) */}
+          <section className="pt-2 space-y-3">
+            <h2
+              className={`text-lg font-extrabold tracking-tight ${
+                isDaylight ? 'text-slate-900' : 'text-white'
+              }`}
+            >
+              Estatística Diária
+            </h2>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-3.5">
-                <span className="text-base font-medium text-zinc-400 block">
+            <div
+              className={`grid grid-cols-2 divide-x divide-y border-t border-b ${
+                isDaylight
+                  ? 'divide-slate-100 border-slate-100'
+                  : 'divide-slate-800/80 border-slate-800/80'
+              }`}
+            >
+              <div className="py-3 pr-3">
+                <span
+                  className={`text-sm font-medium block ${
+                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  }`}
+                >
                   Entregas concluídas
                 </span>
-                <span className="text-xl font-extrabold text-zinc-100 mt-1 block">
+                <span
+                  className={`text-xl font-black mt-0.5 block ${
+                    isDaylight ? 'text-slate-900' : 'text-white'
+                  }`}
+                >
                   {realCompletedDeliveries.length} entregas
                 </span>
               </div>
 
-              <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-3.5">
-                <span className="text-base font-medium text-zinc-400 block">
+              <div className="py-3 pl-3">
+                <span
+                  className={`text-sm font-medium block ${
+                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  }`}
+                >
                   Distância hoje
                 </span>
-                <span className="text-xl font-extrabold text-zinc-100 mt-1 block">
+                <span
+                  className={`text-xl font-black mt-0.5 block ${
+                    isDaylight ? 'text-slate-900' : 'text-white'
+                  }`}
+                >
                   {earningsTodayByApp.totalKm.toFixed(1)} km
                 </span>
               </div>
 
-              <div className="rounded-2xl bg-zinc-950 border border-emerald-500/30 p-3.5">
-                <span className="text-base font-bold text-emerald-400 block">
+              <div className="py-3 pr-3">
+                <span
+                  className={`text-sm font-medium block ${
+                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  }`}
+                >
                   Média líquida €/km
                 </span>
-                <span className="text-xl font-extrabold text-emerald-400 mt-1 block">
-                  {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')} €/km
+                <span
+                  className={`text-xl font-black mt-0.5 block ${
+                    isDaylight ? 'text-cyan-700' : 'text-cyan-400'
+                  }`}
+                >
+                  {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')}{' '}
+                  €/km
                 </span>
               </div>
 
-              <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-3.5">
-                <span className="text-base font-medium text-zinc-400 block">
+              <div className="py-3 pl-3">
+                <span
+                  className={`text-sm font-medium block ${
+                    isDaylight ? 'text-slate-600' : 'text-slate-400'
+                  }`}
+                >
                   Média por hora
                 </span>
-                <span className="text-xl font-extrabold text-amber-400 mt-1 block">
-                  {earningsTodayByApp.avgHourlyEur.toFixed(2).replace('.', ',')} €/h
+                <span
+                  className={`text-xl font-black mt-0.5 block ${
+                    isDaylight ? 'text-slate-900' : 'text-white'
+                  }`}
+                >
+                  {earningsTodayByApp.avgHourlyEur.toFixed(2).replace('.', ',')}{' '}
+                  €/h
                 </span>
               </div>
             </div>
 
-            {/* Progresso da Meta Diária */}
-            <div className="rounded-2xl bg-zinc-950 border border-zinc-800/80 p-3.5 space-y-2">
-              <div className="flex items-center justify-between text-base">
-                <span className="font-bold text-zinc-200">
+            {/* Minimal Progress Bar for Meta Diária (Zero Colored Card Background) */}
+            <div className="pt-1 space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span
+                  className={`font-bold ${
+                    isDaylight ? 'text-slate-700' : 'text-slate-300'
+                  }`}
+                >
                   Meta Diária
                 </span>
-                <span className="font-extrabold text-emerald-400">
+                <span
+                  className={`font-extrabold ${
+                    isDaylight ? 'text-slate-900' : 'text-cyan-400'
+                  }`}
+                >
                   {formatEurPt(earningsTodayByApp.total)} /{' '}
                   {formatEurPt(earningsTodayByApp.goalTargetEur)} (
                   {earningsTodayByApp.goalProgressPct}%)
                 </span>
               </div>
-              <div className="w-full h-3 rounded-full bg-zinc-800 overflow-hidden">
+              <div
+                className={`w-full h-2 rounded-full overflow-hidden ${
+                  isDaylight ? 'bg-slate-200' : 'bg-slate-800'
+                }`}
+              >
                 <div
                   style={{ width: `${earningsTodayByApp.goalProgressPct}%` }}
-                  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                  className="h-full rounded-full bg-cyan-500 transition-all duration-300"
                 />
               </div>
             </div>
@@ -885,7 +981,7 @@ export const ScannerAndSplitModule: React.FC = () => {
       )}
 
       {/* =====================================================================
-          DETAILED EARNINGS MODAL (Full-Height 88vh–92vh + Theme-Aware High Contrast)
+          DETAILED EARNINGS MODAL (Clean Flat Sheet Layout — Zero Excess Boxes & Zero Vibrant Red)
           ===================================================================== */}
       {isEarningsModalOpen && (
         <div
@@ -898,14 +994,11 @@ export const ScannerAndSplitModule: React.FC = () => {
         >
           <div
             style={{
-              backgroundColor: isDaylight ? '#FFFFFF' : '#05070B',
-              borderColor: '#00E5FF',
-              color: isDaylight ? '#090D16' : '#FFFFFF',
-              boxShadow: isDaylight
-                ? '0 20px 50px rgba(15, 23, 42, 0.22)'
-                : '0 20px 50px rgba(0, 229, 255, 0.22)',
+              backgroundColor: isDaylight ? '#FFFFFF' : '#0F172A',
+              borderColor: isDaylight ? '#E2E8F0' : 'rgba(0, 229, 255, 0.28)',
+              color: isDaylight ? '#0F172A' : '#FFFFFF',
             }}
-            className="w-full max-w-md min-h-[84vh] max-h-[92vh] overflow-y-auto rounded-3xl border-2 p-5 flex flex-col justify-between gap-4 cursor-pointer"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border p-5 flex flex-col justify-between gap-5 cursor-pointer shadow-2xl"
             onClick={(e) => {
               e.stopPropagation();
               stopBuddySpeech();
@@ -914,26 +1007,19 @@ export const ScannerAndSplitModule: React.FC = () => {
             title="Toque em qualquer área deste quadro para silenciar a voz imediatamente"
           >
             <div className="space-y-4">
-              {/* Header */}
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <span
-                    style={{
-                      backgroundColor: isDaylight ? '#F0F9FF' : '#0B0F17',
-                      borderColor: '#00E5FF',
-                      color: isDaylight ? '#0284C7' : '#00E5FF',
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-extrabold"
-                  >
-                    💰 Contabilidade Diária
-                  </span>
-                  <h3
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-2xl font-black mt-1.5 leading-snug"
-                  >
-                    Resumo de Ganhos
-                  </h3>
-                </div>
+              {/* Clean Header (No Contabilidade Diária pill) */}
+              <div
+                className={`flex items-center justify-between gap-3 pb-3 border-b ${
+                  isDaylight ? 'border-slate-100' : 'border-slate-800'
+                }`}
+              >
+                <h3
+                  className={`text-2xl font-black tracking-tight leading-snug ${
+                    isDaylight ? 'text-slate-900' : 'text-white'
+                  }`}
+                >
+                  Resumo de Ganhos
+                </h3>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -942,242 +1028,207 @@ export const ScannerAndSplitModule: React.FC = () => {
                     cancelSpeechNow();
                     setIsEarningsModalOpen(false);
                   }}
-                  style={{
-                    backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
-                    borderColor: isDaylight
-                      ? '#CBD5E1'
-                      : 'rgba(0, 229, 255, 0.4)',
-                    color: isDaylight ? '#090D16' : '#FFFFFF',
-                  }}
-                  className="rounded-2xl border px-3.5 py-2 text-lg font-extrabold cursor-pointer shrink-0 transition hover:border-[#00E5FF]"
+                  className={`rounded-xl border px-3 py-1.5 text-base font-bold cursor-pointer shrink-0 transition ${
+                    isDaylight
+                      ? 'bg-slate-50 border-slate-200 text-slate-900 hover:bg-slate-100'
+                      : 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700'
+                  }`}
                 >
                   ✕
                 </button>
               </div>
 
-              {/* 1. Lucro Líquido Total + Bruto vs. Combustível/Desgaste */}
+              {/* 1. Lucro Líquido Hoje + Bruto vs. Custos (Flat Row with Hairline Divider & Slate Grey Costs) */}
               <div
-                style={{
-                  backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
-                  borderColor: '#00E5FF',
-                  color: isDaylight ? '#090D16' : '#FFFFFF',
-                }}
-                className="rounded-3xl border-2 p-4 flex items-center justify-between gap-3 shadow-xs"
+                className={`pb-4 border-b flex items-baseline justify-between gap-3 ${
+                  isDaylight ? 'border-slate-100' : 'border-slate-800'
+                }`}
               >
                 <div>
                   <span
-                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
-                    className="text-base font-extrabold block"
+                    className={`text-sm font-bold block ${
+                      isDaylight ? 'text-slate-600' : 'text-slate-400'
+                    }`}
                   >
                     Lucro Líquido Hoje
                   </span>
                   <span
-                    style={{ color: isDaylight ? '#090D16' : '#00E5FF' }}
-                    className="text-3xl font-black leading-tight block mt-1 whitespace-nowrap"
+                    className={`text-3xl font-black leading-tight block mt-0.5 whitespace-nowrap ${
+                      isDaylight ? 'text-slate-900' : 'text-cyan-400'
+                    }`}
                   >
                     {formatEurPt(earningsTodayByApp.total)}
                   </span>
                 </div>
-                <div className="text-right text-base space-y-1">
+                <div className="text-right text-sm space-y-1">
                   <div
-                    style={{ color: isDaylight ? '#334155' : '#CBD5E1' }}
-                    className="font-bold whitespace-nowrap"
+                    className={`font-medium whitespace-nowrap ${
+                      isDaylight ? 'text-slate-600' : 'text-slate-300'
+                    }`}
                   >
                     Bruto:{' '}
                     <strong
-                      style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                      className="font-black"
+                      className={`font-bold ${
+                        isDaylight ? 'text-slate-900' : 'text-white'
+                      }`}
                     >
                       {formatEurPt(earningsTodayByApp.totalGross)}
                     </strong>
                   </div>
                   <div
-                    style={{ color: isDaylight ? '#DC2626' : '#FB7185' }}
-                    className="font-bold whitespace-nowrap"
+                    className={`text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap ${
+                      isDaylight ? 'text-slate-600' : 'text-slate-400'
+                    }`}
                   >
                     Custos:{' '}
-                    <strong className="font-black">
+                    <strong className="font-semibold">
                       -{formatEurPt(earningsTodayByApp.fuelCostDeducted)}
                     </strong>
                   </div>
                 </div>
               </div>
 
-              {/* 2. Ganhos por Plataforma */}
+              {/* 2. Ganhos por Plataforma (No outer box, no Valor Líquido pill) */}
               <div
-                style={{
-                  backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
-                  borderColor: isDaylight
-                    ? '#CBD5E1'
-                    : 'rgba(0, 229, 255, 0.35)',
-                  color: isDaylight ? '#090D16' : '#FFFFFF',
-                }}
-                className="rounded-3xl border p-4 space-y-3"
+                className={`pb-4 border-b space-y-2 ${
+                  isDaylight ? 'border-slate-100' : 'border-slate-800'
+                }`}
               >
-                <div className="flex items-center justify-between">
-                  <span
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-lg font-black"
-                  >
-                    Ganhos por Plataforma
-                  </span>
-                  <span
-                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
-                    className="text-sm font-extrabold"
-                  >
-                    Valor Líquido
-                  </span>
-                </div>
-                <div
-                  style={{
-                    borderColor: isDaylight
-                      ? '#E2E8F0'
-                      : 'rgba(0, 229, 255, 0.18)',
-                  }}
-                  className="flex items-center justify-between py-2 border-b"
+                <span
+                  className={`text-sm font-bold uppercase tracking-wider block ${
+                    isDaylight ? 'text-slate-500' : 'text-slate-400'
+                  }`}
                 >
-                  <span
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-lg font-extrabold flex items-center gap-2.5"
-                  >
-                    <span className="h-3 w-3 rounded-full bg-[#00E5FF]" />
-                    Uber Eats
-                  </span>
-                  <span
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-xl font-black whitespace-nowrap"
-                  >
-                    {formatEurPt(earningsTodayByApp.uber)}
-                  </span>
-                </div>
+                  Ganhos por Plataforma
+                </span>
                 <div
-                  style={{
-                    borderColor: isDaylight
-                      ? '#E2E8F0'
-                      : 'rgba(0, 229, 255, 0.18)',
-                  }}
-                  className="flex items-center justify-between py-2 border-b"
+                  className={`divide-y ${
+                    isDaylight ? 'divide-slate-100' : 'divide-slate-800/80'
+                  }`}
                 >
-                  <span
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-lg font-extrabold flex items-center gap-2.5"
-                  >
-                    <span className="h-3 w-3 rounded-full bg-[#00B8D4]" />
-                    Glovo
-                  </span>
-                  <span
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-xl font-black whitespace-nowrap"
-                  >
-                    {formatEurPt(earningsTodayByApp.glovo)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <span
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-lg font-extrabold flex items-center gap-2.5"
-                  >
-                    <span className="h-3 w-3 rounded-full bg-[#38BDF8]" />
-                    Bolt Food
-                  </span>
-                  <span
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-xl font-black whitespace-nowrap"
-                  >
-                    {formatEurPt(earningsTodayByApp.bolt)}
-                  </span>
+                  <div className="flex items-center justify-between py-2">
+                    <span
+                      className={`text-base font-bold flex items-center gap-2.5 ${
+                        isDaylight ? 'text-slate-900' : 'text-white'
+                      }`}
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full bg-cyan-500" />
+                      Uber Eats
+                    </span>
+                    <span
+                      className={`text-lg font-black whitespace-nowrap ${
+                        isDaylight ? 'text-slate-900' : 'text-white'
+                      }`}
+                    >
+                      {formatEurPt(earningsTodayByApp.uber)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span
+                      className={`text-base font-bold flex items-center gap-2.5 ${
+                        isDaylight ? 'text-slate-900' : 'text-white'
+                      }`}
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full bg-cyan-600" />
+                      Glovo
+                    </span>
+                    <span
+                      className={`text-lg font-black whitespace-nowrap ${
+                        isDaylight ? 'text-slate-900' : 'text-white'
+                      }`}
+                    >
+                      {formatEurPt(earningsTodayByApp.glovo)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span
+                      className={`text-base font-bold flex items-center gap-2.5 ${
+                        isDaylight ? 'text-slate-900' : 'text-white'
+                      }`}
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
+                      Bolt Food
+                    </span>
+                    <span
+                      className={`text-lg font-black whitespace-nowrap ${
+                        isDaylight ? 'text-slate-900' : 'text-white'
+                      }`}
+                    >
+                      {formatEurPt(earningsTodayByApp.bolt)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* 3. 4-Card KPI Grid: Entregas, KM Rodados, Média €/km, Ritmo €/h */}
-              <div className="grid grid-cols-2 gap-3">
-                <div
-                  style={{
-                    backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
-                    borderColor: isDaylight
-                      ? '#CBD5E1'
-                      : 'rgba(0, 229, 255, 0.35)',
-                    color: isDaylight ? '#090D16' : '#FFFFFF',
-                  }}
-                  className="rounded-2xl border p-3.5"
-                >
+              {/* 3. Open 2x2 Typographic KPI Grid (Hairline Dividers Only — Zero Individual Boxes) */}
+              <div
+                className={`grid grid-cols-2 divide-x divide-y border-b ${
+                  isDaylight
+                    ? 'divide-slate-100 border-slate-100'
+                    : 'divide-slate-800 border-slate-800'
+                }`}
+              >
+                <div className="py-3 pr-3">
                   <span
-                    style={{ color: isDaylight ? '#475569' : '#CBD5E1' }}
-                    className="text-sm font-bold block"
+                    className={`text-sm font-medium block ${
+                      isDaylight ? 'text-slate-600' : 'text-slate-400'
+                    }`}
                   >
                     Entregas hoje
                   </span>
                   <span
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-xl font-black mt-1 block whitespace-nowrap"
+                    className={`text-xl font-black mt-0.5 block whitespace-nowrap ${
+                      isDaylight ? 'text-slate-900' : 'text-white'
+                    }`}
                   >
                     {realCompletedDeliveries.length} entregas
                   </span>
                 </div>
-                <div
-                  style={{
-                    backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
-                    borderColor: isDaylight
-                      ? '#CBD5E1'
-                      : 'rgba(0, 229, 255, 0.35)',
-                    color: isDaylight ? '#090D16' : '#FFFFFF',
-                  }}
-                  className="rounded-2xl border p-3.5"
-                >
+                <div className="py-3 pl-3">
                   <span
-                    style={{ color: isDaylight ? '#475569' : '#CBD5E1' }}
-                    className="text-sm font-bold block"
+                    className={`text-sm font-medium block ${
+                      isDaylight ? 'text-slate-600' : 'text-slate-400'
+                    }`}
                   >
                     Distância hoje
                   </span>
                   <span
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-xl font-black mt-1 block whitespace-nowrap"
+                    className={`text-xl font-black mt-0.5 block whitespace-nowrap ${
+                      isDaylight ? 'text-slate-900' : 'text-white'
+                    }`}
                   >
                     {earningsTodayByApp.totalKm.toFixed(1)} km
                   </span>
                 </div>
-                <div
-                  style={{
-                    backgroundColor: isDaylight ? '#F0F9FF' : '#0B0F17',
-                    borderColor: '#00E5FF',
-                    color: isDaylight ? '#090D16' : '#FFFFFF',
-                  }}
-                  className="rounded-2xl border p-3.5"
-                >
+                <div className="py-3 pr-3">
                   <span
-                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
-                    className="text-sm font-extrabold block"
+                    className={`text-sm font-medium block ${
+                      isDaylight ? 'text-slate-600' : 'text-slate-400'
+                    }`}
                   >
                     Média Líquida
                   </span>
                   <span
-                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
-                    className="text-xl font-black mt-1 block whitespace-nowrap"
+                    className={`text-xl font-black mt-0.5 block whitespace-nowrap ${
+                      isDaylight ? 'text-cyan-700' : 'text-cyan-400'
+                    }`}
                   >
                     {earningsTodayByApp.avgNetPerKm.toFixed(2).replace('.', ',')}{' '}
                     €/km
                   </span>
                 </div>
-                <div
-                  style={{
-                    backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
-                    borderColor: isDaylight
-                      ? '#CBD5E1'
-                      : 'rgba(0, 229, 255, 0.35)',
-                    color: isDaylight ? '#090D16' : '#FFFFFF',
-                  }}
-                  className="rounded-2xl border p-3.5"
-                >
+                <div className="py-3 pl-3">
                   <span
-                    style={{ color: isDaylight ? '#475569' : '#CBD5E1' }}
-                    className="text-sm font-bold block"
+                    className={`text-sm font-medium block ${
+                      isDaylight ? 'text-slate-600' : 'text-slate-400'
+                    }`}
                   >
                     Média por Hora
                   </span>
                   <span
-                    style={{ color: isDaylight ? '#090D16' : '#00E5FF' }}
-                    className="text-xl font-black mt-1 block whitespace-nowrap"
+                    className={`text-xl font-black mt-0.5 block whitespace-nowrap ${
+                      isDaylight ? 'text-slate-900' : 'text-white'
+                    }`}
                   >
                     {earningsTodayByApp.avgHourlyEur.toFixed(2).replace('.', ',')}{' '}
                     €/h
@@ -1185,78 +1236,66 @@ export const ScannerAndSplitModule: React.FC = () => {
                 </div>
               </div>
 
-              {/* 4. Meta Diária % + Última Entrega */}
-              <div
-                style={{
-                  backgroundColor: isDaylight ? '#F8FAFC' : '#0B0F17',
-                  borderColor: isDaylight
-                    ? '#CBD5E1'
-                    : 'rgba(0, 229, 255, 0.35)',
-                  color: isDaylight ? '#090D16' : '#FFFFFF',
-                }}
-                className="rounded-3xl border p-4 space-y-2.5"
-              >
-                <div className="flex items-center justify-between text-base gap-2">
+              {/* 4. Meta Diária % + Última Entrega (Flat Sheet Section — No Box) */}
+              <div className="pt-1 space-y-2">
+                <div className="flex items-center justify-between text-sm gap-2">
                   <span
-                    style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="font-black"
+                    className={`font-bold ${
+                      isDaylight ? 'text-slate-700' : 'text-slate-300'
+                    }`}
                   >
-                    🎯 Meta Diária ({earningsTodayByApp.goalProgressPct}%)
+                    Meta Diária ({earningsTodayByApp.goalProgressPct}%)
                   </span>
                   <span
-                    style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
-                    className="font-black whitespace-nowrap"
+                    className={`font-black whitespace-nowrap ${
+                      isDaylight ? 'text-slate-900' : 'text-cyan-400'
+                    }`}
                   >
                     {formatEurPt(earningsTodayByApp.total)} /{' '}
                     {formatEurPt(earningsTodayByApp.goalTargetEur)}
                   </span>
                 </div>
                 <div
-                  style={{
-                    backgroundColor: isDaylight ? '#E2E8F0' : '#1E293B',
-                  }}
-                  className="w-full h-3 rounded-full overflow-hidden"
+                  className={`w-full h-2 rounded-full overflow-hidden ${
+                    isDaylight ? 'bg-slate-200' : 'bg-slate-800'
+                  }`}
                 >
                   <div
                     style={{
                       width: `${earningsTodayByApp.goalProgressPct}%`,
-                      backgroundColor: '#00E5FF',
                     }}
-                    className="h-full rounded-full transition-all duration-300"
+                    className="h-full rounded-full bg-cyan-500 transition-all duration-300"
                   />
                 </div>
                 {earningsTodayByApp.lastDelivery ? (
                   <div
-                    style={{
-                      borderColor: isDaylight
-                        ? '#E2E8F0'
-                        : 'rgba(0, 229, 255, 0.2)',
-                    }}
-                    className="pt-2 border-t flex items-center justify-between gap-2 text-base"
+                    className={`pt-2 flex items-center justify-between gap-2 text-sm ${
+                      isDaylight ? 'text-slate-600' : 'text-slate-400'
+                    }`}
                   >
-                    <span
-                      style={{ color: isDaylight ? '#334155' : '#CBD5E1' }}
-                      className="truncate font-bold"
-                    >
+                    <span className="truncate font-medium">
                       Última ({earningsTodayByApp.lastDelivery.platform}):{' '}
                       <strong
-                        style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                        className="font-black"
+                        className={`font-bold ${
+                          isDaylight ? 'text-slate-900' : 'text-white'
+                        }`}
                       >
                         {earningsTodayByApp.lastDelivery.segment}
                       </strong>
                     </span>
                     <span
-                      style={{ color: isDaylight ? '#0284C7' : '#00E5FF' }}
-                      className="font-black shrink-0 whitespace-nowrap"
+                      className={`font-black shrink-0 whitespace-nowrap ${
+                        isDaylight ? 'text-cyan-700' : 'text-cyan-400'
+                      }`}
                     >
                       +{formatEurPt(earningsTodayByApp.lastDelivery.netProfitEur)}
                     </span>
                   </div>
                 ) : (
                   <div
-                    style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
-                    className="pt-1.5 text-sm font-bold"
+                    className={`pt-1 text-sm font-medium ${
+                      isDaylight ? 'text-slate-500' : 'text-slate-400'
+                    }`}
                   >
                     Última entrega: Nenhuma entrega registada no turno de hoje.
                   </div>
@@ -1264,7 +1303,7 @@ export const ScannerAndSplitModule: React.FC = () => {
               </div>
             </div>
 
-            {/* 5. Larger, Ergonomic Fechar Resumo Button */}
+            {/* 5. Ergonomic Fechar Resumo Button */}
             <button
               type="button"
               onClick={(e) => {
@@ -1273,11 +1312,7 @@ export const ScannerAndSplitModule: React.FC = () => {
                 cancelSpeechNow();
                 setIsEarningsModalOpen(false);
               }}
-              style={{
-                backgroundColor: '#00E5FF',
-                color: '#05070B',
-              }}
-              className="py-4 text-lg font-black rounded-2xl w-full shadow-lg cursor-pointer transition active:scale-[0.99]"
+              className="py-3.5 text-base font-black rounded-2xl w-full bg-slate-900 text-cyan-400 border border-cyan-500/30 shadow-md cursor-pointer transition active:scale-[0.99]"
             >
               Fechar Resumo
             </button>
