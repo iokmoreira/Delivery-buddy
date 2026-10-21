@@ -82,6 +82,26 @@ export const ScannerAndSplitModule: React.FC = () => {
   const [isEarningsModalOpen, setIsEarningsModalOpen] =
     useState<boolean>(false);
 
+  // Intercept Smart Back ("↩ Voltar") when Resumo de Ganhos modal or Weight Editor is open
+  useEffect(() => {
+    const handleSmartBack = (ev: Event) => {
+      if (isEarningsModalOpen) {
+        stopBuddySpeech();
+        cancelSpeechNow();
+        setIsEarningsModalOpen(false);
+        ev.preventDefault();
+        return;
+      }
+      if (showWeightEditor) {
+        setShowWeightEditor(false);
+        ev.preventDefault();
+      }
+    };
+    window.addEventListener('buddy-smart-back', handleSmartBack);
+    return () =>
+      window.removeEventListener('buddy-smart-back', handleSmartBack);
+  }, [isEarningsModalOpen, showWeightEditor, cancelSpeechNow]);
+
   // Mode B when a real order is active; Mode A when idle (no active order)
   const hasActiveOrder =
     !activeScannedOffer.id.startsWith('PRESET-') ||

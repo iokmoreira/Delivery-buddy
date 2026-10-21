@@ -1815,45 +1815,52 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Primary Weather Metrics */}
+                {/* Primary Weather Metrics — Clean 2-Row Stacked Layout (Zero Text Overlap) */}
                 <div
                   style={{
                     backgroundColor: cardBg,
                     borderColor: cardBorder,
                   }}
-                  className="rounded-2xl border-2 p-4 flex items-center justify-between gap-3 shadow-md"
+                  className="rounded-2xl border-2 p-4 shadow-md"
                 >
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <span className="text-5xl select-none shrink-0">
-                      {amaranteLiveWeather.conditionEmoji}
-                    </span>
-                    <div className="min-w-0">
+                  {/* Row 1 (Full Width): Weather Icon + Bold Temperature + Full Condition Badge on Right */}
+                  <div className="flex items-center justify-between gap-3 w-full">
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-4xl sm:text-5xl select-none shrink-0 leading-none">
+                        {amaranteLiveWeather.conditionEmoji}
+                      </span>
                       <div
                         style={{ color: primaryText }}
-                        className="text-3xl font-black tracking-tight"
+                        className="text-3xl sm:text-4xl font-black tracking-tight whitespace-nowrap"
                       >
                         {isLoadingAmaranteWeather
                           ? '...'
                           : `${amaranteLiveWeather.temperatureC.toFixed(1)} °C`}
                       </div>
-                      <div
-                        style={{ color: neonText }}
-                        className="text-base sm:text-lg font-extrabold mt-0.5"
-                      >
-                        {amaranteLiveWeather.conditionLabel}
-                      </div>
+                    </div>
+                    <div
+                      style={{
+                        backgroundColor: pillBg,
+                        borderColor: subtleBorder,
+                        color: neonText,
+                      }}
+                      className="rounded-xl border px-3 py-1.5 text-sm sm:text-base font-extrabold text-right leading-snug"
+                    >
+                      {amaranteLiveWeather.conditionLabel}
                     </div>
                   </div>
-                  <div className="text-right space-y-2 shrink-0">
+
+                  {/* Row 2 (2 Equal Columns): Chuva & Vento Side by Side */}
+                  <div className="grid grid-cols-2 gap-2 mt-3">
                     <div
                       style={{
                         backgroundColor: pillBg,
                         borderColor: subtleBorder,
                         color: primaryText,
                       }}
-                      className="rounded-xl border px-3 py-1.5 text-sm sm:text-base font-extrabold whitespace-nowrap"
+                      className="rounded-xl border px-3 py-2 text-sm sm:text-base font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
                     >
-                      💧 Chuva:{' '}
+                      <span>💧 Chuva:</span>
                       <span style={{ color: neonText }}>
                         {amaranteLiveWeather.rainMm.toFixed(1)} mm
                       </span>
@@ -1864,9 +1871,9 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
                         borderColor: subtleBorder,
                         color: primaryText,
                       }}
-                      className="rounded-xl border px-3 py-1.5 text-sm sm:text-base font-extrabold whitespace-nowrap"
+                      className="rounded-xl border px-3 py-2 text-sm sm:text-base font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
                     >
-                      💨 Vento:{' '}
+                      <span>💨 Vento:</span>
                       <span style={{ color: primaryText }}>
                         {amaranteLiveWeather.windSpeedKmh.toFixed(0)} km/h
                       </span>

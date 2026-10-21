@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ScanLine,
+  Home,
+  User,
   MapPinned,
-  Wallet,
-  SlidersHorizontal,
+  CornerUpLeft,
 } from 'lucide-react';
 import { AppTabId } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
 import { playBuddyOpenChime } from '../services/voiceEngine';
 
-const CURRENT_OTA_BUILD_VERSION = 'v3.5.0-translator-libras';
+const CURRENT_OTA_BUILD_VERSION = 'v3.6.0-neural-perfil';
 const LAST_SEEN_OTA_BUILD_KEY = 'buddy_last_seen_ota_build_v1';
 const PENDING_OTA_TOAST_KEY = 'buddy_pending_ota_toast_v1';
 
@@ -17,6 +17,7 @@ export const CockpitNavigation: React.FC = () => {
   const {
     activeTab,
     setActiveTab,
+    handleSmartBackNavigation,
     viewMode,
     setCourierWorkspaceSection,
     themeMode,
@@ -112,24 +113,26 @@ export const CockpitNavigation: React.FC = () => {
       };
 
   const bottomNavItems: {
-    id: AppTabId;
+    id: AppTabId | 'voltar_smart';
     label: string;
     section?: 'AREA_PRIVADA' | 'AREA_PUBLICA_SOCIAL';
     icon: React.ReactNode;
-    isSecondaryGroup?: boolean;
+    isPerfilHub?: boolean;
     isCenterHighlight?: boolean;
+    isSmartBack?: boolean;
   }[] = [
     {
       id: 'scanner',
       label: 'Início',
       section: 'AREA_PRIVADA',
-      icon: <ScanLine className="h-4 w-4 shrink-0" />,
+      icon: <Home className="h-4 w-4 shrink-0" />,
     },
     {
-      id: 'financas',
-      label: 'Finanças',
+      id: 'menu_mais',
+      label: 'Perfil',
       section: 'AREA_PRIVADA',
-      icon: <Wallet className="h-4 w-4 shrink-0" />,
+      icon: <User className="h-4 w-4 shrink-0" />,
+      isPerfilHub: true,
     },
     {
       id: 'walkietalkie',
@@ -145,15 +148,16 @@ export const CockpitNavigation: React.FC = () => {
       icon: <MapPinned className="h-4 w-4 shrink-0" />,
     },
     {
-      id: 'menu_mais',
-      label: 'Ajustes',
-      icon: <SlidersHorizontal className="h-4 w-4 shrink-0" />,
-      isSecondaryGroup: true,
+      id: 'voltar_smart',
+      label: 'Voltar',
+      icon: <CornerUpLeft className="h-4 w-4 shrink-0" />,
+      isSmartBack: true,
     },
   ];
 
-  const isMenuMaisActive =
+  const isPerfilHubActive =
     activeTab === 'menu_mais' ||
+    activeTab === 'financas' ||
     activeTab === 'voz_suporte' ||
     activeTab === 'reclamacoes' ||
     activeTab === 'calculadora';
@@ -171,9 +175,11 @@ export const CockpitNavigation: React.FC = () => {
         className="max-w-[440px] mx-auto backdrop-blur-md border-t px-2 py-1 grid grid-cols-5 gap-1 items-center pointer-events-auto transition-colors shadow-2xl"
       >
         {bottomNavItems.map((item) => {
-          const isActive = item.isSecondaryGroup
-            ? isMenuMaisActive
-            : activeTab === item.id;
+          const isActive = item.isSmartBack
+            ? false
+            : item.isPerfilHub
+              ? isPerfilHubActive
+              : activeTab === item.id;
 
           if (item.isCenterHighlight) {
             return (
@@ -214,7 +220,7 @@ export const CockpitNavigation: React.FC = () => {
                     if (item.section) {
                       setCourierWorkspaceSection(item.section);
                     }
-                    setActiveTab(item.id);
+                    setActiveTab(item.id as AppTabId);
                   }}
                   style={{
                     backgroundColor: 'transparent',
@@ -260,10 +266,14 @@ export const CockpitNavigation: React.FC = () => {
               key={item.id}
               type="button"
               onClick={() => {
+                if (item.isSmartBack) {
+                  handleSmartBackNavigation();
+                  return;
+                }
                 if (item.section) {
                   setCourierWorkspaceSection(item.section);
                 }
-                setActiveTab(item.id);
+                setActiveTab(item.id as AppTabId);
               }}
               style={{
                 backgroundColor: isActive ? '#0B0F17' : 'transparent',
@@ -274,7 +284,7 @@ export const CockpitNavigation: React.FC = () => {
                     ? '#475569'
                     : '#94A3B8',
               }}
-              className={`rounded-xl py-1.5 px-1 flex flex-col items-center justify-center gap-0.5 transition cursor-pointer border ${
+              className={`rounded-xl py-1.5 px-1 flex flex-col items-center justify-center gap-0.5 transition cursor-pointer border active:scale-95 ${
                 isActive ? 'font-extrabold shadow-xs' : 'font-semibold'
               }`}
             >

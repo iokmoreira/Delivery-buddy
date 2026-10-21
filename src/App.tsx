@@ -856,8 +856,9 @@ const AppCockpitShell: React.FC = () => {
                   {activeTab === 'scanner' && <ScannerAndSplitModule />}
                   {activeTab === 'walkietalkie' && <WalkieTalkieAndSosModule />}
                   {activeTab === 'radar' && <ShiftRadarModule />}
-                  {activeTab === 'financas' && <FinanceGoalsAndRewardsModule />}
-                  {activeTab === 'menu_mais' && <MenuMaisHubView />}
+                  {(activeTab === 'menu_mais' || activeTab === 'financas') && (
+                    <MenuMaisHubView />
+                  )}
                   {activeTab === 'voz_suporte' && (
                     <VoiceCopilotAndSupportMacrosModule />
                   )}

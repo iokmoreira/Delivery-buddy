@@ -48,6 +48,7 @@ import {
   getOrCreatePersistentCourierUuid,
 } from '../services/geminiAgent';
 import { useEstafetas } from '../context/EstafetasContext';
+import { FinanceGoalsAndRewardsModule } from './FinanceGoalsAndRewardsModule';
 import { AlertVoiceMessagesCustomizationPanel } from './VoiceCopilotAndSupportMacrosModule';
 import { EvidentiaryArchiveVaultSection } from './ComplaintsAndRouteTrapsModule';
 import {
@@ -1541,6 +1542,7 @@ type AjustesSubPageId =
 
 export const MenuMaisHubView: React.FC = () => {
   const {
+    activeTab,
     setActiveTab,
     openWelcomeTour,
     isAppPaused,
@@ -1843,6 +1845,51 @@ export const MenuMaisHubView: React.FC = () => {
     useState<boolean>(false);
   const [isShiftDrawerOpen, setIsShiftDrawerOpen] = useState<boolean>(false);
 
+  // Intercept Smart Back ("↩ Voltar") when any local modal or sub-page inside Perfil is open
+  useEffect(() => {
+    const handleSmartBack = (ev: Event) => {
+      if (isLiveSupportModalOpen) {
+        setIsLiveSupportModalOpen(false);
+        ev.preventDefault();
+        return;
+      }
+      if (isDirectApkShareModalOpen) {
+        setIsDirectApkShareModalOpen(false);
+        ev.preventDefault();
+        return;
+      }
+      if (isHubSelectorModalOpen) {
+        setIsHubSelectorModalOpen(false);
+        ev.preventDefault();
+        return;
+      }
+      if (isShiftDrawerOpen) {
+        setIsShiftDrawerOpen(false);
+        ev.preventDefault();
+        return;
+      }
+      if (subPage !== 'LISTA_PRINCIPAL') {
+        setSubPage('LISTA_PRINCIPAL');
+        ev.preventDefault();
+        return;
+      }
+      if (openAccordion !== null) {
+        setOpenAccordion(null);
+        ev.preventDefault();
+      }
+    };
+    window.addEventListener('buddy-smart-back', handleSmartBack);
+    return () =>
+      window.removeEventListener('buddy-smart-back', handleSmartBack);
+  }, [
+    isLiveSupportModalOpen,
+    isDirectApkShareModalOpen,
+    isHubSelectorModalOpen,
+    isShiftDrawerOpen,
+    subPage,
+    openAccordion,
+  ]);
+
   const toggleAccordionCard = (
     cardId: 'PERFIL' | 'VOZ_BOLINHA' | 'CENTRO_FINANCAS' | 'SEGURANCA_SISTEMA'
   ) => {
@@ -1924,7 +1971,7 @@ export const MenuMaisHubView: React.FC = () => {
             className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 flex items-center gap-1 cursor-pointer shrink-0"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Voltar a Ajustes</span>
+            <span>Voltar a Perfil</span>
           </button>
           <span className="text-xs font-extrabold text-zinc-200 text-right leading-snug">
             {subPageTitleMap[subPage]}
@@ -1942,9 +1989,67 @@ export const MenuMaisHubView: React.FC = () => {
     );
   }
 
+  const isFinancasSubTab = activeTab === 'financas';
+
   return (
     <div className="space-y-3">
-      {/* 1. VERY TOP OF AJUSTES: 🚪 Terminar Sessão / Trocar Conta */}
+      {/* TOP SEGMENTED SWITCHER INSIDE PERFIL: Tab A (👤 Meu Perfil & Ajustes) | Tab B (💶 Finanças & Metas) */}
+      <div
+        style={{
+          backgroundColor: themeMode === 'DAYLIGHT' ? '#FFFFFF' : '#0B0F17',
+          borderColor:
+            themeMode === 'DAYLIGHT' ? '#CBD5E1' : 'rgba(0, 229, 255, 0.35)',
+        }}
+        className="rounded-2xl border p-1.5 grid grid-cols-2 gap-1.5 shadow-sm"
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab('menu_mais')}
+          style={{
+            backgroundColor: !isFinancasSubTab
+              ? '#00E5FF'
+              : themeMode === 'DAYLIGHT'
+                ? '#F8FAFC'
+                : '#111827',
+            borderColor: !isFinancasSubTab ? '#00E5FF' : 'transparent',
+            color: !isFinancasSubTab
+              ? '#090D16'
+              : themeMode === 'DAYLIGHT'
+                ? '#334155'
+                : '#CBD5E1',
+          }}
+          className="rounded-xl border py-2.5 px-2 text-xs sm:text-sm font-black tracking-tight flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+        >
+          <span>👤 Meu Perfil &amp; Ajustes</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('financas')}
+          style={{
+            backgroundColor: isFinancasSubTab
+              ? '#00E5FF'
+              : themeMode === 'DAYLIGHT'
+                ? '#F8FAFC'
+                : '#111827',
+            borderColor: isFinancasSubTab ? '#00E5FF' : 'transparent',
+            color: isFinancasSubTab
+              ? '#090D16'
+              : themeMode === 'DAYLIGHT'
+                ? '#334155'
+                : '#CBD5E1',
+          }}
+          className="rounded-xl border py-2.5 px-2 text-xs sm:text-sm font-black tracking-tight flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+        >
+          <span>💶 Finanças &amp; Metas</span>
+        </button>
+      </div>
+
+      {isFinancasSubTab ? (
+        <FinanceGoalsAndRewardsModule />
+      ) : (
+        <>
+          {/* 1. VERY TOP OF AJUSTES: 🚪 Terminar Sessão / Trocar Conta */}
       <button
         type="button"
         onClick={logoutSession}
@@ -3639,6 +3744,8 @@ export const MenuMaisHubView: React.FC = () => {
             )}
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

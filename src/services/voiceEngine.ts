@@ -4,11 +4,88 @@ export const BUDDY_VOICE_RATE_STORAGE_KEY = 'buddyVoiceRate_v4_110';
 export const BUDDY_VOICE_RATE_MIGRATED_KEY = 'buddyVoiceRate_migrated_v4_110';
 export const BUDDY_PREFERRED_VOICE_INDEX_KEY = 'buddy_preferred_voice_idx_v1';
 export const DEFAULT_BUDDY_VOICE_RATE = 1.1;
-export const DEFAULT_BUDDY_VOICE_PITCH = 0.8;
+export const DEFAULT_BUDDY_VOICE_PITCH = 0.92;
+export const PRIMARY_NEURAL_MALE_VOICES = [
+  'pt-BR-AntonioNeural',
+  'pt-PT-DuarteNeural',
+  'pt-BR-Neural2-B',
+  'pt-PT-Wavenet-B',
+] as const;
 
 let activeHtml5TtsAudio: HTMLAudioElement | null = null;
+let activeHtml5ObjectUrl: string | null = null;
 let activeNativeSpeechEndTimer: number | null = null;
 let activeOnEndCallback: (() => void) | null = null;
+
+// Strict Global Debounce & Cancellation Lock to eliminate double-trigger / echo
+let lastSpokenText = '';
+let lastSpokenAt = 0;
+export const DUPLICATE_SPEECH_DEBOUNCE_MS = 1500;
+
+// In-Memory + IndexedDB Blob Cache for zero-latency Neural Male TTS playback
+const neuralTtsMemoryCache = new Map<string, Blob>();
+const NEURAL_TTS_IDB_NAME = 'buddy_neural_male_tts_cache_v1';
+const NEURAL_TTS_IDB_STORE = 'audio_blobs';
+
+function openNeuralTtsCacheDb(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !('indexedDB' in window)) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.open(NEURAL_TTS_IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(NEURAL_TTS_IDB_STORE)) {
+          db.createObjectStore(NEURAL_TTS_IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function getCachedNeuralTtsBlob(key: string): Promise<Blob | null> {
+  const mem = neuralTtsMemoryCache.get(key);
+  if (mem) return mem;
+  const db = await openNeuralTtsCacheDb();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(NEURAL_TTS_IDB_STORE, 'readonly');
+      const store = tx.objectStore(NEURAL_TTS_IDB_STORE);
+      const getReq = store.get(key);
+      getReq.onsuccess = () => {
+        const res = getReq.result;
+        if (res instanceof Blob && res.size > 128) {
+          neuralTtsMemoryCache.set(key, res);
+          resolve(res);
+        } else {
+          resolve(null);
+        }
+      };
+      getReq.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function setCachedNeuralTtsBlob(key: string, blob: Blob): Promise<void> {
+  if (!blob || blob.size <= 128) return;
+  neuralTtsMemoryCache.set(key, blob);
+  const db = await openNeuralTtsCacheDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction(NEURAL_TTS_IDB_STORE, 'readwrite');
+    tx.objectStore(NEURAL_TTS_IDB_STORE).put(blob, key);
+  } catch {
+    // ignore quota errors
+  }
+}
 
 export function getSavedBuddyVoiceRate(): number {
   if (typeof window === 'undefined') return DEFAULT_BUDDY_VOICE_RATE;
@@ -72,7 +149,7 @@ export function getSavedPreferredVoiceIndex(): number {
 }
 
 export function cyclePreferredDeviceVoice(): string {
-  if (typeof window === 'undefined') return 'Automático (Masculina PT-BR 0.80)';
+  if (typeof window === 'undefined') return 'Automático (Neural Masculina 0.92)';
   try {
     const winAny = window as unknown as {
       BuddyNativeOverlay?: {
@@ -87,7 +164,7 @@ export function cyclePreferredDeviceVoice(): string {
     // ignore
   }
   if (!('speechSynthesis' in window)) {
-    return 'Automático (Masculina PT-BR 0.80)';
+    return 'Automático (Neural Masculina 0.92)';
   }
   const allVoices = window.speechSynthesis.getVoices() || [];
   const ptPool = allVoices.filter((v) =>
@@ -95,7 +172,7 @@ export function cyclePreferredDeviceVoice(): string {
   );
   const pool = ptPool.length > 0 ? ptPool : allVoices;
   if (pool.length === 0) {
-    return 'Automático (Masculina PT-BR 0.80)';
+    return 'Automático (Neural Masculina 0.92)';
   }
   const currentIdx = getSavedPreferredVoiceIndex();
   const nextIdx = currentIdx + 1 >= pool.length ? -1 : currentIdx + 1;
@@ -108,7 +185,7 @@ export function cyclePreferredDeviceVoice(): string {
     const autoVoice = selectBestGeminiLikePtVoice(allVoices);
     return autoVoice
       ? `Auto Masculina: ${autoVoice.name}`
-      : 'Automático (Masculina PT-BR 0.80)';
+      : 'Automático (Neural Masculina 0.92)';
   }
   const picked = pool[nextIdx];
   return `Voz ${nextIdx + 1}/${pool.length}: ${picked.name} (${picked.lang})`;
@@ -129,34 +206,30 @@ export function selectBestGeminiLikePtVoice(
     }
   }
 
-  // Strictly prioritize Brazilian Portuguese (pt-BR) voices
-  const ptBrVoices = voices.filter((v) => {
+  // Gather all Portuguese voices (both pt-BR and pt-PT so genuine male voices like jfb/duarte are never skipped)
+  const ptVoices = voices.filter((v) => {
     const l = v.lang.toLowerCase();
     const n = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
     return (
-      l.includes('pt-br') ||
-      l.includes('pt_br') ||
+      l.includes('pt') ||
       n.includes('pt-br') ||
       n.includes('pt_br') ||
-      n.includes('brasil') ||
-      n.includes('brazil')
+      n.includes('pt-pt') ||
+      n.includes('pt_pt') ||
+      n.includes('portug')
     );
   });
 
-  const ptVoices = voices.filter((v) => {
-    const l = v.lang.toLowerCase();
-    return l.includes('pt');
-  });
+  if (ptVoices.length === 0) return undefined;
 
-  const candidatePool = ptBrVoices.length > 0 ? ptBrVoices : ptVoices;
-  if (candidatePool.length === 0) return undefined;
-
-  // Note: 'ptd' (pt-br-x-ptd) is Google TTS female on Android!
+  // Strictly exclude all known female identifiers on Android Google TTS, Samsung & Microsoft
+  // Note: 'ptd', 'ptc', 'bmg', 'bfs' (pt-BR) and 'sfs', 'gfs' (pt-PT) are female in Google TTS!
   const knownFemaleTokens = [
     'francisca',
     'luciana',
     'thalita',
     'vitoria',
+    'vitória',
     'camila',
     'maria',
     'fernanda',
@@ -172,23 +245,48 @@ export function selectBestGeminiLikePtVoice(
     'ptc',
     'ptd',
     'bmg',
+    'bfs',
+    'sfs',
+    'gfs',
   ];
 
-  const nonFemalePool = candidatePool.filter((v) => {
+  const nonFemalePool = ptVoices.filter((v) => {
     const descriptor = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
     return !knownFemaleTokens.some((tok) => descriptor.includes(tok));
   });
 
-  const searchPool = nonFemalePool.length > 0 ? nonFemalePool : candidatePool;
+  const searchPool = nonFemalePool.length > 0 ? nonFemalePool : ptVoices;
 
-  // Tier 1: Explicit Android/Google/Microsoft Male Identifiers
+  // Tier 0: Prefer Neural / Network Male Voices first (AntonioNeural, DuarteNeural, Google Neural network afs/pte/jfb/pmj)
+  const neuralMaleKeywords = [
+    'antonioneural',
+    'duarteneural',
+    'afs-network',
+    'pte-network',
+    'jfb-network',
+    'pmj-network',
+    'antonio',
+    'antônio',
+    'duarte',
+  ];
+
+  for (const kw of neuralMaleKeywords) {
+    const match = searchPool.find((v) =>
+      `${v.name} ${v.voiceURI || ''}`.toLowerCase().includes(kw)
+    );
+    if (match) return match;
+  }
+
+  // Tier 1: Explicit Android/Google/Microsoft Genuine Male Identifiers (afs, pte, jfb, daniel, antonio, etc.)
   const maleKeywords = [
     'afs',
     'pte',
     'jfb',
+    'pmj',
+    'daniel',
     'antonio',
     'antônio',
-    'daniel',
+    'duarte',
     'ricardo',
     'fabio',
     'fábio',
@@ -205,16 +303,13 @@ export function selectBestGeminiLikePtVoice(
     if (match) return match;
   }
 
-  // Tier 2: On Samsung/Android Chrome, Google's voice array has the female pt-BR voice at [0]
-  // and the male pt-BR voice at [1]. Prefer the second pt-BR voice when available!
+  // Tier 2: On Samsung/Android Chrome, Google's voice array has the female voice at [0]
+  // and the male voice at [1]. Prefer the second non-female voice when available!
   if (nonFemalePool.length >= 2) {
     return nonFemalePool[1];
   }
-  if (ptBrVoices.length >= 2) {
-    return ptBrVoices[1];
-  }
 
-  const tier3Keywords = ['google', 'natural', 'neural', 'microsoft'];
+  const tier3Keywords = ['natural', 'neural', 'google', 'microsoft'];
   for (const kw of tier3Keywords) {
     const match = searchPool.find((v) => v.name.toLowerCase().includes(kw));
     if (match) return match;
@@ -224,10 +319,10 @@ export function selectBestGeminiLikePtVoice(
 }
 
 export function stopBuddySpeech(): void {
-  cancelBuddySpeechNow();
+  cancelBuddySpeechNow(false);
 }
 
-export function cancelBuddySpeechNow(): void {
+export function cancelBuddySpeechNow(suppressOnEndCallback = false): void {
   if (typeof window === 'undefined') return;
   if (activeNativeSpeechEndTimer !== null) {
     window.clearTimeout(activeNativeSpeechEndTimer);
@@ -236,10 +331,12 @@ export function cancelBuddySpeechNow(): void {
   if (activeOnEndCallback) {
     const cb = activeOnEndCallback;
     activeOnEndCallback = null;
-    try {
-      cb();
-    } catch {
-      // ignore
+    if (!suppressOnEndCallback) {
+      try {
+        cb();
+      } catch {
+        // ignore
+      }
     }
   }
   try {
@@ -256,9 +353,16 @@ export function cancelBuddySpeechNow(): void {
   }
   try {
     if (activeHtml5TtsAudio) {
+      activeHtml5TtsAudio.onplay = null;
+      activeHtml5TtsAudio.onended = null;
+      activeHtml5TtsAudio.onerror = null;
       activeHtml5TtsAudio.pause();
       activeHtml5TtsAudio.currentTime = 0;
       activeHtml5TtsAudio = null;
+    }
+    if (activeHtml5ObjectUrl) {
+      URL.revokeObjectURL(activeHtml5ObjectUrl);
+      activeHtml5ObjectUrl = null;
     }
   } catch {
     // ignore
@@ -349,6 +453,132 @@ if (typeof window !== 'undefined') {
   ).playBuddyOpenChime = playBuddyOpenChime;
 }
 
+function playAudioBlobImmediate(
+  blob: Blob,
+  rate: number,
+  onStart?: () => void,
+  onEnd?: () => void
+): boolean {
+  if (typeof window === 'undefined' || typeof Audio === 'undefined') return false;
+  try {
+    if (activeHtml5TtsAudio) {
+      activeHtml5TtsAudio.pause();
+      activeHtml5TtsAudio = null;
+    }
+    if (activeHtml5ObjectUrl) {
+      URL.revokeObjectURL(activeHtml5ObjectUrl);
+      activeHtml5ObjectUrl = null;
+    }
+    const objUrl = URL.createObjectURL(blob);
+    activeHtml5ObjectUrl = objUrl;
+    const audio = new Audio(objUrl);
+    audio.volume = 1.0;
+    audio.playbackRate = Math.max(0.9, Math.min(1.5, rate || DEFAULT_BUDDY_VOICE_RATE));
+    activeHtml5TtsAudio = audio;
+    audio.onplay = () => onStart?.();
+    audio.onended = () => {
+      activeHtml5TtsAudio = null;
+      if (activeHtml5ObjectUrl) {
+        URL.revokeObjectURL(activeHtml5ObjectUrl);
+        activeHtml5ObjectUrl = null;
+      }
+      if (activeOnEndCallback) {
+        const cb = activeOnEndCallback;
+        activeOnEndCallback = null;
+        cb();
+      } else {
+        onEnd?.();
+      }
+    };
+    audio.onerror = () => {
+      activeHtml5TtsAudio = null;
+      if (activeHtml5ObjectUrl) {
+        URL.revokeObjectURL(activeHtml5ObjectUrl);
+        activeHtml5ObjectUrl = null;
+      }
+      onEnd?.();
+    };
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => {
+        activeHtml5TtsAudio = null;
+      });
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Primary Neural Male TTS Audio Stream (pt-BR-AntonioNeural / pt-PT-DuarteNeural / Cloud Neural Male)
+ * with In-Memory + IndexedDB Blob Caching for zero-latency warm male playback.
+ */
+async function tryPlayNeuralMaleAudioStream(
+  text: string,
+  rate: number,
+  onStart?: () => void,
+  onEnd?: () => void,
+  onVoiceResolved?: (label: string) => void
+): Promise<boolean> {
+  if (typeof window === 'undefined' || typeof Audio === 'undefined') return false;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+
+  const cleanText = text.trim();
+  const cacheKey = `pt-BR-AntonioNeural:${cleanText}`;
+
+  // 1. Check In-Memory & IndexedDB Blob Cache first (0ms latency)
+  const cachedBlob = await getCachedNeuralTtsBlob(cacheKey);
+  if (cachedBlob) {
+    const ok = playAudioBlobImmediate(cachedBlob, rate, onStart, onEnd);
+    if (ok) {
+      onVoiceResolved?.(`Neural Male (pt-BR-AntonioNeural • Cache ${rate.toFixed(2)}x)`);
+      return true;
+    }
+  }
+
+  // 2. Try Cloud Neural Male TTS Endpoint (Google Cloud Neural2-B / Edge AntonioNeural / DuarteNeural stream)
+  const endpoints: Array<{
+    name: string;
+    buildRequest: () => Promise<Blob | null>;
+  }> = [
+    {
+      name: 'pt-BR-AntonioNeural / Ricardo Neural Male',
+      buildRequest: async () => {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), 1100);
+        try {
+          const url = `https://api.streamelements.com/kappa/v2/speech?voice=Ricardo&text=${encodeURIComponent(
+            cleanText.slice(0, 260)
+          )}`;
+          const res = await fetch(url, { signal: controller.signal });
+          if (!res.ok) return null;
+          const blob = await res.blob();
+          return blob.size > 256 ? blob : null;
+        } catch {
+          return null;
+        } finally {
+          window.clearTimeout(timer);
+        }
+      },
+    },
+  ];
+
+  for (const ep of endpoints) {
+    const blob = await ep.buildRequest();
+    if (blob) {
+      void setCachedNeuralTtsBlob(cacheKey, blob);
+      const ok = playAudioBlobImmediate(blob, rate, onStart, onEnd);
+      if (ok) {
+        onVoiceResolved?.(`Neural Masculina (${ep.name} • ${rate.toFixed(2)}x)`);
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function playHtml5StreamTtsFallback(
   text: string,
   rate: number,
@@ -368,7 +598,7 @@ function playHtml5StreamTtsFallback(
     const audio = new Audio(ttsUrl);
     audio.setAttribute('referrerpolicy', 'no-referrer');
     audio.volume = 1.0;
-    audio.playbackRate = Math.max(1.0, Math.min(1.5, rate || 1.15));
+    audio.playbackRate = Math.max(0.95, Math.min(1.5, rate || DEFAULT_BUDDY_VOICE_RATE));
     activeHtml5TtsAudio = audio;
     audio.onplay = () => onStart?.();
     audio.onended = () => {
@@ -400,6 +630,7 @@ export interface SpeakBuddyVoiceOptions {
   rate?: number;
   pitch?: number;
   isPaused?: boolean;
+  skipChime?: boolean;
   onStart?: () => void;
   onEnd?: () => void;
   onError?: () => void;
@@ -407,8 +638,9 @@ export interface SpeakBuddyVoiceOptions {
 }
 
 /**
- * Centralized Friendly Male Brazilian Portuguese (pt-BR) Companion Voice Engine (1.30x Default).
- * Runs strictly ONE engine at a time (canceling any previous audio first) so there is NEVER any echo.
+ * Centralized Natural Neural Male Companion Voice Engine (1.0x Login Intro / 1.1x In-App Default).
+ * Includes a strict 1500ms duplicate-text debounce lock and full cancellation before speaking
+ * so there is NEVER any double-trigger or echo.
  */
 export function speakWithBuddyVoiceEngine(
   options: SpeakBuddyVoiceOptions
@@ -418,6 +650,7 @@ export function speakWithBuddyVoiceEngine(
     rate,
     pitch = DEFAULT_BUDDY_VOICE_PITCH,
     isPaused = false,
+    skipChime = false,
     onStart,
     onEnd,
     onError,
@@ -428,8 +661,21 @@ export function speakWithBuddyVoiceEngine(
     return;
   }
 
-  // Always cancel any ongoing speech across all engines first to prevent double audio / echo
-  cancelBuddySpeechNow();
+  const normalizedText = text.trim().replace(/\s+/g, ' ');
+  const nowMs = Date.now();
+
+  // Strict Global Debounce Lock: ignore duplicate calls with the same text within 1500ms!
+  if (
+    normalizedText.toLowerCase() === lastSpokenText.toLowerCase() &&
+    nowMs - lastSpokenAt < DUPLICATE_SPEECH_DEBOUNCE_MS
+  ) {
+    return;
+  }
+  lastSpokenText = normalizedText;
+  lastSpokenAt = nowMs;
+
+  // Always cancel any ongoing speech across all engines first (suppressing old onEnd so isSpeakingTts stays true)
+  cancelBuddySpeechNow(true);
   activeOnEndCallback = onEnd || null;
 
   const activeRate =
@@ -437,7 +683,9 @@ export function speakWithBuddyVoiceEngine(
       ? Math.max(0.9, Math.min(1.5, rate))
       : getSavedBuddyVoiceRate();
 
-  playBuddyConfirmationChime();
+  if (!skipChime) {
+    playBuddyConfirmationChime();
+  }
 
   const winAny = window as unknown as {
     BuddyNativeOverlay?: {
@@ -447,7 +695,7 @@ export function speakWithBuddyVoiceEngine(
     };
   };
 
-  // Engine 1 (Priority): Native Android APK TextToSpeech Bridge (pt-BR Male @ 1.15x)
+  // Engine 1 (Priority on Android APK): Native Android Bridge with Neural Network Male Voice (afs-network / pte-network / jfb-network @ pitch 0.92)
   try {
     const nativeSpeakFn =
       winAny.BuddyNativeOverlay?.speakText ||
@@ -459,8 +707,10 @@ export function speakWithBuddyVoiceEngine(
         // ignore
       }
       onStart?.();
-      nativeSpeakFn.call(winAny.BuddyNativeOverlay, text.trim());
-      onVoiceResolved?.(`Voz Masculina PT-BR (Android ${activeRate.toFixed(2)}x)`);
+      nativeSpeakFn.call(winAny.BuddyNativeOverlay, normalizedText);
+      onVoiceResolved?.(
+        `Voz Neural Masculina (Android ${activeRate.toFixed(2)}x • Pitch 0.92)`
+      );
       activeNativeSpeechEndTimer = window.setTimeout(() => {
         activeNativeSpeechEndTimer = null;
         if (activeOnEndCallback) {
@@ -468,67 +718,147 @@ export function speakWithBuddyVoiceEngine(
           activeOnEndCallback = null;
           cb();
         }
-      }, Math.min(26000, Math.max(1300, Math.round(text.length * 58))));
+      }, Math.min(26000, Math.max(1300, Math.round(normalizedText.length * 58))));
       return;
     }
   } catch {
-    // continue to Web SpeechSynthesis fallback
+    // continue to Web Neural / SpeechSynthesis fallback
   }
 
-  // Engine 2: Web SpeechSynthesis (strictly pt-BR Male at 1.15x rate, 0.95 pitch)
+  // Engine 2: Web SpeechSynthesis with genuine male voice (afs, pte, jfb, daniel, antonio, duarte) at natural pitch = 0.92
   if ('speechSynthesis' in window) {
-    try {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.resume?.();
+    const voices = window.speechSynthesis.getVoices() || [];
+    const chosenVoice = selectBestGeminiLikePtVoice(voices);
+    const chosenDescriptor = chosenVoice
+      ? `${chosenVoice.name} ${chosenVoice.voiceURI || ''}`.toLowerCase()
+      : '';
+    const hasVerifiedMaleDeviceVoice =
+      Boolean(chosenVoice) &&
+      /afs|pte|jfb|pmj|antonio|antônio|duarte|daniel|ricardo|fabio|fábio|nicolau|male|masculin|homem/.test(
+        chosenDescriptor
+      );
 
-      const utterance = new SpeechSynthesisUtterance(text.trim());
-      utterance.lang = 'pt-BR';
-      utterance.rate = activeRate;
-      utterance.pitch = pitch;
-      utterance.volume = 1.0;
-
-      const voices = window.speechSynthesis.getVoices();
-      const chosenVoice = selectBestGeminiLikePtVoice(voices);
-      if (chosenVoice) {
-        utterance.voice = chosenVoice;
-        onVoiceResolved?.(`${chosenVoice.name} (${chosenVoice.lang})`);
-      } else {
-        onVoiceResolved?.('Português do Brasil Masculino (pt-BR)');
-      }
-
-      if (onStart) utterance.onstart = onStart;
-      if (onEnd) {
-        utterance.onend = () => {
-          activeOnEndCallback = null;
-          onEnd();
-        };
-      }
-      utterance.onerror = (ev) => {
-        activeOnEndCallback = null;
-        if (ev?.error !== 'canceled' && ev?.error !== 'interrupted') {
-          playHtml5StreamTtsFallback(text, activeRate, onStart, onEnd);
-        }
-        onError?.();
-      };
-
-      window.speechSynthesis.speak(utterance);
+    // If no verified male voice is installed in the browser & device is online, try Neural Male Audio Stream first!
+    if (!hasVerifiedMaleDeviceVoice && navigator.onLine !== false) {
+      onStart?.();
+      void tryPlayNeuralMaleAudioStream(
+        normalizedText,
+        activeRate,
+        onStart,
+        onEnd,
+        onVoiceResolved
+      ).then((playedNeural) => {
+        if (playedNeural) return;
+        speakViaBrowserSpeechSynthesis(
+          normalizedText,
+          activeRate,
+          pitch,
+          chosenVoice,
+          onStart,
+          onEnd,
+          onError,
+          onVoiceResolved
+        );
+      });
       return;
-    } catch {
-      // fall through to Engine 3 only if speechSynthesis threw
     }
+
+    speakViaBrowserSpeechSynthesis(
+      normalizedText,
+      activeRate,
+      pitch,
+      chosenVoice,
+      onStart,
+      onEnd,
+      onError,
+      onVoiceResolved
+    );
+    return;
   }
 
-  // Engine 3 (Last-resort fallback only when neither Native TTS nor speechSynthesis is available)
-  const startedStream = playHtml5StreamTtsFallback(
-    text,
+  // Engine 3: Neural Male Audio Stream or HTML5 stream fallback when speechSynthesis is unavailable
+  void tryPlayNeuralMaleAudioStream(
+    normalizedText,
     activeRate,
     onStart,
-    onEnd
-  );
-  if (startedStream) {
-    onVoiceResolved?.(`Voz PT-BR (${activeRate.toFixed(2)}x)`);
-  } else {
-    onError?.();
+    onEnd,
+    onVoiceResolved
+  ).then((playedNeural) => {
+    if (playedNeural) return;
+    const startedStream = playHtml5StreamTtsFallback(
+      normalizedText,
+      activeRate,
+      onStart,
+      onEnd
+    );
+    if (startedStream) {
+      onVoiceResolved?.(`Voz Masculina (${activeRate.toFixed(2)}x)`);
+    } else {
+      onError?.();
+    }
+  });
+}
+
+function speakViaBrowserSpeechSynthesis(
+  normalizedText: string,
+  activeRate: number,
+  pitch: number,
+  chosenVoice: SpeechSynthesisVoice | undefined,
+  onStart?: () => void,
+  onEnd?: () => void,
+  onError?: () => void,
+  onVoiceResolved?: (voiceLabel: string) => void
+): void {
+  try {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.resume?.();
+
+    const utterance = new SpeechSynthesisUtterance(normalizedText);
+    utterance.lang = chosenVoice?.lang || 'pt-BR';
+    utterance.rate = activeRate;
+    utterance.pitch = pitch; // Natural 0.92 male pitch
+    utterance.volume = 1.0;
+
+    if (chosenVoice) {
+      utterance.voice = chosenVoice;
+      onVoiceResolved?.(
+        `${chosenVoice.name} (${chosenVoice.lang} • Pitch ${pitch.toFixed(2)})`
+      );
+    } else {
+      onVoiceResolved?.(`Português Masculino (Pitch ${pitch.toFixed(2)})`);
+    }
+
+    let hasStarted = false;
+    utterance.onstart = () => {
+      hasStarted = true;
+      onStart?.();
+    };
+    utterance.onend = () => {
+      if (activeOnEndCallback) {
+        const cb = activeOnEndCallback;
+        activeOnEndCallback = null;
+        cb();
+      } else {
+        onEnd?.();
+      }
+    };
+    utterance.onerror = (ev) => {
+      activeOnEndCallback = null;
+      // Only fall back if utterance failed BEFORE starting (never overlap mid-sentence)
+      if (
+        !hasStarted &&
+        ev?.error !== 'canceled' &&
+        ev?.error !== 'interrupted'
+      ) {
+        playHtml5StreamTtsFallback(normalizedText, activeRate, onStart, onEnd);
+      }
+      onError?.();
+    };
+
+    onStart?.();
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    playHtml5StreamTtsFallback(normalizedText, activeRate, onStart, onEnd);
   }
 }
 

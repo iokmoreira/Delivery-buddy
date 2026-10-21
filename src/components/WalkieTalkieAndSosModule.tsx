@@ -663,7 +663,7 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
       {/* Interactive 45% / 80% Buddy Profile Pop-up */}
       {renderBuddyProfilePopup()}
 
-      {/* Top Bar: Courier Identity & 1-Click Registration / Profile Edit (Fits 100% Inside Card Padding) */}
+      {/* Top Bar: Courier Identity (Profile Editing Lives Exclusively Inside the Perfil Tab) */}
       <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-3 space-y-2.5">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -679,17 +679,9 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
             <span className="text-xs font-extrabold text-zinc-100 truncate">
               {realCourierProfile?.isRegistered && realCourierProfile.name
                 ? `${realCourierProfile.name} (${realCourierProfile.vehicle}) • ${activePlatforms.join(' + ')}`
-                : 'Novo Dispositivo: Toque em "Editar Perfil" para entrar online'}
+                : 'Aceda à aba "Perfil" para gerir a sua conta'}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsCourierRegistrationModalOpen(true)}
-            className="rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-[#00E5FF]/50 text-[#00E5FF] px-2.5 py-1 text-xs font-extrabold flex items-center gap-1 cursor-pointer transition shrink-0"
-          >
-            <UserCheck className="h-3.5 w-3.5 shrink-0" />
-            <span>Editar Perfil</span>
-          </button>
         </div>
 
         <div className="grid grid-cols-3 gap-2">

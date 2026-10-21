@@ -690,14 +690,14 @@ export const AuthAndVerificationGate: React.FC = () => {
           }
           window.speechSynthesis.resume?.();
 
+          const voices = window.speechSynthesis.getVoices();
+          const chosenVoice = selectBestGeminiLikePtVoice(voices);
           const utterance = new SpeechSynthesisUtterance(sentence);
-          utterance.lang = 'pt-BR';
+          utterance.lang = chosenVoice?.lang || 'pt-BR';
           utterance.rate = LOGIN_INTRO_VOICE_RATE;
           utterance.pitch = DEFAULT_BUDDY_VOICE_PITCH;
           utterance.volume = 1.0;
 
-          const voices = window.speechSynthesis.getVoices();
-          const chosenVoice = selectBestGeminiLikePtVoice(voices);
           if (chosenVoice) {
             utterance.voice = chosenVoice;
           }

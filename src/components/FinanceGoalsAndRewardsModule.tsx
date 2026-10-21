@@ -737,12 +737,12 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
             {/* Daily Goal */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-lg gap-2">
-                <span className="font-bold text-zinc-100 whitespace-nowrap">
+              <div className="flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80 min-w-0">
+                <span className="font-bold text-sm sm:text-base text-zinc-100 whitespace-nowrap shrink-0">
                   Meta Diária
                 </span>
-                <div className="flex items-center gap-1.5 font-bold text-zinc-200">
-                  <span className="whitespace-nowrap">
+                <div className="flex items-center gap-1 font-bold text-zinc-200 min-w-0">
+                  <span className="whitespace-nowrap text-xs sm:text-sm text-zinc-300 shrink-0">
                     {scopedStats.currentDaily.toFixed(2)}{'\u00A0'}€ /
                   </span>
                   <input
@@ -755,9 +755,9 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                     onChange={(e) =>
                       handleGoalChange('DAILY', parseFloat(e.target.value) || 50)
                     }
-                    className="w-20 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-right text-lg font-extrabold text-zinc-100"
+                    className="w-16 rounded-lg bg-zinc-900 border border-zinc-700 px-1.5 py-1 text-center text-sm font-extrabold text-zinc-100 shrink-0"
                   />
-                  <span className="whitespace-nowrap">
+                  <span className="whitespace-nowrap shrink-0 text-sm text-emerald-300">
                     € ({scopedStats.dailyPct}%)
                   </span>
                 </div>
@@ -772,12 +772,12 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
             {/* Weekly Goal */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-lg gap-2">
-                <span className="font-bold text-zinc-100 whitespace-nowrap">
+              <div className="flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80 min-w-0">
+                <span className="font-bold text-sm sm:text-base text-zinc-100 whitespace-nowrap shrink-0">
                   Meta Semanal
                 </span>
-                <div className="flex items-center gap-1.5 font-bold text-zinc-200">
-                  <span className="whitespace-nowrap">
+                <div className="flex items-center gap-1 font-bold text-zinc-200 min-w-0">
+                  <span className="whitespace-nowrap text-xs sm:text-sm text-zinc-300 shrink-0">
                     {scopedStats.currentWeekly.toFixed(2)}{'\u00A0'}€ /
                   </span>
                   <input
@@ -793,9 +793,9 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                         parseFloat(e.target.value) || 300
                       )
                     }
-                    className="w-20 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-right text-lg font-extrabold text-zinc-100"
+                    className="w-16 rounded-lg bg-zinc-900 border border-zinc-700 px-1.5 py-1 text-center text-sm font-extrabold text-zinc-100 shrink-0"
                   />
-                  <span className="whitespace-nowrap">
+                  <span className="whitespace-nowrap shrink-0 text-sm text-emerald-300">
                     € ({scopedStats.weeklyPct}%)
                   </span>
                 </div>
@@ -810,12 +810,12 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
 
             {/* Monthly Goal */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-lg gap-2">
-                <span className="font-bold text-zinc-100 whitespace-nowrap">
+              <div className="flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80 min-w-0">
+                <span className="font-bold text-sm sm:text-base text-zinc-100 whitespace-nowrap shrink-0">
                   Meta Mensal
                 </span>
-                <div className="flex items-center gap-1.5 font-bold text-zinc-200">
-                  <span className="whitespace-nowrap">
+                <div className="flex items-center gap-1 font-bold text-zinc-200 min-w-0">
+                  <span className="whitespace-nowrap text-xs sm:text-sm text-zinc-300 shrink-0">
                     {scopedStats.currentMonthly.toFixed(2)}{'\u00A0'}€ /
                   </span>
                   <input
@@ -831,9 +831,9 @@ export const FinanceGoalsAndRewardsModule: React.FC = () => {
                         parseFloat(e.target.value) || 1200
                       )
                     }
-                    className="w-24 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-right text-lg font-extrabold text-zinc-100"
+                    className="w-16 rounded-lg bg-zinc-900 border border-zinc-700 px-1.5 py-1 text-center text-sm font-extrabold text-zinc-100 shrink-0"
                   />
-                  <span className="whitespace-nowrap">
+                  <span className="whitespace-nowrap shrink-0 text-sm text-emerald-300">
                     € ({scopedStats.monthlyPct}%)
                   </span>
                 </div>

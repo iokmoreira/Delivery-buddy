@@ -351,6 +351,7 @@ export interface OfferPreferenceVerdict {
 interface EstafetasContextValue {
   activeTab: AppTabId;
   setActiveTab: (tab: AppTabId) => void;
+  handleSmartBackNavigation: () => void;
 
   // Vehicle & Cost Engine
   vehicleProfile: VehicleCostProfile;
@@ -2355,15 +2356,29 @@ export const EstafetasProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsSpeakingTts(false);
   }, []);
 
+  const tabHistoryRef = useRef<AppTabId[]>(['scanner']);
+
   const setActiveTab = useCallback(
     (tab: AppTabId) => {
       cancelSpeechNow();
-      setActiveTabState(tab);
+      setActiveTabState((prev) => {
+        if (prev !== tab) {
+          const hist = tabHistoryRef.current;
+          if (hist[hist.length - 1] !== prev) {
+            hist.push(prev);
+          }
+          if (hist.length > 24) {
+            hist.shift();
+          }
+        }
+        return tab;
+      });
       if (tab === 'walkietalkie' || tab === 'radar') {
         setCourierWorkspaceSectionState('AREA_PUBLICA_SOCIAL');
       } else if (
         tab === 'scanner' ||
         tab === 'financas' ||
+        tab === 'menu_mais' ||
         tab === 'calculadora'
       ) {
         setCourierWorkspaceSectionState('AREA_PRIVADA');
@@ -3498,6 +3513,10 @@ Solicita-se a revisão imediata do cálculo cartográfico deste trecho e o créd
     (text: string) => {
       setLastSpokenTranscript(text);
       isSpeakingTtsRef.current = true;
+      if (watchdogRestartTimerRef.current !== null) {
+        window.clearTimeout(watchdogRestartTimerRef.current);
+        watchdogRestartTimerRef.current = null;
+      }
       // Stop Web SpeechRecognition if running in web mode so mic doesn't hear Buddy's own voice
       if (activeSpeechRecRef.current) {
         try {
@@ -13715,11 +13734,118 @@ Este pedido exige obrigatoriamente ${recommendedCouriers}+ estafetas (Divisão d
     );
   }, [isProdMode, state.complaints]);
 
+  const handleSmartBackNavigation = useCallback(() => {
+    cancelSpeechNow();
+
+    // 1. Allow any open local component modal/sub-screen (e.g., Resumo de Ganhos, Perfil sub-pages) to close itself first
+    if (typeof window !== 'undefined') {
+      const ev = new CustomEvent('buddy-smart-back', { cancelable: true });
+      const shouldContinue = window.dispatchEvent(ev);
+      if (!shouldContinue) {
+        return;
+      }
+    }
+
+    // 2. Close any open global modal or drawer
+    if (isAmaranteWeatherModalOpen) {
+      setIsAmaranteWeatherModalOpen(false);
+      return;
+    }
+    if (isTranslatorModalOpen) {
+      setIsTranslatorModalOpen(false);
+      return;
+    }
+    if (isAccessibilityDiagnosticOpen) {
+      setIsAccessibilityDiagnosticOpen(false);
+      return;
+    }
+    if (isOfficialManualModalOpen) {
+      setIsOfficialManualModalOpen(false);
+      return;
+    }
+    if (isCourierRegistrationModalOpen) {
+      setIsCourierRegistrationModalOpen(false);
+      return;
+    }
+    if (isContextualHelpOpen) {
+      setIsContextualHelpOpenState(false);
+      return;
+    }
+    if (isWelcomeTourOpen) {
+      setIsWelcomeTourOpen(false);
+      return;
+    }
+    if (isQuickSummaryOpen) {
+      setIsQuickSummaryOpenState(false);
+      return;
+    }
+    if (showManualInstallGuideModal) {
+      setShowManualInstallGuideModal(false);
+      return;
+    }
+    if (activeBuddyPopupCourierId) {
+      setActiveBuddyPopupCourierId(null);
+      return;
+    }
+    if (activeDirectChatCourierId) {
+      setActiveDirectChatCourierId(null);
+      return;
+    }
+    if (ephemeralVoiceOverlay?.isOpen) {
+      setEphemeralVoiceOverlay(null);
+      return;
+    }
+    if (liveVoiceTranscription?.isOpen) {
+      setLiveVoiceTranscription(null);
+      return;
+    }
+    if (viewMode === 'PAINEL_ADMIN') {
+      setViewModeState('MODO_ESTAFETA');
+      return;
+    }
+
+    // 3. Otherwise pop the previous tab from tabHistoryRef (defaulting to 'scanner' / Início)
+    setActiveTabState((current) => {
+      const hist = tabHistoryRef.current;
+      while (hist.length > 0) {
+        const popped = hist.pop();
+        if (popped && popped !== current) {
+          if (popped === 'walkietalkie' || popped === 'radar') {
+            setCourierWorkspaceSectionState('AREA_PUBLICA_SOCIAL');
+          } else {
+            setCourierWorkspaceSectionState('AREA_PRIVADA');
+          }
+          return popped;
+        }
+      }
+      setCourierWorkspaceSectionState('AREA_PRIVADA');
+      return 'scanner';
+    });
+  }, [
+    cancelSpeechNow,
+    isAmaranteWeatherModalOpen,
+    setIsAmaranteWeatherModalOpen,
+    isTranslatorModalOpen,
+    isAccessibilityDiagnosticOpen,
+    isOfficialManualModalOpen,
+    isCourierRegistrationModalOpen,
+    isContextualHelpOpen,
+    isWelcomeTourOpen,
+    isQuickSummaryOpen,
+    showManualInstallGuideModal,
+    activeBuddyPopupCourierId,
+    activeDirectChatCourierId,
+    ephemeralVoiceOverlay,
+    liveVoiceTranscription,
+    viewMode,
+  ]);
+
   return (
     <EstafetasContext.Provider
       value={{
         activeTab,
         setActiveTab,
+        handleSmartBackNavigation,
         vehicleProfile: state.vehicleProfile,
         updateVehicleProfile,
         totalCostPerKm,
