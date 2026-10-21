@@ -44,6 +44,8 @@ import {
   CloudRain,
   BatteryCharging,
   FolderOpen,
+  Ghost,
+  Sparkles,
 } from 'lucide-react';
 import {
   CONTEXTUAL_HELP_BY_TAB,
@@ -90,9 +92,15 @@ import {
 } from './AuthAndVerificationGate';
 import {
   getCourierContactAndOptInPreferences,
+  isCourierAdminByName,
   publishLearnedOrderTemplateToCloud,
   saveCourierContactAndOptInPreferences,
 } from '../services/cloudSync';
+import {
+  BUDDY_AVATARS,
+  getBuddyAvatarForState,
+  useBuddySkin,
+} from '../utils/buddyAvatars';
 import {
   learnFromScannedOrderSample,
   loadLearnedPlatformTemplates,
@@ -1555,6 +1563,7 @@ type AjustesSubPageId =
   | 'RAIO_MAPA';
 
 export const MenuMaisHubView: React.FC = () => {
+  const [buddySkin, setBuddySkinPref] = useBuddySkin();
   const {
     activeTab,
     setActiveTab,
@@ -2011,6 +2020,9 @@ export const MenuMaisHubView: React.FC = () => {
       ? 'AUSENTE'
       : 'ONLINE';
 
+  const isPresidenteProfile = isCourierAdminByName(currentUserName);
+  const perfilStatusAvatarUrl = getBuddyAvatarForState(currentShiftMode, buddySkin);
+
   const handleSelectShiftMode = (mode: 'ONLINE' | 'AUSENTE' | 'NINJA') => {
     if (mode === 'ONLINE') {
       if (isAppPaused) toggleAppPauseMode();
@@ -2098,19 +2110,31 @@ export const MenuMaisHubView: React.FC = () => {
             {/* User Identity Row: Avatar + Nome, Veículo, Plataformas */}
             <div className="flex items-center justify-between gap-3 min-w-0">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="relative h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF] bg-slate-900 shrink-0 flex items-center justify-center">
-                  {realCourierProfile?.isRegistered &&
-                  realCourierProfile.avatar_url ? (
+                <div className="relative h-12 w-12 shrink-0">
+                  <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF] bg-black flex items-center justify-center">
                     <img
-                      src={realCourierProfile.avatar_url}
+                      src={
+                        realCourierProfile?.isRegistered &&
+                        realCourierProfile.avatar_url
+                          ? realCourierProfile.avatar_url
+                          : isPresidenteProfile
+                            ? BUDDY_AVATARS.presidente
+                            : perfilStatusAvatarUrl
+                      }
                       alt={currentUserName}
                       className="h-full w-full object-cover"
                     />
-                  ) : (
-                    <span className="text-sm font-extrabold text-white">
-                      {currentUserName.slice(0, 2).toUpperCase()}
-                    </span>
-                  )}
+                  </div>
+                  {/* Live 3D Buddy status badge (Presidente crown for Admin) */}
+                  <img
+                    src={
+                      isPresidenteProfile && currentShiftMode === 'ONLINE'
+                        ? BUDDY_AVATARS.presidente
+                        : perfilStatusAvatarUrl
+                    }
+                    alt="Estado do Buddy"
+                    className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full object-cover bg-black ring-2 ring-[#0F172A] shadow-sm"
+                  />
                 </div>
                 <div className="min-w-0">
                   <span
@@ -2231,6 +2255,57 @@ export const MenuMaisHubView: React.FC = () => {
                   <EyeOff className="h-3.5 w-3.5 shrink-0" />
                   <span>Modo Ninja</span>
                 </button>
+              </div>
+            </div>
+
+            {/* Buddy Visual: live 3D status preview + seasonal skin selector (Padrão | Halloween) */}
+            <div className="pt-2.5 border-t border-slate-800/80 flex items-center gap-3">
+              <div className="h-14 w-14 rounded-xl overflow-hidden bg-black ring-1 ring-[#00E5FF]/40 shrink-0">
+                <img
+                  src={perfilStatusAvatarUrl}
+                  alt="Pré-visualização do Buddy"
+                  className="h-full w-full object-cover scale-110"
+                />
+              </div>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
+                  <span className="text-slate-400">Visual do Buddy</span>
+                  <span className="text-cyan-400 truncate">
+                    {currentShiftMode === 'NINJA'
+                      ? 'Buddy Ninja'
+                      : currentShiftMode === 'AUSENTE'
+                        ? 'Buddy de Costas (Ausente)'
+                        : buddySkin === 'HALLOWEEN'
+                          ? 'Buddy Halloween'
+                          : 'Buddy Explorador'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setBuddySkinPref('DEFAULT')}
+                    className={`rounded-lg py-1.5 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
+                      buddySkin === 'DEFAULT'
+                        ? 'bg-slate-950 border-[#00E5FF] text-[#00E5FF]'
+                        : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                    <span>Padrão</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBuddySkinPref('HALLOWEEN')}
+                    className={`rounded-lg py-1.5 px-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition border ${
+                      buddySkin === 'HALLOWEEN'
+                        ? 'bg-slate-950 border-amber-400 text-amber-300'
+                        : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Ghost className="h-3.5 w-3.5 shrink-0" />
+                    <span>Modo Halloween</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

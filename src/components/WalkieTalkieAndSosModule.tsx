@@ -29,6 +29,8 @@ import {
 import { BuddyChallengePeriod, WalkieChannelId } from '../types/models';
 import { WALKIE_QUICK_MACROS } from '../data/seedData';
 import { useEstafetas } from '../context/EstafetasContext';
+import { isCourierAdminByName } from '../services/cloudSync';
+import { BUDDY_AVATARS } from '../utils/buddyAvatars';
 import { DirectApkShareModal } from './ShiftRadarModule';
 
 export const WalkieTalkieAndSosModule: React.FC = () => {
@@ -304,17 +306,24 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
               {/* Row 2: Avatar + Courier Name + AMIGO Badge + Vehicle & Tenure */}
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative h-12 w-12 rounded-full overflow-hidden border-2 border-[#00E5FF] bg-slate-900 shrink-0 flex items-center justify-center">
-                  {popupCourier.avatarPhotoUrl ? (
+                  {isCourierAdminByName(popupCourier.callsign) ? (
+                    <img
+                      src={BUDDY_AVATARS.presidente}
+                      alt={`${popupCourier.callsign} (Presidente)`}
+                      className="w-full h-full object-cover bg-black"
+                    />
+                  ) : popupCourier.avatarPhotoUrl ? (
                     <img
                       src={popupCourier.avatarPhotoUrl}
                       alt={popupCourier.callsign}
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <span className="text-sm font-extrabold text-white">
-                      {popupCourier.avatarInitials ||
-                        popupCourier.callsign.slice(0, 2).toUpperCase()}
-                    </span>
+                    <img
+                      src={BUDDY_AVATARS.online}
+                      alt={popupCourier.callsign}
+                      className="w-full h-full object-cover bg-black scale-110"
+                    />
                   )}
                 </div>
                 <div className="min-w-0 flex-1 space-y-0.5">
@@ -974,17 +983,24 @@ export const WalkieTalkieAndSosModule: React.FC = () => {
                               : 'border-zinc-700 bg-zinc-950'
                           }`}
                         >
-                          {courier.avatarPhotoUrl ? (
+                          {isCourierAdminByName(courier.callsign) ? (
+                            <img
+                              src={BUDDY_AVATARS.presidente}
+                              alt={`${courier.callsign} (Presidente)`}
+                              className={`w-full h-full object-cover bg-black ${isOffline ? 'grayscale opacity-60' : ''}`}
+                            />
+                          ) : courier.avatarPhotoUrl ? (
                             <img
                               src={courier.avatarPhotoUrl}
                               alt={courier.callsign}
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <span className="text-xs font-extrabold text-white">
-                              {courier.avatarInitials ||
-                                courier.callsign.slice(0, 2).toUpperCase()}
-                            </span>
+                            <img
+                              src={isPaused ? BUDDY_AVATARS.ausente : BUDDY_AVATARS.online}
+                              alt={courier.callsign}
+                              className={`w-full h-full object-cover bg-black scale-110 ${isOffline ? 'grayscale opacity-60' : ''}`}
+                            />
                           )}
                           <span
                             className={`absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border border-zinc-950 ${

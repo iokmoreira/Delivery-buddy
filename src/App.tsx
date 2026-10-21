@@ -16,6 +16,7 @@ import { FinanceGoalsAndRewardsModule } from './components/FinanceGoalsAndReward
 import { FloatingBubbleAndQuickMenu } from './components/FloatingBubbleAndQuickMenu';
 import { VoiceCopilotAndSupportMacrosModule } from './components/VoiceCopilotAndSupportMacrosModule';
 import { AdminBackofficeModule } from './components/AdminBackofficeModule';
+import { BuddyLaunchController } from './components/BuddyLaunchAnimation';
 import {
   ChromeMascotGalleryBridgeView,
   InteractiveManualAndHelpDrawer,
@@ -302,6 +303,8 @@ const AppCockpitShell: React.FC = () => {
           }
         `}</style>
       )}
+      {/* 60fps Buddy Multi-Platform Jetpack Launch (1x per session + replay via header Buddy icon) */}
+      <BuddyLaunchController disabled={isBubbleMinimized} />
       <div
         className={
           isBubbleMinimized

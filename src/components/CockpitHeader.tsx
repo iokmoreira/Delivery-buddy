@@ -1,6 +1,7 @@
 import React from 'react';
 import { useEstafetas } from '../context/EstafetasContext';
 import { isCourierAdminByName } from '../services/cloudSync';
+import { BUDDY_AVATARS, requestBuddyLaunchReplay } from '../utils/buddyAvatars';
 
 export const CockpitHeader: React.FC = () => {
   const {
@@ -10,7 +11,6 @@ export const CockpitHeader: React.FC = () => {
     toggleAnonymousMode,
     themeMode,
     currentMascotState,
-    currentMascotImageUrl,
     setViewMode,
     setActiveTab,
     realCourierProfile,
@@ -25,7 +25,7 @@ export const CockpitHeader: React.FC = () => {
     '';
   const isFounderAdmin = isCourierAdminByName(activeCourierName);
 
-  // Cycle: 🟢 Online -> ⚪ Pausa -> 🥷 Anónimo -> 🟢 Online
+  // Cycle: Online -> Ausente (Pausa) -> Modo Ninja (Anónimo) -> Online
   const handleCycleHeaderStatus = () => {
     if (!isAppPaused && !isAnonymous) {
       // Online -> Pausa
@@ -43,7 +43,7 @@ export const CockpitHeader: React.FC = () => {
   };
 
   const statusDotClass = isAnonymous
-    ? 'bg-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.8)]'
+    ? 'bg-[#0F172A] ring-1 ring-[#00E5FF]'
     : currentMascotState === 'DELIVERY'
       ? 'bg-[#00E5FF] animate-ping shadow-[0_0_10px_rgba(0,229,255,0.95)]'
       : isAppPaused
@@ -60,26 +60,32 @@ export const CockpitHeader: React.FC = () => {
       className="sticky top-0 z-40 backdrop-blur-md border-b px-3.5 py-1.5 transition-colors"
     >
       <div className="flex items-center justify-between gap-2">
-        {/* Left: Clickable 3-State Transparent 3D Robot Mascot (52px) + Delivery Buddy Title with 8px Status Dot */}
-        <button
-          type="button"
-          onClick={handleCycleHeaderStatus}
-          title="Toque para alternar estado: Online → Pausa → Anónimo"
-          style={{
-            backgroundColor: 'transparent',
-            color: isDaylight ? '#090D16' : '#FFFFFF',
-          }}
-          className="flex items-center gap-2 min-w-0 text-left cursor-pointer group border-0 p-0"
-        >
-          <div className="relative h-[52px] w-[52px] shrink-0 flex items-center justify-center transition-transform group-hover:scale-105">
+        {/* Left: Tappable 3D Buddy brand icon (replays the Jetpack Launch animation) + Delivery Buddy title (tap cycles status) */}
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={requestBuddyLaunchReplay}
+            title="Toque no Buddy para ver a animação de lançamento"
+            aria-label="Rever animação de lançamento do Buddy"
+            className="relative h-[46px] w-[46px] shrink-0 rounded-full overflow-hidden bg-black ring-[1.5px] ring-[#00E5FF]/60 shadow-[0_0_10px_rgba(0,229,255,0.35)] cursor-pointer transition-transform hover:scale-105 active:scale-95 border-0 p-0"
+          >
             <img
-              src={currentMascotImageUrl}
+              src={BUDDY_AVATARS.flying}
               alt="Buddy Mascote"
-              className="h-full w-full object-contain select-none pointer-events-none"
+              className="h-full w-full object-cover scale-110 select-none pointer-events-none"
             />
-          </div>
+          </button>
 
-          <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={handleCycleHeaderStatus}
+            title="Toque para alternar estado: Online → Ausente → Modo Ninja"
+            style={{
+              backgroundColor: 'transparent',
+              color: isDaylight ? '#090D16' : '#FFFFFF',
+            }}
+            className="flex items-center gap-2 min-w-0 text-left cursor-pointer border-0 p-0"
+          >
             <span
               style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
               className="text-lg font-extrabold tracking-tight whitespace-nowrap"
@@ -89,8 +95,8 @@ export const CockpitHeader: React.FC = () => {
             <span
               className={`h-2 w-2 rounded-full shrink-0 ${statusDotClass}`}
             />
-          </div>
-        </button>
+          </button>
+        </div>
 
         {/* Right: Sleek Obsidian Black & Light Neon Blue Admin Capsule — STRICTLY restricted to Founder ('Presidente') */}
         {isFounderAdmin && (

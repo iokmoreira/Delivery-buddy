@@ -7,6 +7,17 @@ import {
   Plus,
   X,
   Check,
+  Circle,
+  Lock,
+  Smartphone,
+  Download,
+  Copy,
+  CheckCircle2,
+  Compass,
+  Save,
+  Bell,
+  Footprints,
+  Trash2,
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -93,7 +104,8 @@ export const OperationalHubSelectorModal: React.FC<{
         <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 px-3 py-1 text-base font-bold text-emerald-300">
-              📍 Raio Operacional Regional
+              <MapPin className="h-4 w-4 shrink-0" />
+              Raio Operacional Regional
             </span>
             <h3 className="text-xl font-extrabold text-white mt-2">
               Selecionar Centro Operacional (35 km)
@@ -120,14 +132,18 @@ export const OperationalHubSelectorModal: React.FC<{
           >
             <div>
               <div className="text-lg font-extrabold text-white flex items-center gap-2">
-                <span>🔵 Amarante &amp; Tâmega</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Circle className="h-3.5 w-3.5 shrink-0 fill-[#00E5FF] text-[#00E5FF]" />
+                  Amarante &amp; Tâmega
+                </span>
               </div>
               <p className="text-base font-bold text-emerald-300 mt-0.5">
                 Ativo — Raio 35 km (Bloqueio Regional)
               </p>
             </div>
-            <span className="rounded-xl bg-emerald-500 text-zinc-950 px-3 py-1.5 text-base font-extrabold shrink-0">
-              Ativo ✓
+            <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 text-zinc-950 px-3 py-1.5 text-base font-extrabold shrink-0">
+              Ativo
+              <Check className="h-4 w-4 shrink-0" />
             </span>
           </button>
 
@@ -138,8 +154,9 @@ export const OperationalHubSelectorModal: React.FC<{
               className="w-full rounded-2xl bg-zinc-950/90 border border-zinc-800 p-3.5 text-left flex items-center justify-between gap-3 opacity-80"
             >
               <div>
-                <div className="text-lg font-bold text-zinc-200">
-                  🔒 {hub.name}
+                <div className="text-lg font-bold text-zinc-200 inline-flex items-center gap-1.5">
+                  <Lock className="h-4 w-4 shrink-0 text-zinc-400" />
+                  {hub.name}
                 </div>
                 <p className="text-base font-medium text-zinc-400">
                   {hub.radius} • Expansão Regional
@@ -176,7 +193,7 @@ export const DirectApkShareModal: React.FC<{
   if (!isOpen) return null;
 
   const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(
-    `🤖 Delivery Buddy (Amarante) — Clica aqui para baixar a App direta (.APK sem .ZIP) para Android: ${DIRECT_APK_DOWNLOAD_URL}`
+    `Delivery Buddy (Amarante) — Clica aqui para baixar a App direta (.APK sem .ZIP) para Android: ${DIRECT_APK_DOWNLOAD_URL}`
   )}`;
 
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=10&data=${encodeURIComponent(
@@ -205,7 +222,8 @@ export const DirectApkShareModal: React.FC<{
         <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 px-3 py-1 text-base font-bold text-emerald-300">
-              📲 Download Direto .APK (Sem .ZIP)
+              <Smartphone className="h-4 w-4 shrink-0" />
+              Download Direto .APK (Sem .ZIP)
             </span>
             <h3 className="text-xl font-extrabold text-white mt-2">
               Enviar App a um Colega
@@ -257,7 +275,10 @@ export const DirectApkShareModal: React.FC<{
             }}
             className="w-full rounded-2xl border-2 py-3.5 px-4 text-lg font-extrabold flex items-center justify-center gap-2 shadow-lg cursor-pointer no-underline transition hover:opacity-95"
           >
-            <span>📲 Enviar pelo WhatsApp</span>
+            <span className="inline-flex items-center gap-1.5">
+              <Smartphone className="h-4 w-4 shrink-0" />
+              Enviar pelo WhatsApp
+            </span>
           </a>
 
           <a
@@ -268,7 +289,10 @@ export const DirectApkShareModal: React.FC<{
             style={{ backgroundColor: '#0284c7', color: '#ffffff' }}
             className="w-full rounded-2xl py-3.5 px-4 text-lg font-extrabold flex items-center justify-center gap-2 shadow-lg cursor-pointer no-underline transition hover:opacity-95"
           >
-            <span>⬇️ Baixar APK Direto (Sem .ZIP)</span>
+            <span className="inline-flex items-center gap-1.5">
+              <Download className="h-4 w-4 shrink-0" />
+              Baixar APK Direto (Sem .ZIP)
+            </span>
           </a>
 
           <button
@@ -276,10 +300,15 @@ export const DirectApkShareModal: React.FC<{
             onClick={() => void handleCopyDirectLink()}
             className="w-full rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white py-3.5 px-4 text-lg font-bold flex items-center justify-center gap-2 cursor-pointer transition"
           >
-            <span>
+            <span className="inline-flex items-center gap-1.5">
+              {copiedLink ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-[#00E5FF]" />
+              ) : (
+                <Copy className="h-4 w-4 shrink-0" />
+              )}
               {copiedLink
-                ? '✅ Link Direto Copiado!'
-                : '📋 Copiar Link Direto (.APK)'}
+                ? 'Link Direto Copiado!'
+                : 'Copiar Link Direto (.APK)'}
             </span>
           </button>
         </div>
@@ -324,8 +353,9 @@ export const MapRadiusSettingsSection: React.FC = () => {
         className="w-full rounded-2xl bg-zinc-950 hover:bg-zinc-900 border-2 border-emerald-500/45 p-3.5 flex items-center justify-between gap-2 cursor-pointer transition"
       >
         <div className="text-left">
-          <span className="text-lg font-extrabold text-white block">
-            📍 Centro: Amarante (Raio 35 km)
+          <span className="text-lg font-extrabold text-white flex items-center gap-1.5">
+            <MapPin className="h-4 w-4 shrink-0 text-[#00E5FF]" />
+            Centro: Amarante (Raio 35 km)
           </span>
           <span className="text-base font-medium text-emerald-400 block mt-0.5">
             Toque para ver centros operacionais disponíveis
@@ -440,8 +470,9 @@ export const RoadHazardsSettingsSection: React.FC = () => {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1 space-y-0.5">
-                    <span className="text-xs font-extrabold text-zinc-100 block leading-snug">
-                      ⚠️ {pin.hazardType}
+                    <span className="text-xs font-extrabold text-zinc-100 flex items-center gap-1.5 leading-snug">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                      {pin.hazardType}
                     </span>
                     <span className="text-[11px] text-zinc-300 flex items-start gap-1 leading-snug">
                       <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[#00E5FF]" />
@@ -464,9 +495,10 @@ export const RoadHazardsSettingsSection: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => resolveRoadHazardPin(pin.id)}
-                      className="rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 px-2.5 py-1.5 text-xs font-extrabold cursor-pointer whitespace-nowrap"
+                      className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 px-2.5 py-1.5 text-xs font-extrabold cursor-pointer whitespace-nowrap"
                     >
-                      ✓ Limpo
+                      <Check className="h-3.5 w-3.5 shrink-0" />
+                      Limpo
                     </button>
                   </div>
                 </div>
@@ -1166,7 +1198,7 @@ export const ShiftRadarModule: React.FC = () => {
           if (nowPathMs - lastSpoken > 180000) {
             learnedPathAlertCooldownRef.current[path.id] = nowPathMs;
             setCrosswalkFeedbackBanner(
-              `🚪 ${pTitle}: ${path.entranceNote}`
+              `${pTitle}: ${path.entranceNote}`
             );
             window.setTimeout(() => {
               setCrosswalkFeedbackBanner(null);
@@ -1203,7 +1235,7 @@ export const ShiftRadarModule: React.FC = () => {
     setLearnedPathAddressInput(roadNameLabel || 'Amarante Centro');
     setLearnedPathNoteInput('Entrada pelo portão lateral junto ao Rio Tâmega');
     setCrosswalkFeedbackBanner(
-      '🧭 A gravar caminho GPS até à porta... Conduz até à entrada e toca em Concluir!'
+      'A gravar caminho GPS até à porta... Conduz até à entrada e toca em Concluir!'
     );
   }, [localLiveCoords, roadNameLabel]);
 
@@ -1269,7 +1301,7 @@ export const ShiftRadarModule: React.FC = () => {
     setIsRecordingLearnedPath(false);
     setIsSaveLearnedPathModalOpen(false);
     setCrosswalkFeedbackBanner(
-      `✓ Caminho e entrada guardados: ${cleanTitle} (+15 Coins • Sincronizado na Cloud)`
+      `Caminho e entrada guardados: ${cleanTitle} (+15 Coins • Sincronizado na Cloud)`
     );
     window.setTimeout(() => {
       setCrosswalkFeedbackBanner(null);
@@ -1366,7 +1398,7 @@ export const ShiftRadarModule: React.FC = () => {
     setIsMarkMapModalOpen(false);
 
     setCrosswalkFeedbackBanner(
-      `⚠️ Perigo na via reportado em ${roadNameLabel} (+15 Coins)`
+      `Perigo na via reportado em ${roadNameLabel} (+15 Coins)`
     );
     window.setTimeout(() => {
       setCrosswalkFeedbackBanner(null);
@@ -1388,7 +1420,7 @@ export const ShiftRadarModule: React.FC = () => {
       setAmaranteCrosswalks(getAllAmaranteCrosswalks());
       setIsMarkMapModalOpen(false);
       setCrosswalkFeedbackBanner(
-        `🗑️ Passadeira removida: ${removed.streetLabel}`
+        `Passadeira removida: ${removed.streetLabel}`
       );
       window.setTimeout(() => {
         setCrosswalkFeedbackBanner(null);
@@ -1406,7 +1438,7 @@ export const ShiftRadarModule: React.FC = () => {
       setAmaranteCrosswalks(getAllAmaranteCrosswalks());
       setSelectedCrosswalkForInspect(null);
       setCrosswalkFeedbackBanner(
-        `🗑️ Passadeira removida${streetLabel ? `: ${streetLabel}` : ''}`
+        `Passadeira removida${streetLabel ? `: ${streetLabel}` : ''}`
       );
       window.setTimeout(() => {
         setCrosswalkFeedbackBanner(null);
@@ -2041,7 +2073,7 @@ export const ShiftRadarModule: React.FC = () => {
       const latestPt = recordedPathBreadcrumbs[recordedPathBreadcrumbs.length - 1];
       const recIcon = L.divIcon({
         className: 'buddy-learned-rec-pin',
-        html: `<div style="transform:translate(-50%,-50%);background:#090D16;color:#00E5FF;border:2px solid #00E5FF;border-radius:9999px;padding:2px 7px;font-size:10px;font-weight:900;white-space:nowrap;box-shadow:0 0 12px rgba(0,229,255,0.6);">🧭 A gravar (${recordedPathBreadcrumbs.length} pts)</div>`,
+        html: `<div style="transform:translate(-50%,-50%);background:#090D16;color:#00E5FF;border:2px solid #00E5FF;border-radius:9999px;padding:2px 7px;font-size:10px;font-weight:900;white-space:nowrap;box-shadow:0 0 12px rgba(0,229,255,0.6);">A gravar (${recordedPathBreadcrumbs.length} pts)</div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0],
       });
@@ -2076,7 +2108,7 @@ export const ShiftRadarModule: React.FC = () => {
       const pathIcon = L.divIcon({
         className: 'buddy-learned-path-pin',
         html: `<div title="${pLabel}: ${path.entranceNote}" style="display:flex;align-items:center;gap:4px;transform:translate(-50%,-50%);background:#090D16;color:#00E5FF;border:1.5px solid #00E5FF;border-radius:9999px;padding:2px 7px;font-size:10px;font-weight:900;white-space:nowrap;box-shadow:0 0 10px rgba(0,229,255,0.45);cursor:pointer;">
-          <span>🧭</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/></svg>
           <span style="max-width:110px;overflow:hidden;text-overflow:ellipsis;">${pLabel}</span>
         </div>`,
         iconSize: [0, 0],
@@ -2086,7 +2118,7 @@ export const ShiftRadarModule: React.FC = () => {
       const marker = L.marker([pLat, pLng], { icon: pathIcon });
       marker.on('click', () => {
         setCrosswalkFeedbackBanner(
-          `🧭 ${pLabel}: "${path.entranceNote}" (por ${pTeacher})`
+          `${pLabel}: "${path.entranceNote}" (por ${pTeacher})`
         );
         speakTextPt(
           `Acesso ensinado em ${pLabel}: ${path.entranceNote}`
@@ -2248,7 +2280,7 @@ export const ShiftRadarModule: React.FC = () => {
           ? '#00E5FF'
           : '#00B8D4';
       const statusBadgeLabel = isPendingApproval
-        ? '⏳ Pendente'
+        ? 'Pendente'
         : isFree
           ? 'Online'
           : 'Em Entrega';
@@ -2446,7 +2478,7 @@ export const ShiftRadarModule: React.FC = () => {
           className="absolute inset-0 z-0 h-full w-full"
         />
 
-        {/* TOP-LEFT FLOATING STATUS CAPSULE: Pulsing GPS Radar + Amarante 35km • Online Count + Inline 📍⚙ Hub Button */}
+        {/* TOP-LEFT FLOATING STATUS CAPSULE: Pulsing GPS Radar + Amarante 35km • Online Count + Inline Hub Button */}
         <div
           style={{
             top: '12px',
@@ -2512,7 +2544,7 @@ export const ShiftRadarModule: React.FC = () => {
             {totalOnlineCouriersCount} online
           </span>
 
-          {/* Small Inline 📍⚙ Icon Button to Open Mudar Centro */}
+          {/* Small Inline Icon Button to Open Mudar Centro */}
           <button
             type="button"
             onClick={() => setIsHubSelectorModalOpen(true)}
@@ -2542,7 +2574,7 @@ export const ShiftRadarModule: React.FC = () => {
           </button>
         </div>
 
-        {/* TOP-RIGHT COMPACT 3-ICON MAP VIEW PILL (🎯 Centrar • 🗺️ Camada • ⛶ Ecrã) */}
+        {/* TOP-RIGHT COMPACT 3-ICON MAP VIEW PILL (Centrar • Camada • Ecrã) */}
         <div
           style={{
             top: '12px',
@@ -2557,7 +2589,7 @@ export const ShiftRadarModule: React.FC = () => {
           }}
           className="absolute z-[430] rounded-2xl border-1.5 p-1 flex flex-col items-center gap-1.5 backdrop-blur-md"
         >
-          {/* 1. 🎯 Centrar */}
+          {/* 1. Centrar */}
           <button
             type="button"
             onClick={handleRecenterAndFollowGps}
@@ -2622,7 +2654,7 @@ export const ShiftRadarModule: React.FC = () => {
             </svg>
           </button>
 
-          {/* 2. 🗺️ Camada (Cycles: Mapa Limpo -> 🚦 Trânsito -> 🛰️ Satélite with tiny active label) */}
+          {/* 2. Camada (Cycles: Mapa Limpo -> Trânsito -> Satélite with tiny active label) */}
           <button
             type="button"
             onClick={handleCycleMapLayer}
@@ -2673,7 +2705,7 @@ export const ShiftRadarModule: React.FC = () => {
             </span>
           </button>
 
-          {/* 3. ⛶ Ecrã (Fullscreen Toggle) */}
+          {/* 3. Ecrã (Fullscreen Toggle) */}
           <button
             type="button"
             onClick={handleToggleFullRoadView}
@@ -2722,7 +2754,7 @@ export const ShiftRadarModule: React.FC = () => {
           </button>
         </div>
 
-        {/* BOTTOM-RIGHT DISTINCT "➕ Marcar" ACTION BUTTON (Separated safely away from map view controls) */}
+        {/* BOTTOM-RIGHT DISTINCT "Marcar" ACTION BUTTON (Separated safely away from map view controls) */}
         <div
           style={{
             bottom: hasRealActiveDelivery ? '68px' : '20px',
@@ -2795,8 +2827,9 @@ export const ShiftRadarModule: React.FC = () => {
             <div className="flex items-center gap-2 min-w-0">
               <span className="h-2.5 w-2.5 rounded-full bg-[#00E5FF] animate-ping shrink-0" />
               <div className="min-w-0">
-                <p className="text-xs font-black text-[#00E5FF] truncate">
-                  🧭 A Gravar Caminho GPS ({recordedPathBreadcrumbs.length} pts)
+                <p className="text-xs font-black text-[#00E5FF] truncate flex items-center gap-1.5">
+                  <Compass className="h-3.5 w-3.5 shrink-0" />
+                  A Gravar Caminho GPS ({recordedPathBreadcrumbs.length} pts)
                 </p>
                 <p className="text-[10px] font-bold text-zinc-300 truncate">
                   Conduz até à entrada certa e toca em Guardar
@@ -2807,9 +2840,10 @@ export const ShiftRadarModule: React.FC = () => {
               <button
                 type="button"
                 onClick={handleOpenSaveLearnedPathModal}
-                className="rounded-xl bg-[#00E5FF] text-[#090D16] px-3 py-1.5 text-[11px] font-black cursor-pointer shadow-md"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#00E5FF] text-[#090D16] px-3 py-1.5 text-[11px] font-black cursor-pointer shadow-md"
               >
-                💾 Guardar Caminho
+                <Save className="h-3.5 w-3.5 shrink-0" />
+                Guardar Caminho
               </button>
               <button
                 type="button"
@@ -2817,9 +2851,10 @@ export const ShiftRadarModule: React.FC = () => {
                   setIsRecordingLearnedPath(false);
                   setRecordedPathBreadcrumbs([]);
                 }}
-                className="rounded-xl border border-rose-500/60 bg-rose-950/60 text-rose-200 px-2.5 py-1.5 text-[11px] font-bold cursor-pointer"
+                aria-label="Cancelar gravação"
+                className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 px-2.5 py-1.5 text-[11px] font-bold cursor-pointer"
               >
-                ✕
+                <X className="h-3.5 w-3.5 shrink-0" />
               </button>
             </div>
           </div>
@@ -2875,7 +2910,7 @@ export const ShiftRadarModule: React.FC = () => {
               title={`Limite da via (${roadNameLabel}): ${roadLimitKmh} km/h`}
               style={{
                 backgroundColor: '#FFFFFF',
-                borderColor: '#EF4444',
+                borderColor: '#F59E0B',
                 color: '#090D16',
               }}
               className="h-10 w-10 rounded-full border-[3.5px] flex flex-col items-center justify-center shrink-0 shadow-sm"
@@ -2897,9 +2932,12 @@ export const ShiftRadarModule: React.FC = () => {
                 {roadNameLabel}
               </span>
               {consecutiveOverSpeedSec > 0 ? (
-                <span className="text-[10px] font-extrabold text-[#00E5FF] block leading-tight mt-0.5">
+                <span className="text-[10px] font-extrabold text-[#00E5FF] flex items-center gap-1 leading-tight mt-0.5">
+                  {consecutiveOverSpeedSec >= 20 && (
+                    <Bell className="h-3 w-3 shrink-0" />
+                  )}
                   {consecutiveOverSpeedSec >= 20
-                    ? '🔔 20s > Limite (Reduzir)'
+                    ? '20s > Limite (Reduzir)'
                     : `Acima +10: ${consecutiveOverSpeedSec}s / 20s`}
                 </span>
               ) : (
@@ -2968,9 +3006,10 @@ export const ShiftRadarModule: React.FC = () => {
                 <div>
                   <h3
                     style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-base font-black tracking-tight"
+                    className="text-base font-black tracking-tight flex items-center gap-1.5"
                   >
-                    ➕ Ensinar / Marcar no Mapa
+                    <Plus className="h-4 w-4 shrink-0 text-[#00B8D4]" />
+                    Ensinar / Marcar no Mapa
                   </h3>
                   <p
                     style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
@@ -3000,7 +3039,10 @@ export const ShiftRadarModule: React.FC = () => {
                   }}
                   className="w-full rounded-2xl border-2 px-4 py-3 text-left font-black text-xs flex items-center justify-between cursor-pointer transition active:scale-98"
                 >
-                  <span>🚸 Confirmar Nova Passadeira Aqui</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Footprints className="h-4 w-4 shrink-0" />
+                    Confirmar Nova Passadeira Aqui
+                  </span>
                   <span className="text-[11px] font-extrabold bg-[#00E5FF]/15 px-2 py-0.5 rounded-full">
                     +15 Coins
                   </span>
@@ -3017,7 +3059,10 @@ export const ShiftRadarModule: React.FC = () => {
                   }}
                   className="w-full rounded-2xl border-2 px-4 py-3 text-left font-black text-xs flex items-center justify-between cursor-pointer transition active:scale-98"
                 >
-                  <span>🧭 Ensinar Caminho / Entrada GPS (&quot;Buddy, ensinar caminho&quot;)</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Compass className="h-4 w-4 shrink-0" />
+                    Ensinar Caminho / Entrada GPS (&quot;Buddy, ensinar caminho&quot;)
+                  </span>
                   <span className="text-[11px] font-extrabold bg-[#00E5FF]/20 px-2 py-0.5 rounded-full">
                     +25 Coins
                   </span>
@@ -3034,7 +3079,10 @@ export const ShiftRadarModule: React.FC = () => {
                   }}
                   className="w-full rounded-2xl border px-4 py-3 text-left font-extrabold text-xs flex items-center justify-between cursor-pointer transition active:scale-98"
                 >
-                  <span>⚠️ Reportar Perigo na Via (Obras / Buraco / Acidente)</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                    Reportar Perigo na Via (Obras / Buraco / Acidente)
+                  </span>
                 </button>
 
                 {/* Option 4: Delete Last Crosswalk Marked by Mistake */}
@@ -3042,13 +3090,16 @@ export const ShiftRadarModule: React.FC = () => {
                   type="button"
                   onClick={handleDeleteLatestCrosswalk}
                   style={{
-                    backgroundColor: isDaylight ? '#FFF1F2' : '#1F1218',
-                    borderColor: '#F43F5E',
-                    color: isDaylight ? '#BE123C' : '#FDA4AF',
+                    backgroundColor: isDaylight ? '#F8FAFC' : '#0F172A',
+                    borderColor: isDaylight ? '#CBD5E1' : '#334155',
+                    color: isDaylight ? '#475569' : '#CBD5E1',
                   }}
                   className="w-full rounded-2xl border px-4 py-3 text-left font-extrabold text-xs flex items-center justify-between cursor-pointer transition active:scale-98"
                 >
-                  <span>🗑️ Apagar Última Passadeira Marcada por Engano</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Trash2 className="h-4 w-4 shrink-0" />
+                    Apagar Última Passadeira Marcada por Engano
+                  </span>
                 </button>
 
                 {/* Option 5: Cancel */}
@@ -3059,9 +3110,10 @@ export const ShiftRadarModule: React.FC = () => {
                     backgroundColor: isDaylight ? '#F1F5F9' : '#1E293B',
                     color: isDaylight ? '#334155' : '#CBD5E1',
                   }}
-                  className="w-full rounded-2xl py-2.5 text-center font-black text-xs cursor-pointer"
+                  className="w-full rounded-2xl py-2.5 text-center font-black text-xs cursor-pointer inline-flex items-center justify-center gap-1.5"
                 >
-                  ✕ Cancelar
+                  <X className="h-3.5 w-3.5 shrink-0" />
+                  Cancelar
                 </button>
               </div>
             </div>
@@ -3087,9 +3139,10 @@ export const ShiftRadarModule: React.FC = () => {
                 <div>
                   <h3
                     style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
-                    className="text-base font-black tracking-tight"
+                    className="text-base font-black tracking-tight flex items-center gap-1.5"
                   >
-                    🧭 Guardar Caminho & Entrada
+                    <Compass className="h-4 w-4 shrink-0 text-[#00B8D4]" />
+                    Guardar Caminho &amp; Entrada
                   </h3>
                   <p
                     style={{ color: isDaylight ? '#475569' : '#94A3B8' }}
@@ -3165,9 +3218,10 @@ export const ShiftRadarModule: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleSaveLearnedPathNow}
-                    className="flex-1 rounded-2xl bg-[#00E5FF] text-[#090D16] py-2.5 text-xs font-black cursor-pointer shadow-md"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-2xl bg-[#00E5FF] text-[#090D16] py-2.5 text-xs font-black cursor-pointer shadow-md"
                   >
-                    💾 Guardar & Sincronizar (+25 Coins)
+                    <Save className="h-3.5 w-3.5 shrink-0" />
+                    Guardar &amp; Sincronizar (+25 Coins)
                   </button>
                   <button
                     type="button"
@@ -3232,13 +3286,14 @@ export const ShiftRadarModule: React.FC = () => {
                     )
                   }
                   style={{
-                    backgroundColor: isDaylight ? '#FFF1F2' : '#1F1218',
-                    borderColor: '#F43F5E',
-                    color: isDaylight ? '#BE123C' : '#FDA4AF',
+                    backgroundColor: isDaylight ? '#F8FAFC' : '#0F172A',
+                    borderColor: isDaylight ? '#CBD5E1' : '#334155',
+                    color: isDaylight ? '#475569' : '#CBD5E1',
                   }}
-                  className="w-full rounded-xl border px-3 py-2.5 text-xs font-extrabold cursor-pointer text-center"
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-extrabold cursor-pointer text-center"
                 >
-                  🗑️ Remover se marcada por engano
+                  <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                  Remover se marcada por engano
                 </button>
                 <button
                   type="button"

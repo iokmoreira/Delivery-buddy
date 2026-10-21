@@ -29,6 +29,11 @@ import { AppTabId, EphemeralVoiceCardCategory } from '../types/models';
 import { useEstafetas } from '../context/EstafetasContext';
 import { stopBuddySpeech } from '../services/voiceEngine';
 import { BubbleRestingPreset } from '../utils/buddyMascotEngine';
+import {
+  getBuddyAvatarForState,
+  resolveBuddyShiftVisualState,
+  useBuddySkin,
+} from '../utils/buddyAvatars';
 
 type DraggableBubbleId = 'logo' | 'sos' | 'ptt' | 'buddy';
 
@@ -182,6 +187,19 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
     bubbleRestingPreset,
     toggleVoiceMicListening,
   } = useEstafetas();
+
+  // State-driven 3D Buddy avatar: Online / Ausente / Modo Ninja / Entrega (+ Halloween skin)
+  const [buddySkin] = useBuddySkin();
+  const buddyStatusAvatarUrl = currentMascotImageUrl.startsWith('data:')
+    ? currentMascotImageUrl
+    : getBuddyAvatarForState(
+        resolveBuddyShiftVisualState({
+          isAppPaused,
+          isNinja: Boolean(userPrefs?.anonymousMode),
+          isDelivery: currentMascotState === 'DELIVERY',
+        }),
+        buddySkin
+      );
 
   const [bubblePositions, setBubblePositions] = useState<BubblePositionsMap>(
     () => loadSavedBubblePositions()
@@ -576,12 +594,14 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
             />
           )}
           <div className="h-full w-full pointer-events-none relative z-10 flex items-center justify-center">
-            <img
-              src={currentMascotImageUrl}
-              alt="Buddy Mascote Voz"
-              style={{ objectFit: 'contain' }}
-              className="h-full w-full object-contain"
-            />
+            <div className="h-full w-full rounded-full overflow-hidden bg-black">
+              <img
+                src={buddyStatusAvatarUrl}
+                alt="Buddy Mascote Voz"
+                style={{ objectFit: 'cover' }}
+                className="h-full w-full object-cover scale-[1.12]"
+              />
+            </div>
             {userPrefs.anonymousMode && (
               <span
                 style={{
@@ -1522,12 +1542,12 @@ export const FloatingBubbleAndQuickMenu: React.FC = () => {
               className="absolute inset-0 rounded-full animate-ping pointer-events-none bg-[#00E5FF]/35"
             />
           )}
-          <div className="h-full w-full pointer-events-none relative z-10 flex items-center justify-center">
+          <div className="h-full w-full pointer-events-none relative z-10 flex items-center justify-center rounded-full overflow-hidden bg-black">
             <img
-              src={currentMascotImageUrl}
+              src={buddyStatusAvatarUrl}
               alt="Buddy Mascote"
-              style={{ objectFit: 'contain' }}
-              className="h-full w-full object-contain"
+              style={{ objectFit: 'cover' }}
+              className="h-full w-full object-cover scale-[1.12]"
             />
           </div>
         </button>

@@ -23,6 +23,22 @@ import {
   Mic,
   AlertTriangle,
   MessageSquare,
+  BarChart3,
+  TrendingUp,
+  Rocket,
+  RefreshCw,
+  Bot,
+  Image as ImageIcon,
+  Pencil,
+  Bell,
+  Mail,
+  Save,
+  Ban,
+  Cloud,
+  User,
+  Circle,
+  Copy,
+  Construction,
 } from 'lucide-react';
 import {
   AdminBroadcastTargetType,
@@ -69,6 +85,7 @@ import {
   subscribeToCloudSharedState,
   syncCloudStateNow,
 } from '../services/cloudSync';
+import { BUDDY_AVATARS } from '../utils/buddyAvatars';
 
 export const AdminBackofficeModule: React.FC = () => {
   const {
@@ -161,7 +178,7 @@ export const AdminBackofficeModule: React.FC = () => {
     AdminNotificationEvent[]
   >(() => loadCloudSharedState().adminNotifications || []);
   const [importantAlertMessage, setImportantAlertMessage] = useState<string>(
-    '📢 Alerta Importante Delivery Buddy Amarante: Nova atualização / aviso operacional disponível na App.'
+    'Alerta Importante Delivery Buddy Amarante: Nova atualização / aviso operacional disponível na App.'
   );
 
   const handleSaveAdminNotifyConfig = async () => {
@@ -284,7 +301,7 @@ export const AdminBackofficeModule: React.FC = () => {
     setCloudRequests(loadCloudSharedState().approvalRequests || []);
     setManualName('');
     setManualContact('');
-    setManualAddFeedback(`✓ ${cleanName} aprovado e publicado na frota!`);
+    setManualAddFeedback(`${cleanName} aprovado e publicado na frota!`);
     window.setTimeout(() => {
       setManualAddFeedback(null);
       setIsManualAddOpen(false);
@@ -390,7 +407,7 @@ export const AdminBackofficeModule: React.FC = () => {
     const replyMsg: SupportChatMessage = {
       id: `admin-sup-${Date.now()}`,
       sender: 'SUPPORT',
-      topicBadge: '👑 Suporte Admin (CEO)',
+      topicBadge: 'Suporte Admin (CEO)',
       text: clean,
       timestamp: nowTime,
     };
@@ -408,7 +425,7 @@ export const AdminBackofficeModule: React.FC = () => {
           supabaseUrl: aiAgentConfig.supabaseUrl,
           supabaseAnonKey: aiAgentConfig.supabaseAnonKey,
           senderId: 'ADMIN_CEO',
-          senderCallsign: '👑 Suporte Admin (CEO)',
+          senderCallsign: 'Suporte Admin (CEO)',
           recipientId: 'SUPORTE_DIRETO',
           messageBody: clean,
         });
@@ -542,6 +559,27 @@ export const AdminBackofficeModule: React.FC = () => {
     1,
     unifiedCloudAndLocalAccounts.length + deduplicatedAdminCouriers.length
   );
+
+  // Round avatar per courier row: Presidente for founder/admin, the courier's
+  // own photo when known (online directory), otherwise the official Buddy pose.
+  const courierAvatarByNameKey = React.useMemo(() => {
+    const map = new Map<string, string>();
+    onlineDirectoryCouriers.forEach((c) => {
+      const k = normalizeCourierNameKey(c.callsign || '');
+      if (k && c.avatarPhotoUrl) map.set(k, c.avatarPhotoUrl);
+    });
+    return map;
+  }, [onlineDirectoryCouriers]);
+
+  const resolveCourierRowAvatar = (
+    rawName: string,
+    opts?: { isInactive?: boolean }
+  ): string => {
+    if (isCourierAdminByName(rawName)) return BUDDY_AVATARS.presidente;
+    const own = courierAvatarByNameKey.get(normalizeCourierNameKey(rawName));
+    if (own) return own;
+    return opts?.isInactive ? BUDDY_AVATARS.ausente : BUDDY_AVATARS.online;
+  };
   const pendingApprovalsCount =
     unifiedCloudAndLocalAccounts.filter((acc) => acc.status === 'PENDENTE')
       .length +
@@ -615,8 +653,8 @@ export const AdminBackofficeModule: React.FC = () => {
     const res = saveAndConnectSupabaseRealtime(cleanUrl, cleanKey);
     setSupabaseSaveFeedback(
       res.connected
-        ? '✅ Credenciais sanitizadas e WebSocket Realtime iniciado!'
-        : '⚠️ Chaves limpas. Introduza URL e Chave Anon para ligar.'
+        ? 'Credenciais sanitizadas e WebSocket Realtime iniciado!'
+        : 'Chaves limpas. Introduza URL e Chave Anon para ligar.'
     );
     window.setTimeout(() => {
       setSupabaseSaveFeedback(null);
@@ -729,7 +767,8 @@ export const AdminBackofficeModule: React.FC = () => {
           }}
           className="rounded-xl border py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5"
         >
-          <span>📊 Online Agora &amp; Projeções</span>
+          <BarChart3 className="h-3.5 w-3.5 shrink-0" />
+          <span>Online Agora &amp; Projeções</span>
         </button>
         <button
           type="button"
@@ -756,7 +795,8 @@ export const AdminBackofficeModule: React.FC = () => {
           }}
           className="rounded-xl border py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5"
         >
-          <span>✓ Requisições de Aceitação ({totalRegisteredCount})</span>
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+          <span>Requisições de Aceitação ({totalRegisteredCount})</span>
           {pendingApprovalsCount > 0 && (
             <span className="rounded-full bg-[#00E5FF] text-slate-950 px-1.5 py-0.5 text-[10px] font-black animate-pulse">
               +{pendingApprovalsCount} Nova{pendingApprovalsCount > 1 ? 's' : ''}
@@ -788,8 +828,9 @@ export const AdminBackofficeModule: React.FC = () => {
           }}
           className="rounded-xl border py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5"
         >
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
           <span>
-            ⚠️ Reclamações &amp; Alertas (
+            Reclamações &amp; Alertas (
             {visibleComplaints.length +
               roadHazards.filter((h) => !h.resolved).length}
             )
@@ -820,12 +861,13 @@ export const AdminBackofficeModule: React.FC = () => {
           }}
           className="rounded-xl border py-2.5 px-2 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5"
         >
-          <span>💬 Central de Suporte Ativo ({supportMessages.length})</span>
+          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+          <span>Central de Suporte Ativo ({supportMessages.length})</span>
         </button>
       </div>
 
       {/* =====================================================================
-          VIEW 0: [📊 ONLINE AGORA & PROJEÇÕES] — LIVE COURIERS, 30D/90D/1Y
+          VIEW 0: [ONLINE AGORA & PROJEÇÕES] — LIVE COURIERS, 30D/90D/1Y
           GROWTH PROJECTIONS, 3D MASCOT MANAGER, AI STUDIO & SUPABASE
           ===================================================================== */}
       {subTab === 'IA_SKILLS' && (
@@ -838,7 +880,8 @@ export const AdminBackofficeModule: React.FC = () => {
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
                 <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                  <span>📊 Estafetas Online Agora &amp; Projeções de Crescimento</span>
+                  <BarChart3 className="h-4 w-4 shrink-0 text-[#00E5FF]" />
+                  <span>Estafetas Online Agora &amp; Projeções de Crescimento</span>
                 </h3>
                 <p className="text-xs text-zinc-400">
                   Centro Operacional Ativo: <strong className="text-emerald-400">Amarante (Raio 35 km)</strong> • Sincronização em Tempo Real
@@ -956,9 +999,10 @@ export const AdminBackofficeModule: React.FC = () => {
               >
                 <span
                   style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
-                  className="text-xs font-extrabold block"
+                  className="text-xs font-extrabold flex items-center gap-1.5"
                 >
-                  📈 Projeção 30 Dias
+                  <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+                  Projeção 30 Dias
                 </span>
                 <span
                   style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
@@ -991,9 +1035,10 @@ export const AdminBackofficeModule: React.FC = () => {
               >
                 <span
                   style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
-                  className="text-xs font-extrabold block"
+                  className="text-xs font-extrabold flex items-center gap-1.5"
                 >
-                  🚀 Projeção 90 Dias
+                  <Rocket className="h-3.5 w-3.5 shrink-0" />
+                  Projeção 90 Dias
                 </span>
                 <span
                   style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
@@ -1026,9 +1071,10 @@ export const AdminBackofficeModule: React.FC = () => {
               >
                 <span
                   style={{ color: isDaylight ? '#00838F' : '#00E5FF' }}
-                  className="text-xs font-extrabold block"
+                  className="text-xs font-extrabold flex items-center gap-1.5"
                 >
-                  📊 Projeção 1 Ano (12 Meses)
+                  <BarChart3 className="h-3.5 w-3.5 shrink-0" />
+                  Projeção 1 Ano (12 Meses)
                 </span>
                 <span
                   style={{ color: isDaylight ? '#090D16' : '#FFFFFF' }}
@@ -1065,7 +1111,7 @@ export const AdminBackofficeModule: React.FC = () => {
                 try {
                   setMascotAdminMsg('A recortar as 3 poses...');
                   await uploadThreePoseMascotSheet(file);
-                  setMascotAdminMsg('✓ 3 Poses atualizadas com sucesso!');
+                  setMascotAdminMsg('3 Poses atualizadas com sucesso!');
                 } catch {
                   setMascotAdminMsg('Erro ao processar imagem.');
                 }
@@ -1074,8 +1120,9 @@ export const AdminBackofficeModule: React.FC = () => {
             />
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
-                <h4 className="text-sm font-extrabold text-white">
-                  🤖 Mascote Oficial 3D Delivery Buddy (3 Poses Integradas)
+                <h4 className="text-sm font-extrabold text-white flex items-center gap-1.5">
+                  <Bot className="h-4 w-4 shrink-0 text-[#00E5FF]" />
+                  Mascote Oficial 3D Delivery Buddy (3 Poses Integradas)
                 </h4>
                 <p className="text-xs text-zinc-400">
                   Integrado nativamente no APK, Ícone Android, Topo, Mapa, Barra Inferior e Bolinha
@@ -1085,9 +1132,10 @@ export const AdminBackofficeModule: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => mascotAdminInputRef.current?.click()}
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-extrabold cursor-pointer transition"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-extrabold cursor-pointer transition"
                 >
-                  🖼️ Substituir Imagem 3 Poses (Admin)
+                  <ImageIcon className="h-3.5 w-3.5 shrink-0" />
+                  Substituir Imagem 3 Poses (Admin)
                 </button>
                 {buddyMascotImages.isCustomUploaded && (
                   <button
@@ -1144,8 +1192,9 @@ export const AdminBackofficeModule: React.FC = () => {
                   className="h-12 w-12 rounded-full object-contain bg-transparent p-0.5 border border-[#00E5FF] shrink-0"
                 />
                 <div className="min-w-0">
-                  <span className="block text-xs font-extrabold text-[#00E5FF] truncate">
-                    3. Entrega 🚀
+                  <span className="flex items-center gap-1 text-xs font-extrabold text-[#00E5FF] truncate">
+                    3. Entrega
+                    <Rocket className="h-3 w-3 shrink-0" />
                   </span>
                   <span className="block text-[10px] text-zinc-400 truncate">
                     Jato Neon Azul
@@ -1488,10 +1537,15 @@ export const AdminBackofficeModule: React.FC = () => {
                 onClick={handleCopySqlSchema}
                 className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-xs"
               >
-                <span>
+                <span className="inline-flex items-center gap-1.5">
+                  {sqlCopiedFeedback ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5 shrink-0" />
+                  )}
                   {sqlCopiedFeedback
-                    ? '✅ Script SQL Copiado!'
-                    : '📋 Copiar Script SQL das Tabelas (Colar no SQL Editor)'}
+                    ? 'Script SQL Copiado!'
+                    : 'Copiar Script SQL das Tabelas (Colar no SQL Editor)'}
                 </span>
               </button>
 
@@ -1676,15 +1730,16 @@ export const AdminBackofficeModule: React.FC = () => {
                       {/* Top Stacked Row: Status Badge + Origin & Confidence Badges */}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <span
-                          className={`rounded-md px-2.5 py-0.5 text-[10px] font-extrabold shrink-0 ${
+                          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-[10px] font-extrabold shrink-0 ${
                             isPublished
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                               : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                           }`}
                         >
+                          {isPublished && <Check className="h-3 w-3 shrink-0" />}
                           {isPublished
-                            ? '✓ Publicada para Todos os Buddys'
-                            : '⏳ Em Análise'}
+                            ? 'Publicada para Todos os Buddys'
+                            : 'Em Análise'}
                         </span>
 
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -1707,13 +1762,15 @@ export const AdminBackofficeModule: React.FC = () => {
                             {getCategoryBadgeLabel(log.category)}
                           </span>
                           {log.learningOrigin === 'ENSINO_VOZ_GUIADO' && (
-                            <span className="rounded bg-indigo-500/20 border border-indigo-500/40 px-1.5 py-0.5 text-[9px] font-extrabold text-indigo-300">
-                              🎙️ Ensinada por Voz
+                            <span className="inline-flex items-center gap-1 rounded bg-indigo-500/20 border border-indigo-500/40 px-1.5 py-0.5 text-[9px] font-extrabold text-indigo-300">
+                              <Mic className="h-3 w-3 shrink-0" />
+                              Ensinada por Voz
                             </span>
                           )}
                           {log.learningOrigin === 'PASSIVA_AUTOMATICA' && (
-                            <span className="rounded bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-300">
-                              ⚡ Passiva Automática
+                            <span className="inline-flex items-center gap-1 rounded bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-300">
+                              <Zap className="h-3 w-3 shrink-0" />
+                              Passiva Automática
                             </span>
                           )}
                         </div>
@@ -1776,15 +1833,18 @@ export const AdminBackofficeModule: React.FC = () => {
                             <Play className="h-2.5 w-2.5" />
                             <span>
                               {isJustTested
-                                ? 'Macro Testada ✓'
+                                ? 'Macro Testada'
                                 : 'Testar Macro'}
                             </span>
+                            {isJustTested && (
+                              <Check className="h-2.5 w-2.5 shrink-0 text-[#00E5FF]" />
+                            )}
                           </button>
 
                           <button
                             type="button"
                             onClick={() => discardAiSkillLog(log.id)}
-                            className="rounded-lg bg-zinc-900 hover:bg-rose-950/60 border border-zinc-800 text-zinc-400 hover:text-rose-300 px-2 py-1 text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition"
+                            className="rounded-lg bg-zinc-900 hover:bg-slate-800 border border-zinc-800 text-zinc-400 hover:text-slate-200 px-2 py-1 text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition"
                           >
                             <Trash2 className="h-2.5 w-2.5" />
                             <span>Descartar</span>
@@ -1801,7 +1861,7 @@ export const AdminBackofficeModule: React.FC = () => {
       )}
 
       {/* =====================================================================
-          VIEW 1: [✅ REQUISIÇÕES DE ACEITAÇÃO] — KYC & ACCOUNT APPROVALS
+          VIEW 1: [REQUISIÇÕES DE ACEITAÇÃO] — KYC & ACCOUNT APPROVALS
           ===================================================================== */}
       {subTab === 'KYC' && (
         <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800/80 p-3.5 space-y-3 shadow-lg">
@@ -1810,16 +1870,17 @@ export const AdminBackofficeModule: React.FC = () => {
               <span className="text-base font-extrabold text-zinc-100 flex items-center gap-1.5 flex-wrap">
                 <Users className="h-4 w-4 text-[#00E5FF]" />
                 <span>
-                  ✓ Requisições de Aceitação &amp; Controlo de Contas ({totalRegisteredCount})
+                  Requisições de Aceitação &amp; Controlo de Contas ({totalRegisteredCount})
                 </span>
                 {pendingApprovalsCount > 0 && (
                   <span className="rounded-full bg-[#00E5FF] text-slate-950 px-2 py-0.5 text-[10px] font-black animate-pulse">
-                    ⏳ {pendingApprovalsCount} Pendente{pendingApprovalsCount > 1 ? 's' : ''}
+                    {pendingApprovalsCount} Pendente{pendingApprovalsCount > 1 ? 's' : ''}
                   </span>
                 )}
                 {syncDoneBadge && (
-                  <span className="rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300 px-2 py-0.5 text-[10px] font-extrabold">
-                    ✓ Sincronizado agora
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 border border-[#00E5FF]/40 text-[#00E5FF] px-2 py-0.5 text-[10px] font-extrabold">
+                    <Check className="h-3 w-3 shrink-0" />
+                    Sincronizado agora
                   </span>
                 )}
               </span>
@@ -1842,12 +1903,19 @@ export const AdminBackofficeModule: React.FC = () => {
                 }}
                 className="w-full rounded-xl border px-2.5 py-2 text-xs font-extrabold cursor-pointer transition flex items-center justify-center gap-1 truncate"
               >
+                {isSyncingCloudAccounts ? (
+                  <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                ) : syncDoneBadge ? (
+                  <Check className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+                )}
                 <span className="truncate">
                   {isSyncingCloudAccounts
-                    ? '⏳ A Sincronizar...'
+                    ? 'A Sincronizar...'
                     : syncDoneBadge
-                      ? '✓ Sincronizado agora'
-                      : '🔄 Sincronizar Nuvem'}
+                      ? 'Sincronizado agora'
+                      : 'Sincronizar Nuvem'}
                 </span>
               </button>
               <button
@@ -1860,7 +1928,8 @@ export const AdminBackofficeModule: React.FC = () => {
                 }}
                 className="w-full rounded-xl border px-2.5 py-2 text-xs font-extrabold cursor-pointer transition flex items-center justify-center gap-1 truncate"
               >
-                <span className="truncate">✏️ Editar Meu Registo</span>
+                <Pencil className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Editar Meu Registo</span>
               </button>
             </div>
 
@@ -1875,7 +1944,8 @@ export const AdminBackofficeModule: React.FC = () => {
               }}
               className="w-full rounded-xl border px-3 py-2 text-xs font-extrabold cursor-pointer transition flex items-center justify-center gap-1.5"
             >
-              <span>➕ Adicionar Estafeta à Frota</span>
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              <span>Adicionar Estafeta à Frota</span>
             </button>
 
             {isManualAddOpen && (
@@ -1884,15 +1954,17 @@ export const AdminBackofficeModule: React.FC = () => {
                 className="rounded-xl bg-zinc-950 border border-[#00E5FF]/50 p-3 space-y-2.5 shadow-md"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-[#00E5FF]">
-                    ➕ Registar / Aprovar Colega Manualmente (1 Toque)
+                  <span className="text-xs font-extrabold text-[#00E5FF] flex items-center gap-1.5">
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                    Registar / Aprovar Colega Manualmente (1 Toque)
                   </span>
                   <button
                     type="button"
                     onClick={() => setIsManualAddOpen(false)}
-                    className="text-xs font-bold text-zinc-400 hover:text-white cursor-pointer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-zinc-400 hover:text-white cursor-pointer"
                   >
-                    ✕ Fechar
+                    <X className="h-3.5 w-3.5 shrink-0" />
+                    Fechar
                   </button>
                 </div>
 
@@ -1922,10 +1994,10 @@ export const AdminBackofficeModule: React.FC = () => {
                     }
                     className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs font-semibold text-white focus:outline-none"
                   >
-                    <option value="Mota 125cc">🛵 Mota 125cc</option>
-                    <option value="Scooter Elétrica">⚡ Scooter Elétrica</option>
-                    <option value="Bicicleta Elétrica">🚲 Bicicleta Elétrica</option>
-                    <option value="Carro Ligeiro">🚗 Carro Ligeiro</option>
+                    <option value="Mota 125cc">Mota 125cc</option>
+                    <option value="Scooter Elétrica">Scooter Elétrica</option>
+                    <option value="Bicicleta Elétrica">Bicicleta Elétrica</option>
+                    <option value="Carro Ligeiro">Carro Ligeiro</option>
                   </select>
                   <select
                     value={manualZone}
@@ -1969,9 +2041,10 @@ export const AdminBackofficeModule: React.FC = () => {
                           borderColor: active ? '#00E5FF' : '#334155',
                           color: active ? '#05070B' : '#CBD5E1',
                         }}
-                        className="rounded-lg border px-2 py-1 text-[10px] font-extrabold cursor-pointer transition"
+                        className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-extrabold cursor-pointer transition"
                       >
-                        {active ? `✓ ${plat}` : plat}
+                        {active && <Check className="h-3 w-3 shrink-0" />}
+                        {plat}
                       </button>
                     );
                   })}
@@ -1983,9 +2056,10 @@ export const AdminBackofficeModule: React.FC = () => {
                     backgroundColor: '#00E5FF',
                     color: '#05070B',
                   }}
-                  className="w-full rounded-xl py-2 px-3 text-xs font-black cursor-pointer transition"
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 text-xs font-black cursor-pointer transition"
                 >
-                  ✓ Aprovar &amp; Publicar Estafeta na Frota Agora
+                  <Check className="h-3.5 w-3.5 shrink-0" />
+                  Aprovar &amp; Publicar Estafeta na Frota Agora
                 </button>
 
                 {manualAddFeedback && (
@@ -1996,28 +2070,31 @@ export const AdminBackofficeModule: React.FC = () => {
               </form>
             )}
 
-            {/* 📲 Canais de Recebimento do Admin (WhatsApp & E-mail) */}
+            {/* Canais de Recebimento do Admin (WhatsApp & E-mail) */}
             <div className="rounded-xl bg-zinc-950 border border-[#00E5FF]/40 p-3 space-y-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <span className="text-xs sm:text-sm font-extrabold text-white block">
-                    📲 Canais de Recebimento do Admin (WhatsApp &amp; E-mail)
+                  <span className="text-xs sm:text-sm font-extrabold text-white flex items-center gap-1.5">
+                    <Smartphone className="h-4 w-4 shrink-0 text-[#00E5FF]" />
+                    Canais de Recebimento do Admin (WhatsApp &amp; E-mail)
                   </span>
                   <span className="text-[11px] text-zinc-400 block">
                     Receba requisições de novos estafetas, reclamações, suporte e alertas SOS no seu WhatsApp e E-mail.
                   </span>
                 </div>
                 {adminNotifySavedBadge && (
-                  <span className="rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300 px-2.5 py-0.5 text-[10px] font-extrabold">
-                    ✓ Canais Guardados
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 border border-[#00E5FF]/40 text-[#00E5FF] px-2.5 py-0.5 text-[10px] font-extrabold">
+                    <Check className="h-3 w-3 shrink-0" />
+                    Canais Guardados
                   </span>
                 )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1">
-                    📲 WhatsApp do Admin (+351...)
+                  <label className="flex items-center gap-1 text-[10px] font-bold text-zinc-400 mb-1">
+                    <Smartphone className="h-3 w-3 shrink-0" />
+                    WhatsApp do Admin (+351...)
                   </label>
                   <input
                     type="tel"
@@ -2033,8 +2110,9 @@ export const AdminBackofficeModule: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1">
-                    ✉️ E-mail do Admin
+                  <label className="flex items-center gap-1 text-[10px] font-bold text-zinc-400 mb-1">
+                    <Mail className="h-3 w-3 shrink-0" />
+                    E-mail do Admin
                   </label>
                   <input
                     type="email"
@@ -2072,9 +2150,14 @@ export const AdminBackofficeModule: React.FC = () => {
                         ? '#00E5FF'
                         : '#a1a1aa',
                     }}
-                    className="rounded-lg border px-2.5 py-1 text-[11px] font-extrabold cursor-pointer"
+                    className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-extrabold cursor-pointer"
                   >
-                    {adminNotifyConfig.autoNotifyNewUsers ? '✓' : '○'} Novos Registos
+                    {adminNotifyConfig.autoNotifyNewUsers ? (
+                      <Check className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <Circle className="h-3 w-3 shrink-0" />
+                    )}
+                    Novos Registos
                   </button>
                   <button
                     type="button"
@@ -2095,9 +2178,14 @@ export const AdminBackofficeModule: React.FC = () => {
                         ? '#00E5FF'
                         : '#a1a1aa',
                     }}
-                    className="rounded-lg border px-2.5 py-1 text-[11px] font-extrabold cursor-pointer"
+                    className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-extrabold cursor-pointer"
                   >
-                    {adminNotifyConfig.autoNotifyReportsAndSos ? '✓' : '○'} Reclamações / Suporte / SOS
+                    {adminNotifyConfig.autoNotifyReportsAndSos ? (
+                      <Check className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <Circle className="h-3 w-3 shrink-0" />
+                    )}
+                    Reclamações / Suporte / SOS
                   </button>
                 </div>
 
@@ -2108,21 +2196,24 @@ export const AdminBackofficeModule: React.FC = () => {
                     backgroundColor: '#00E5FF',
                     color: '#05070B',
                   }}
-                  className="rounded-lg px-3 py-1.5 text-xs font-black cursor-pointer transition hover:opacity-95"
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black cursor-pointer transition hover:opacity-95"
                 >
-                  💾 Guardar Canais Admin
+                  <Save className="h-3.5 w-3.5 shrink-0" />
+                  Guardar Canais Admin
                 </button>
               </div>
 
               {adminNotifications.length > 0 && (
-                <div className="space-y-1.5 pt-1 border-t border-zinc-800 max-h-48 overflow-y-auto">
-                  <span className="text-[11px] font-extrabold text-[#00E5FF] block">
-                    🔔 Últimos Pedidos &amp; Alertas Recebidos ({adminNotifications.length}):
+                <div className="pt-1 border-t border-zinc-800 max-h-48 overflow-y-auto">
+                  <span className="text-[11px] font-extrabold text-[#00E5FF] flex items-center gap-1.5 pb-1">
+                    <Bell className="h-3.5 w-3.5 shrink-0" />
+                    Últimos Pedidos &amp; Alertas Recebidos ({adminNotifications.length}):
                   </span>
+                  <div className="divide-y divide-zinc-800">
                   {adminNotifications.slice(0, 8).map((ev) => (
                     <div
                       key={ev.id}
-                      className="rounded-lg bg-zinc-900 border border-zinc-800 p-2 flex items-center justify-between gap-2 flex-wrap"
+                      className="py-2 flex items-center justify-between gap-2 flex-wrap"
                     >
                       <div className="min-w-0">
                         <span className="text-xs font-extrabold text-white block truncate">
@@ -2140,9 +2231,10 @@ export const AdminBackofficeModule: React.FC = () => {
                           )}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-lg bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 px-2 py-1 text-[10px] font-extrabold no-underline"
+                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 px-2 py-1 text-[10px] font-extrabold no-underline"
                         >
-                          📲 Receber / Enviar no WhatsApp
+                          <Smartphone className="h-3 w-3 shrink-0" />
+                          Receber / Enviar no WhatsApp
                         </a>
                         <a
                           href={buildMailtoDeepLink(
@@ -2150,13 +2242,15 @@ export const AdminBackofficeModule: React.FC = () => {
                             `[Delivery Buddy] ${ev.title}`,
                             ev.body
                           )}
-                          className="rounded-lg bg-sky-500/20 border border-sky-400/60 text-sky-300 px-2 py-1 text-[10px] font-extrabold no-underline"
+                          className="inline-flex items-center gap-1 rounded-lg bg-sky-500/20 border border-sky-400/60 text-sky-300 px-2 py-1 text-[10px] font-extrabold no-underline"
                         >
-                          ✉️ Enviar por E-mail
+                          <Mail className="h-3 w-3 shrink-0" />
+                          Enviar por E-mail
                         </a>
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -2168,6 +2262,11 @@ export const AdminBackofficeModule: React.FC = () => {
               <span className="text-xs font-extrabold text-[#00E5FF] block">
                 Contas Registadas &amp; Requisições da Nuvem (Acesso App &amp; Mapa):
               </span>
+              <div
+                className={`rounded-xl bg-zinc-950 border border-zinc-800 overflow-hidden divide-y ${
+                  isDaylight ? 'divide-slate-100' : 'divide-slate-800'
+                }`}
+              >
               {unifiedCloudAndLocalAccounts.map((acc) => {
                 const status = acc.status || 'APROVADO';
                 const isPending = status === 'PENDENTE';
@@ -2175,12 +2274,20 @@ export const AdminBackofficeModule: React.FC = () => {
                 return (
                   <div
                     key={acc.courierId || acc.username}
-                    className={`rounded-xl bg-zinc-950 border p-3 flex items-center justify-between gap-2 flex-wrap ${
+                    className={`px-3 py-2.5 flex items-center justify-between gap-2 flex-wrap ${
                       isPending
-                        ? 'border-[#00E5FF] shadow-[0_0_12px_rgba(0,229,255,0.2)]'
-                        : 'border-zinc-800'
+                        ? 'border-l-2 border-l-[#00E5FF] bg-[#00E5FF]/5'
+                        : ''
                     }`}
                   >
+                    <div className="min-w-0 flex items-start gap-2.5">
+                      <img
+                        src={resolveCourierRowAvatar(acc.username, {
+                          isInactive: isBlocked,
+                        })}
+                        alt={acc.username}
+                        className="h-8 w-8 rounded-full object-cover bg-black ring-1 ring-[#00E5FF]/40 shrink-0"
+                      />
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-extrabold text-white">
@@ -2196,33 +2303,50 @@ export const AdminBackofficeModule: React.FC = () => {
                                   color: '#00E5FF',
                                 }
                           }
-                          className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold border ${
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-extrabold border ${
                             isBlocked
-                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                              ? 'bg-slate-900 text-amber-400 border-amber-500/40'
                               : isPending
                                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
                                 : ''
                           }`}
                         >
+                          {isBlocked ? (
+                            <Ban className="h-3 w-3 shrink-0" />
+                          ) : isPending ? null : (
+                            <Check className="h-3 w-3 shrink-0" />
+                          )}
                           {isBlocked
-                            ? '🚫 BLOQUEADO'
+                            ? 'BLOQUEADO'
                             : isPending
-                              ? '⏳ PENDENTE DE APROVAÇÃO'
-                              : '✓ APROVADO'}
+                              ? 'PENDENTE DE APROVAÇÃO'
+                              : 'APROVADO'}
                         </span>
                         {acc.isCloudOnly && (
-                          <span className="rounded-md px-1.5 py-0.5 text-[9px] font-bold bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/40">
-                            ☁️ Telemóvel Remoto
+                          <span
+                            title="Telemóvel Remoto"
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-[#00E5FF]"
+                          >
+                            <Cloud className="h-3 w-3 shrink-0" />
+                            Remoto
                           </span>
                         )}
                         {acc.optInWhatsapp !== false && (
-                          <span className="rounded bg-emerald-500/15 border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
-                            🔔 WhatsApp
+                          <span
+                            title="Opt-in WhatsApp"
+                            className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-400"
+                          >
+                            <Bell className="h-3 w-3 shrink-0" />
+                            WhatsApp
                           </span>
                         )}
                         {acc.optInEmail !== false && (
-                          <span className="rounded bg-sky-500/15 border border-sky-500/40 px-1.5 py-0.5 text-[9px] font-bold text-sky-300">
-                            🔔 E-mail
+                          <span
+                            title="Opt-in E-mail"
+                            className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-400"
+                          >
+                            <Bell className="h-3 w-3 shrink-0" />
+                            E-mail
                           </span>
                         )}
                       </div>
@@ -2231,45 +2355,41 @@ export const AdminBackofficeModule: React.FC = () => {
                         {acc.zone}
                       </span>
                       {Array.isArray(acc.platforms) && acc.platforms.length > 0 && (
-                        <div className="flex items-center gap-1 flex-wrap pt-0.5">
-                          {acc.platforms.map((plat) => (
-                            <span
-                              key={plat}
-                              className="rounded bg-zinc-900 border border-[#00E5FF]/40 px-1.5 py-0.5 text-[10px] font-bold text-[#00E5FF]"
-                            >
-                              {plat}
-                            </span>
-                          ))}
-                        </div>
+                        <span className="text-[10px] font-bold text-[#00E5FF] block pt-0.5">
+                          {acc.platforms.join(' · ')}
+                        </span>
                       )}
+                    </div>
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap shrink-0">
                       <a
                         href={buildWhatsAppDeepLink(
                           acc.whatsapp || acc.emailOrPhone || adminNotifyConfig.adminWhatsapp,
                           `Olá ${acc.username}! A tua conta no Delivery Buddy Amarante está ${
-                            status === 'APROVADO' ? 'APROVADA ✓' : 'registada'
+                            status === 'APROVADO' ? 'APROVADA' : 'registada'
                           }.`
                         )}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-xl bg-emerald-500/15 border border-emerald-500/50 text-emerald-300 px-2.5 py-1.5 text-[11px] font-extrabold no-underline"
+                        className="inline-flex items-center gap-1 rounded-xl bg-emerald-500/15 border border-emerald-500/50 text-emerald-300 px-2.5 py-1.5 text-[11px] font-extrabold no-underline"
                         title="Enviar confirmação ou mensagem por WhatsApp"
                       >
-                        📲 WhatsApp
+                        <Smartphone className="h-3.5 w-3.5 shrink-0" />
+                        WhatsApp
                       </a>
                       <a
                         href={buildMailtoDeepLink(
                           acc.email || adminNotifyConfig.adminEmail,
                           `Delivery Buddy Amarante — Conta ${acc.username}`,
                           `Olá ${acc.username},\nA tua conta no Delivery Buddy Amarante está ${
-                            status === 'APROVADO' ? 'APROVADA ✓' : 'em validação'
+                            status === 'APROVADO' ? 'APROVADA' : 'em validação'
                           }.`
                         )}
-                        className="rounded-xl bg-sky-500/15 border border-sky-500/50 text-sky-300 px-2.5 py-1.5 text-[11px] font-extrabold no-underline"
+                        className="inline-flex items-center gap-1 rounded-xl bg-sky-500/15 border border-sky-500/50 text-sky-300 px-2.5 py-1.5 text-[11px] font-extrabold no-underline"
                         title="Enviar confirmação ou mensagem por E-mail"
                       >
-                        ✉️ E-mail
+                        <Mail className="h-3.5 w-3.5 shrink-0" />
+                        E-mail
                       </a>
                       <button
                         type="button"
@@ -2291,40 +2411,44 @@ export const AdminBackofficeModule: React.FC = () => {
                                 }
                               : undefined
                         }
-                        className={`rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                        className={`inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
                           status === 'APROVADO' || isPending
                             ? ''
                             : 'bg-zinc-900 border-zinc-700 text-zinc-300'
                         }`}
                       >
-                        ✓ Aprovar
+                        <Check className="h-3.5 w-3.5 shrink-0" />
+                        Aprovar
                       </button>
                       <button
                         type="button"
                         onClick={() =>
                           handleToggleLocalAccountStatus(acc.username, 'BLOQUEADO', acc.courierId)
                         }
-                        className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                        className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
                           isBlocked
-                            ? 'bg-rose-600 text-white'
-                            : 'bg-zinc-900 border border-zinc-700 text-rose-300'
+                            ? 'bg-slate-900 text-amber-400 border border-amber-500/40'
+                            : 'bg-zinc-900 border border-zinc-700 text-slate-400'
                         }`}
                       >
-                        🚫 Bloquear
+                        <Ban className="h-3.5 w-3.5 shrink-0" />
+                        Bloquear
                       </button>
                     </div>
                   </div>
                 );
               })}
+              </div>
             </div>
           )}
 
-          {/* 📢 Enviar Alerta Importante (WhatsApp / E-mail) para Estafetas Opt-In */}
+          {/* Enviar Alerta Importante (WhatsApp / E-mail) para Estafetas Opt-In */}
           <div className="rounded-xl bg-zinc-950 border border-[#00E5FF]/40 p-3 space-y-2.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
-                <span className="text-xs sm:text-sm font-extrabold text-white block">
-                  📢 Enviar Alerta Importante (WhatsApp / E-mail)
+                <span className="text-xs sm:text-sm font-extrabold text-white flex items-center gap-1.5">
+                  <Megaphone className="h-4 w-4 shrink-0 text-[#00E5FF]" />
+                  Enviar Alerta Importante (WhatsApp / E-mail)
                 </span>
                 <span className="text-[11px] text-zinc-400 block">
                   Envia comunicados urgentes diretamente para o WhatsApp ou E-mail dos estafetas que autorizaram receber alertas.
@@ -2352,33 +2476,35 @@ export const AdminBackofficeModule: React.FC = () => {
               <a
                 href={buildMailtoDeepLink(
                   adminNotifyConfig.adminEmail,
-                  '📢 Alerta Importante — Delivery Buddy Amarante',
+                  'Alerta Importante — Delivery Buddy Amarante',
                   importantAlertMessage,
                   unifiedCloudAndLocalAccounts
                     .filter((a) => a.optInEmail !== false && a.email && a.email.includes('@'))
                     .map((a) => a.email as string)
                 )}
-                className="rounded-xl bg-sky-500/20 border border-sky-400 text-sky-200 px-3 py-1.5 text-xs font-extrabold no-underline"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-sky-500/20 border border-sky-400 text-sky-200 px-3 py-1.5 text-xs font-extrabold no-underline"
               >
-                ✉️ Disparar E-mail para Todos Opt-In
+                <Mail className="h-3.5 w-3.5 shrink-0" />
+                Disparar E-mail para Todos Opt-In
               </a>
               <a
                 href={buildWhatsAppDeepLink('', importantAlertMessage)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-200 px-3 py-1.5 text-xs font-extrabold no-underline"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-200 px-3 py-1.5 text-xs font-extrabold no-underline"
               >
-                📲 Partilhar Alerta no WhatsApp
+                <Smartphone className="h-3.5 w-3.5 shrink-0" />
+                Partilhar Alerta no WhatsApp
               </a>
             </div>
 
-            <div className="space-y-1.5 pt-1">
+            <div className="pt-1 divide-y divide-zinc-800 border-t border-zinc-800">
               {unifiedCloudAndLocalAccounts
                 .filter((a) => a.optInWhatsapp !== false || a.optInEmail !== false)
                 .map((acc) => (
                   <div
                     key={`optin-${acc.courierId || acc.username}`}
-                    className="rounded-lg bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 flex items-center justify-between gap-2 flex-wrap"
+                    className="py-1.5 flex items-center justify-between gap-2 flex-wrap"
                   >
                     <span className="text-xs font-bold text-zinc-200">
                       {acc.username}{' '}
@@ -2395,21 +2521,23 @@ export const AdminBackofficeModule: React.FC = () => {
                           )}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 px-2 py-0.5 text-[10px] font-extrabold no-underline"
+                          className="inline-flex items-center gap-1 rounded bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 px-2 py-0.5 text-[10px] font-extrabold no-underline"
                         >
-                          📲 Enviar WhatsApp
+                          <Smartphone className="h-3 w-3 shrink-0" />
+                          Enviar WhatsApp
                         </a>
                       )}
                       {acc.optInEmail !== false && (
                         <a
                           href={buildMailtoDeepLink(
                             acc.email || '',
-                            '📢 Alerta Importante — Delivery Buddy',
+                            'Alerta Importante — Delivery Buddy',
                             importantAlertMessage
                           )}
-                          className="rounded bg-sky-500/20 border border-sky-400/60 text-sky-300 px-2 py-0.5 text-[10px] font-extrabold no-underline"
+                          className="inline-flex items-center gap-1 rounded bg-sky-500/20 border border-sky-400/60 text-sky-300 px-2 py-0.5 text-[10px] font-extrabold no-underline"
                         >
-                          ✉️ Enviar E-mail
+                          <Mail className="h-3 w-3 shrink-0" />
+                          Enviar E-mail
                         </a>
                       )}
                     </div>
@@ -2420,7 +2548,11 @@ export const AdminBackofficeModule: React.FC = () => {
 
           {/* Supabase Realtime Couriers (Deduplicated against Local Registered Accounts) */}
           {deduplicatedAdminCouriers.length > 0 && (
-            <div className="space-y-2">
+            <div
+              className={`rounded-xl bg-zinc-950 border border-zinc-800 overflow-hidden divide-y ${
+                isDaylight ? 'divide-slate-100' : 'divide-slate-800'
+              }`}
+            >
               {deduplicatedAdminCouriers.map((c) => {
                 const isSelf =
                   Boolean(c.isSelfRegistered) ||
@@ -2429,11 +2561,19 @@ export const AdminBackofficeModule: React.FC = () => {
                 return (
                   <div
                     key={c.id}
-                    className={`rounded-xl bg-zinc-950 p-3 space-y-2 border ${
-                      isSelf ? 'border-[#00E5FF]/50' : 'border-zinc-800/80'
+                    className={`px-3 py-2.5 space-y-2 ${
+                      isSelf ? 'border-l-2 border-l-[#00E5FF]' : ''
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0 flex items-start gap-2.5">
+                        <img
+                          src={resolveCourierRowAvatar(cleanFullName, {
+                            isInactive: c.kycStatus === 'Suspenso',
+                          })}
+                          alt={cleanFullName}
+                          className="h-8 w-8 rounded-full object-cover bg-black ring-1 ring-[#00E5FF]/40 shrink-0"
+                        />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-extrabold text-zinc-100">
@@ -2458,6 +2598,7 @@ export const AdminBackofficeModule: React.FC = () => {
                           {c.activeAmaranteZone || c.cityZone}
                         </span>
                       </div>
+                      </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
@@ -2472,26 +2613,28 @@ export const AdminBackofficeModule: React.FC = () => {
                                 }
                               : undefined
                           }
-                          className={`rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                          className={`inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
                             c.kycStatus === 'Ativo'
                               ? ''
                               : 'bg-zinc-900 border-zinc-800 text-zinc-300'
                           }`}
                         >
-                          ✓ Aprovar
+                          <Check className="h-3.5 w-3.5 shrink-0" />
+                          Aprovar
                         </button>
                         <button
                           type="button"
                           onClick={() =>
                             updateAdminCourierKycStatus(c.id, 'Suspenso')
                           }
-                          className={`rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
+                          className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-extrabold cursor-pointer transition ${
                             c.kycStatus === 'Suspenso'
-                              ? 'bg-rose-600 text-white'
-                              : 'bg-zinc-900 border border-zinc-800 text-rose-300'
+                              ? 'bg-slate-900 text-amber-400 border border-amber-500/40'
+                              : 'bg-zinc-900 border border-zinc-800 text-slate-400'
                           }`}
                         >
-                          🚫 Bloquear
+                          <Ban className="h-3.5 w-3.5 shrink-0" />
+                          Bloquear
                         </button>
                       </div>
                     </div>
@@ -2504,7 +2647,7 @@ export const AdminBackofficeModule: React.FC = () => {
       )}
 
       {/* =====================================================================
-          VIEW 2: [⚠️ RECLAMAÇÕES & ALERTAS] — COMPLAINTS, HAZARDS & BROADCASTS
+          VIEW 2: [RECLAMAÇÕES & ALERTAS] — COMPLAINTS, HAZARDS & BROADCASTS
           ===================================================================== */}
       {subTab === 'RECLAMACOES_ALERTAS' && (
         <section className="rounded-2xl bg-zinc-900/95 border border-zinc-800/80 p-3.5 space-y-3.5 shadow-lg">
@@ -2512,9 +2655,9 @@ export const AdminBackofficeModule: React.FC = () => {
           <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
-                <AlertTriangle className="h-4 w-4 text-[#0284C7] shrink-0" />
+                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
                 <span>
-                  ⚠️ Reclamações de Rotas, Pilaretes &amp; Desvios (
+                  Reclamações de Rotas, Pilaretes &amp; Desvios (
                   {visibleComplaints.length})
                 </span>
               </span>
@@ -2534,19 +2677,17 @@ export const AdminBackofficeModule: React.FC = () => {
                 Todas as reclamações foram processadas ou arquivadas.
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-96 overflow-y-auto pr-0.5">
+              <div
+                className={`max-h-96 overflow-y-auto pr-0.5 divide-y ${
+                  isDaylight ? 'divide-slate-100' : 'divide-slate-800'
+                }`}
+              >
                 {visibleComplaints.map((rc) => {
                   const isPublished = publishedComplaintIds.includes(rc.id);
                   return (
                     <div
                       key={rc.id}
-                      style={{
-                        backgroundColor: isDaylight ? '#FFFFFF' : '#111827',
-                        borderColor: isDaylight
-                          ? '#E2E8F0'
-                          : 'rgba(0, 229, 255, 0.28)',
-                      }}
-                      className="rounded-xl border p-3 space-y-2 shadow-2xs"
+                      className="py-3 first:pt-0 last:pb-0 space-y-2"
                     >
                       <div className="flex items-start justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -2629,14 +2770,9 @@ export const AdminBackofficeModule: React.FC = () => {
                           </div>
                         )}
 
-                      {/* 2 Actionable Admin Buttons: ✓ Publicar Alerta no Mapa & 🗑️ Arquivar */}
+                      {/* 2 Actionable Admin Buttons: Publicar Alerta no Mapa & Arquivar */}
                       <div
-                        style={{
-                          borderColor: isDaylight
-                            ? '#F1F5F9'
-                            : 'rgba(0, 229, 255, 0.15)',
-                        }}
-                        className="flex items-center justify-end gap-2 pt-1 border-t flex-wrap"
+                        className="flex items-center justify-end gap-2 pt-1 flex-wrap"
                       >
                         <button
                           type="button"
@@ -2660,10 +2796,11 @@ export const AdminBackofficeModule: React.FC = () => {
                           }}
                           className="rounded-xl border px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition hover:opacity-95"
                         >
+                          <Check className="h-3.5 w-3.5 shrink-0" />
                           <span>
                             {isPublished
-                              ? '✓ Alerta Publicado no Mapa'
-                              : '✓ Publicar Alerta no Mapa'}
+                              ? 'Alerta Publicado no Mapa'
+                              : 'Publicar Alerta no Mapa'}
                           </span>
                         </button>
 
@@ -2681,7 +2818,8 @@ export const AdminBackofficeModule: React.FC = () => {
                           }}
                           className="rounded-xl border px-3 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer transition hover:opacity-90"
                         >
-                          <span>🗑️ Arquivar</span>
+                          <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                          <span>Arquivar</span>
                         </button>
                       </div>
                     </div>
@@ -2693,23 +2831,22 @@ export const AdminBackofficeModule: React.FC = () => {
 
           {/* Active Road Hazards in Amarante */}
           <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3.5 space-y-2.5">
-            <span className="text-sm font-extrabold text-zinc-100 block">
-              🚧 Perigos na Via Ativos em Amarante (
+            <span className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
+              <Construction className="h-4 w-4 shrink-0 text-amber-500" />
+              Perigos na Via Ativos em Amarante (
               {roadHazards.filter((h) => !h.resolved).length})
             </span>
-            <div className="space-y-2">
+            <div
+              className={`divide-y ${
+                isDaylight ? 'divide-slate-100' : 'divide-slate-800'
+              }`}
+            >
               {roadHazards
                 .filter((h) => !h.resolved)
                 .map((haz) => (
                   <div
                     key={haz.id}
-                    style={{
-                      backgroundColor: isDaylight ? '#F8FAFC' : '#111827',
-                      borderColor: isDaylight
-                        ? '#E2E8F0'
-                        : 'rgba(0, 229, 255, 0.25)',
-                    }}
-                    className="rounded-xl border p-2.5 flex items-center justify-between gap-2"
+                    className="py-2 first:pt-0 last:pb-0 flex items-center justify-between gap-2"
                   >
                     <div>
                       <span
@@ -2836,7 +2973,7 @@ export const AdminBackofficeModule: React.FC = () => {
       )}
 
       {/* =====================================================================
-          VIEW 3: [💬 CENTRAL DE SUPORTE ATIVO (TEMPO REAL)] — LIVE ADMIN INBOX
+          VIEW 3: [CENTRAL DE SUPORTE ATIVO (TEMPO REAL)] — LIVE ADMIN INBOX
           ===================================================================== */}
       {subTab === 'SUPORTE_ATIVO' && (
         <section className="rounded-2xl bg-zinc-900/95 border border-sky-500/40 p-3.5 space-y-3.5 shadow-lg">
@@ -2844,7 +2981,7 @@ export const AdminBackofficeModule: React.FC = () => {
             <div>
               <h3 className="text-base font-extrabold text-white flex items-center gap-2">
                 <MessageSquare className="h-4 w-4 text-[#00E5FF]" />
-                <span>💬 Central de Suporte Ativo (Tempo Real)</span>
+                <span>Central de Suporte Ativo (Tempo Real)</span>
               </h3>
               <p className="text-xs text-zinc-400">
                 Receba e responda em tempo real às mensagens de suporte enviadas pelos estafetas na App e no Login.
@@ -2880,9 +3017,18 @@ export const AdminBackofficeModule: React.FC = () => {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3 mb-1 text-[11px] opacity-85">
-                      <span className="font-extrabold">
-                        {msg.topicBadge ||
-                          (isAdmin ? 'Suporte Admin' : '👤 Estafeta')}
+                      <span className="font-extrabold inline-flex items-center gap-1.5">
+                        {isAdmin ? (
+                          <img
+                            src={BUDDY_AVATARS.presidente}
+                            alt="Presidente"
+                            className="h-4 w-4 rounded-full object-cover bg-black ring-1 ring-[#00E5FF]/40 shrink-0"
+                          />
+                        ) : (
+                          <User className="h-3 w-3 shrink-0" />
+                        )}
+                        {(msg.topicBadge || '').replace(/\u{1F451}\s*/u, '') ||
+                          (isAdmin ? 'Suporte Admin' : 'Estafeta')}
                       </span>
                       <span>{msg.timestamp}</span>
                     </div>
